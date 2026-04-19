@@ -9,6 +9,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         replaceIcons();
         polishChatButtons();
+        watchBroadcasterPanel();
     });
 
     // ── Icon replacement ──────────────────────────────────────────────────────────
@@ -81,6 +82,28 @@
 
     function runInPageContext(source) {
         chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
+    }
+
+    function watchBroadcasterPanel() {
+        const seen = new WeakSet();
+        const mo = new MutationObserver(() => {
+            const panel = document.getElementById('rtc-broadcaster');
+            if (!panel || seen.has(panel)) { return; }
+            seen.add(panel);
+
+            panel.style.setProperty('position', 'relative', '');
+
+            const btn = document.createElement('button');
+            btn.id = 'ichc-broadcaster-close';
+            btn.textContent = '✕';
+            btn.title = 'Close';
+            btn.addEventListener('click', () => {
+                const stop = panel.querySelector('a[href*="stop"], a[onclick*="stop"], a[onclick*="Stop"]');
+                if (stop) { stop.click(); } else { panel.style.display = 'none'; }
+            });
+            panel.insertBefore(btn, panel.firstChild);
+        });
+        mo.observe(document.body, { childList: true, subtree: true });
     }
 
     function invokeNativeElementAction(element) {
