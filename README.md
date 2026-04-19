@@ -108,7 +108,7 @@ Re-download the zip for your browser, extract it over your existing folder, then
 
 ## Building from source
 
-No build step required — this is a plain MV2 extension.
+No build step required — this is a plain MV3 extension.
 
 ```
 ichc-extension/
