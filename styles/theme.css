@@ -2686,34 +2686,32 @@
     }
     .ichc-emote-item {
         grid-column: span 1 !important;
-        aspect-ratio: 1 !important;
         overflow: hidden !important;
         border-radius: 6px !important;
         cursor: pointer !important;
-        background: #111214 !important;
-        border: 1px solid rgba(255,255,255,0.04) !important;
-        transition: transform 0.12s, border-color 0.12s !important;
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        transition: background 0.1s, transform 0.1s !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 9px !important;
-        color: #80848e !important;
-        text-align: center !important;
-        padding: 2px !important;
-        word-break: break-all !important;
-        line-height: 1.1 !important;
     }
     .ichc-emote-item:hover {
-        transform: scale(1.06) !important;
-        border-color: rgba(255,255,255,0.14) !important;
-        color: #dbdee1 !important;
+        background: rgba(255,255,255,0.07) !important;
+        transform: scale(1.15) !important;
         z-index: 2 !important;
     }
-    .ichc-emote-item img {
-        max-width: 80% !important;
-        max-height: 80% !important;
-        object-fit: contain !important;
-        pointer-events: none !important;
+    /* Emoji cells: larger text, tighter grid */
+    .ichc-emoji-item {
+        font-size: 22px !important;
+        line-height: 1 !important;
+        padding: 4px !important;
+        user-select: none !important;
+    }
+    /* When emoji tab is active, switch grid to 7 columns of fixed 40px rows */
+    #ichc-gif-grid.ichc-emoji-grid {
+        grid-template-columns: repeat(7, 1fr) !important;
+        grid-auto-rows: 40px !important;
     }
     #ichc-gif-wrapper {
         position: relative !important;

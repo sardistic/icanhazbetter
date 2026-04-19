@@ -95,6 +95,105 @@
     }
     let camSeed = 0;
 
+    // ─── Emoji dataset ───────────────────────────────────────────────────────────
+    // Each entry: { e: char, n: search name (lowercase) }
+    const ICHC_EMOJIS = [
+        // Faces – positive
+        {e:'😀',n:'grinning'},{e:'😁',n:'beaming grin'},{e:'😂',n:'joy tears laugh'},
+        {e:'🤣',n:'rofl rolling floor laughing'},{e:'😃',n:'big smile'},{e:'😄',n:'smile eyes'},
+        {e:'😅',n:'sweat smile'},{e:'😆',n:'laughing'},{e:'😊',n:'smiling blushing'},
+        {e:'😋',n:'yum delicious'},{e:'😎',n:'cool sunglasses'},{e:'😍',n:'heart eyes love'},
+        {e:'🥰',n:'smiling hearts love'},{e:'😘',n:'kiss blow'},{e:'😗',n:'kissing'},
+        {e:'😙',n:'kissing smiling'},{e:'😚',n:'kissing closed eyes'},
+        {e:'🤩',n:'star struck excited'},{e:'😇',n:'angel halo innocent'},
+        // Faces – neutral / expressive
+        {e:'🙂',n:'slightly smiling'},{e:'🙃',n:'upside down'},{e:'😐',n:'neutral'},
+        {e:'😑',n:'expressionless'},{e:'😶',n:'no mouth'},{e:'🫡',n:'salute'},
+        {e:'🤔',n:'thinking'},{e:'🤨',n:'raised eyebrow suspicious'},
+        {e:'😏',n:'smirk'},{e:'😒',n:'unamused'},{e:'🙄',n:'eye roll'},
+        {e:'😬',n:'grimace'},{e:'🤥',n:'lying pinocchio'},{e:'😌',n:'relieved'},
+        {e:'😔',n:'pensive sad'},{e:'😪',n:'sleepy'},{e:'🤤',n:'drooling'},
+        {e:'😴',n:'sleeping zzz'},{e:'😷',n:'mask sick'},{e:'🤒',n:'thermometer sick'},
+        {e:'🤕',n:'hurt bandage'},{e:'🤢',n:'nauseated sick'},{e:'🤮',n:'vomiting'},
+        {e:'🤧',n:'sneezing'},{e:'🥵',n:'hot flushed'},{e:'🥶',n:'cold frozen'},
+        {e:'🥴',n:'woozy drunk'},{e:'😵',n:'dizzy dead eyes'},{e:'🤯',n:'exploding head mind blown'},
+        // Faces – negative
+        {e:'😞',n:'disappointed'},{e:'😟',n:'worried'},{e:'😣',n:'persevering'},
+        {e:'😖',n:'confounded'},{e:'😫',n:'tired'},{e:'😩',n:'weary'},
+        {e:'🥺',n:'pleading puppy eyes'},{e:'😢',n:'cry single tear'},
+        {e:'😭',n:'sob loudly crying'},{e:'😤',n:'triumph steam nose'},
+        {e:'😠',n:'angry'},{e:'😡',n:'pouting rage red'},{e:'🤬',n:'swearing cursing'},
+        {e:'😈',n:'devil smiling'},{e:'👿',n:'devil angry'},{e:'💀',n:'skull dead'},
+        {e:'☠️',n:'skull crossbones'},{e:'💩',n:'poop'},{e:'🤡',n:'clown'},
+        {e:'👹',n:'ogre monster'},{e:'👺',n:'goblin'},{e:'👻',n:'ghost'},
+        {e:'👽',n:'alien'},{e:'🤖',n:'robot'},
+        // Gestures & hands
+        {e:'👋',n:'wave hi hello'},{e:'🤚',n:'raised back hand'},
+        {e:'🖐️',n:'hand five fingers'},{e:'✋',n:'raised hand stop'},
+        {e:'🖖',n:'vulcan salute spock'},{e:'🫱',n:'rightwards hand'},
+        {e:'👌',n:'ok perfect'},{e:'🤌',n:'pinched fingers chef kiss'},
+        {e:'✌️',n:'peace victory two'},{e:'🤞',n:'crossed fingers luck'},
+        {e:'🤟',n:'love you hand'},{e:'🤘',n:'horns rock metal'},
+        {e:'🤙',n:'call me shaka hang loose'},{e:'👈',n:'left point'},
+        {e:'👉',n:'right point'},{e:'👆',n:'up point'},{e:'👇',n:'down point'},
+        {e:'☝️',n:'index point up'},{e:'👍',n:'thumbs up like good'},
+        {e:'👎',n:'thumbs down dislike'},{e:'✊',n:'raised fist'},
+        {e:'👊',n:'oncoming fist punch'},{e:'🤛',n:'left fist bump'},
+        {e:'🤜',n:'right fist bump'},{e:'👏',n:'clap applause'},
+        {e:'🙌',n:'raising hands celebration'},{e:'🫶',n:'heart hands love'},
+        {e:'👐',n:'open hands'},{e:'🤲',n:'palms up prayer'},
+        {e:'🙏',n:'pray please thank you'},{e:'🤝',n:'handshake deal'},
+        {e:'💅',n:'nail polish sassy'},{e:'🤳',n:'selfie'},
+        {e:'💪',n:'muscle strong flex'},{e:'🦵',n:'leg kick'},{e:'🦶',n:'foot'},
+        {e:'👂',n:'ear listen'},{e:'👃',n:'nose sniff'},
+        // Hearts & affection
+        {e:'❤️',n:'red heart love'},{e:'🧡',n:'orange heart'},
+        {e:'💛',n:'yellow heart'},{e:'💚',n:'green heart'},
+        {e:'💙',n:'blue heart'},{e:'💜',n:'purple heart'},
+        {e:'🖤',n:'black heart'},{e:'🤍',n:'white heart'},
+        {e:'🤎',n:'brown heart'},{e:'💔',n:'broken heart'},
+        {e:'❤️‍🔥',n:'heart fire burning love'},{e:'💕',n:'two hearts'},
+        {e:'💞',n:'revolving hearts'},{e:'💓',n:'beating heart'},
+        {e:'💗',n:'growing heart'},{e:'💖',n:'sparkling heart'},
+        {e:'💘',n:'heart arrow cupid'},{e:'💝',n:'heart ribbon gift'},
+        {e:'💟',n:'heart decoration'},{e:'♥️',n:'heart suit card'},
+        {e:'😻',n:'heart eyes cat'},{e:'💋',n:'kiss mark lips'},
+        // Common objects & symbols
+        {e:'🔥',n:'fire hot lit'},{e:'✨',n:'sparkles magic'},
+        {e:'⭐',n:'star'},{e:'🌟',n:'glowing star'},{e:'💫',n:'dizzy star spinning'},
+        {e:'🎉',n:'party popper celebration'},{e:'🎊',n:'confetti ball party'},
+        {e:'🎈',n:'balloon'},{e:'🎁',n:'gift present wrapped'},
+        {e:'🏆',n:'trophy winner'},{e:'🥇',n:'gold medal first place'},
+        {e:'🍕',n:'pizza'},{e:'🍔',n:'burger'},{e:'🍟',n:'fries'},
+        {e:'🌮',n:'taco'},{e:'🍣',n:'sushi'},{e:'🍜',n:'noodles ramen'},
+        {e:'🍺',n:'beer mug'},{e:'🍻',n:'clinking beers cheers'},
+        {e:'🥂',n:'champagne toast'},{e:'☕',n:'coffee hot'},
+        {e:'🧃',n:'juice box'},{e:'🎮',n:'game controller'},
+        {e:'💻',n:'laptop computer'},{e:'📱',n:'phone mobile'},
+        {e:'📷',n:'camera photo'},{e:'🎵',n:'music note'},
+        {e:'🎶',n:'musical notes'},{e:'💤',n:'zzz sleep'},
+        {e:'💯',n:'hundred percent perfect'},
+        {e:'‼️',n:'double exclamation'},{e:'❓',n:'question'},
+        {e:'❗',n:'exclamation'},{e:'✅',n:'check mark yes'},
+        {e:'❌',n:'cross no x'},{e:'⚠️',n:'warning caution'},
+        {e:'🚀',n:'rocket launch'},{e:'🛸',n:'ufo flying saucer'},
+        {e:'🌈',n:'rainbow'},{e:'☀️',n:'sun'},{e:'🌙',n:'moon crescent'},
+        {e:'⚡',n:'lightning bolt zap'},{e:'🌊',n:'wave ocean water'},
+        {e:'💥',n:'boom explosion'},{e:'👀',n:'eyes looking watching'},
+        {e:'🗣️',n:'speaking head talk'},{e:'💬',n:'speech bubble chat'},
+        {e:'🫂',n:'hug people'},{e:'🤦',n:'facepalm'},
+        {e:'🤷',n:'shrug whatever'},{e:'💁',n:'info person sassy'},
+        {e:'🙆',n:'ok gesture person'},{e:'🙅',n:'no gesture forbidden'},
+        {e:'🙋',n:'raising hand question'},{e:'🤸',n:'cartwheel gymnastics'},
+        {e:'💃',n:'dance woman'},{e:'🕺',n:'dance man'},
+        {e:'🐱',n:'cat kitten'},{e:'🐶',n:'dog puppy'},
+        {e:'🐸',n:'frog'},{e:'🐧',n:'penguin'},
+        {e:'🦊',n:'fox'},{e:'🐼',n:'panda'},
+        {e:'🌸',n:'cherry blossom flower pink'},
+        {e:'🌺',n:'hibiscus flower'},{e:'🌻',n:'sunflower'},
+        {e:'🍀',n:'four leaf clover luck'},
+    ];
+
     // ─── JS ──────────────────────────────────────────────────────────────────────
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -1461,7 +1560,7 @@
             const tabGif = document.createElement('button');
             tabGif.type = 'button'; tabGif.className = 'ichc-gif-tab active'; tabGif.textContent = 'GIFs';
             const tabEmote = document.createElement('button');
-            tabEmote.type = 'button'; tabEmote.className = 'ichc-gif-tab'; tabEmote.textContent = 'Emotes';
+            tabEmote.type = 'button'; tabEmote.className = 'ichc-gif-tab'; tabEmote.textContent = 'Emoji';
             tabBar.appendChild(tabGif); tabBar.appendChild(tabEmote);
 
             // Search
@@ -1521,20 +1620,13 @@
                         grid.appendChild(el);
                     });
                 } else {
-                    const items = q ? _gifData.emotes.filter(e => e.code.includes(q)) : _gifData.emotes;
-                    items.slice(0, 200).forEach(e => {
+                    const items = q ? ICHC_EMOJIS.filter(e => e.n.includes(q)) : ICHC_EMOJIS;
+                    items.forEach(e => {
                         const el = document.createElement('div');
-                        el.className = 'ichc-emote-item';
-                        el.title = e.code;
-                        // Try to show the emote image
-                        const imgName = e.code.replace(/^:/, '').replace(/:$/, '');
-                        const img = document.createElement('img');
-                        img.src = '//images.icanhazchat.com/smicons/' + imgName + '.gif';
-                        img.alt = e.code;
-                        img.loading = 'lazy';
-                        img.onerror = () => { img.remove(); el.textContent = e.code; };
-                        el.appendChild(img);
-                        el.addEventListener('click', () => insertText(e.code));
+                        el.className = 'ichc-emote-item ichc-emoji-item';
+                        el.title = e.n;
+                        el.textContent = e.e;
+                        el.addEventListener('click', () => insertText(e.e));
                         grid.appendChild(el);
                     });
                 }
@@ -1557,15 +1649,7 @@
                         gifSeen.add(code);
                         gifs.push({ code, src: m[2], full: 'https://www.vidble.com/' + m[3] + '.' + m[4] });
                     }
-                    // Emotes: any codes not already paired with a vidble image
-                    const emoteSet = new Set(gifs.map(g => g.code));
-                    const emotes = [];
-                    for (const m of text.matchAll(/copyToClipboard\('(:[^']+)'\)/g)) {
-                        if (emoteSet.has(m[1])) { continue; }
-                        emoteSet.add(m[1]);
-                        emotes.push({ code: m[1] });
-                    }
-                    _gifData = { gifs, emotes };
+                    _gifData = { gifs };
                 } catch (err) {
                     grid.textContent = 'Failed to load.';
                     return;
@@ -1587,7 +1671,14 @@
                 const next = gifPanel.hidden;
                 if (next) { portalGifPanel(); }
                 gifPanel.hidden = !next;
-                if (!gifPanel.hidden) { loadGifData(); }
+                if (!gifPanel.hidden) {
+                    if (_activeTab === 'emote') {
+                        grid.classList.add('ichc-emoji-grid');
+                        renderGrid();
+                    } else {
+                        loadGifData();
+                    }
+                }
             });
             document.addEventListener('click', e => {
                 if (!gifWrapper.contains(e.target) && !gifPanel.contains(e.target)) { gifPanel.hidden = true; }
@@ -1596,11 +1687,13 @@
             tabGif.addEventListener('click', () => {
                 _activeTab = 'gif';
                 tabGif.classList.add('active'); tabEmote.classList.remove('active');
+                grid.classList.remove('ichc-emoji-grid');
                 renderGrid();
             });
             tabEmote.addEventListener('click', () => {
                 _activeTab = 'emote';
                 tabEmote.classList.add('active'); tabGif.classList.remove('active');
+                grid.classList.add('ichc-emoji-grid');
                 renderGrid();
             });
             searchInput.addEventListener('input', () => {
