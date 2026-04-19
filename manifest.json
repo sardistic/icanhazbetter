@@ -3,9 +3,14 @@
   "name": "icanhazbetter",
   "version": "1.1",
   "description": "Dark theme, flexible room layout, cam management, and chat improvements for icanhazchat.com",
+  "permissions": ["scripting"],
   "host_permissions": [
-    "https://images.icanhazchat.com/*"
+    "https://images.icanhazchat.com/*",
+    "https://www.icanhazchat.com/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "web_accessible_resources": [
     {
       "resources": ["gifs.txt"],

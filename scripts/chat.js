@@ -4,13 +4,7 @@
     // ─── Shared utilities (duplicated from ichc-theme) ───────────────────────────
 
     function runInPageContext(source) {
-        const root = document.documentElement || document.head || document.body;
-        if (!root) { return; }
-
-        const script = document.createElement('script');
-        script.textContent = `(() => { try { ${source} } catch (_ichcErr) {} })();`;
-        root.appendChild(script);
-        script.remove();
+        chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
     }
 
     function invokeNativeElementAction(element) {
