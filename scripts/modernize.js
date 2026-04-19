@@ -1758,13 +1758,34 @@
         const seen    = new Set();
         const users   = [];
 
+        // Pre-scan: find supporter smicons and map them to the nearest userlink.
+        // The site places img.smicon as a sibling of a.userlink (not a child), so
+        // a.querySelector() misses them entirely. Walk each smicon's siblings to
+        // find the associated name.
+        const supporterNames = new Set();
+        src.querySelectorAll('img.smicon').forEach(icon => {
+            const src2 = icon.src || '';
+            const ttl  = (icon.title || icon.alt || '').toLowerCase();
+            if (!src2.includes('heart') && !ttl.includes('supporter')) { return; }
+            // Search prev siblings first, then next siblings for the userlink
+            let el = icon.previousElementSibling;
+            while (el && !el.classList.contains('userlink')) { el = el.previousElementSibling; }
+            if (!el) {
+                el = icon.nextElementSibling;
+                while (el && !el.classList.contains('userlink')) { el = el.nextElementSibling; }
+            }
+            // Fallback: check parent element for a userlink child
+            if (!el) { el = icon.parentElement?.querySelector('a.userlink') || null; }
+            const n = el?.textContent?.trim().toLowerCase();
+            if (n) { supporterNames.add(n); }
+        });
+
         src.querySelectorAll('a.userlink').forEach(a => {
             const name = a.textContent.trim();
             const key  = name.toLowerCase();
             if (seen.has(key)) { return; }
             seen.add(key);
             const parentLi = a.closest('li');
-            // smicon may be a sibling inside the <li>, not a child of <a>
             const smicon = a.querySelector('img.smicon') || parentLi?.querySelector('img.smicon');
             // Detect broadcasting via cam-logo icon in userlist row (site inserts
             // img.cam-logo next to the userlink for broadcasting users). theme.js
@@ -1785,7 +1806,7 @@
                 karma:   extractKarmaFromUserAnchor(a),
                 trigger: a,
                 icon:      smicon ? { src: smicon.src, title: smicon.title || smicon.alt || '' } : null,
-                supporter: !!(smicon && (smicon.src.includes('heart') || (smicon.title || smicon.alt || '').toLowerCase().includes('supporter'))),
+                supporter: supporterNames.has(key),
             });
         });
 
