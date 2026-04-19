@@ -1353,10 +1353,32 @@
     .ichc-range strong { color: #dbdee1 !important; }
     .ichc-toolbar-note { margin-left: auto !important; color: #80848e !important; font-size: 12px !important; }
 
-    /* Site sets #camPreview z-index:200 and #rtc-broadcaster z-index:20 — without this
-       #camPreview sits on top and blocks clicks on the Go Live camera setup panel. */
+    /* #camPreview / #cambroadcaster: the site's cam feed containers — don't block clicks */
     #camPreview, #cambroadcaster {
         pointer-events: none !important;
+    }
+
+    /* Go Live camera/mic setup panel — must float above #ichc-room-root (z:2147483000).
+       The site sets position:absolute + z-index:20 which renders it behind our layout. */
+    #rtc-broadcaster {
+        position: fixed !important;
+        z-index: 2147483647 !important;
+        top: 60px !important;
+        left: 20px !important;
+        width: auto !important;
+        max-width: 300px !important;
+        min-width: 180px !important;
+        box-sizing: border-box !important;
+    }
+    /* Prevent #cams > * from forcing 100% width on the panel */
+    #cams > #rtc-broadcaster,
+    #cams #rtc-broadcaster {
+        width: auto !important;
+        max-width: 300px !important;
+    }
+    /* Don't hide it when cam cards are present */
+    #cams.ichc-has-rounded-cards > #rtc-broadcaster {
+        display: block !important;
     }
 
     #cams {
