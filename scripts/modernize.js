@@ -1314,8 +1314,36 @@
         menu.id = 'ichc-cog-menu';
         menu.setAttribute('role', 'menu');
 
+        // Read the current notification state label from the native button's img title.
+        // The site cycles the title as the user toggles (e.g. "Show Notifications" →
+        // "Mentions Only" → "No Notifications"), so we mirror it in the menu item.
+        function getNotifLabel() {
+            const img = document.querySelector('#showNotifications img.smicon');
+            const raw = (img?.title || img?.alt || '').trim();
+            return raw || 'Notifications';
+        }
+
         const items = [
-            { label: 'Notifications',   icon: ICONS.bell,      fn: 'toggleNotifications()' },
+            {
+                label: getNotifLabel(),
+                icon: ICONS.bell,
+                action(labelEl) {
+                    // Click the native button directly — it owns the cycling logic and
+                    // state, so invokeNativeElementAction is more reliable than calling
+                    // toggleNotifications() blindly from page context.
+                    const nativeLink = document.querySelector('#showNotifications a');
+                    if (nativeLink) {
+                        invokeNativeElementAction(nativeLink);
+                    } else {
+                        runInPageContext('if (typeof toggleNotifications === "function") { toggleNotifications(); }');
+                    }
+                    // Reflect the new state in the label after a tick (site updates the
+                    // img title synchronously inside toggleNotifications).
+                    window.setTimeout(() => {
+                        if (labelEl) { labelEl.textContent = getNotifLabel(); }
+                    }, 50);
+                },
+            },
             { label: 'Sounds',          icon: ICONS.volume,    fn: 'toggleChatSound()' },
             { label: 'Text color',      icon: ICONS.palette,   fn: 'pickColor()' },
             { label: 'Image viewing',   icon: ICONS.imageIcon, fn: 'toggleImages()' },
@@ -1334,12 +1362,21 @@
                 el.href = '#';
                 el.addEventListener('click', e => {
                     e.preventDefault();
-                    runInPageContext(item.fn);
-                    menu.hidden = true;
-                    cogBtn.setAttribute('aria-expanded', 'false');
+                    if (item.action) {
+                        item.action(el.querySelector('.ichc-cog-item-label'));
+                        // Keep menu open for Notifications so user can see state cycle
+                        if (!item.keepOpen) {
+                            menu.hidden = true;
+                            cogBtn.setAttribute('aria-expanded', 'false');
+                        }
+                    } else {
+                        runInPageContext(item.fn);
+                        menu.hidden = true;
+                        cogBtn.setAttribute('aria-expanded', 'false');
+                    }
                 });
             }
-            el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span>${item.label}</span>`;
+            el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span class="ichc-cog-item-label">${item.label}</span>`;
             menu.appendChild(el);
         });
 
@@ -1357,7 +1394,12 @@
         };
         const toggle = () => {
             const next = menu.hidden;
-            if (next) { portalMenu(); }
+            if (next) {
+                portalMenu();
+                // Refresh notification label on open to reflect any external state change
+                const notifLabelEl = menu.querySelector('.ichc-cog-item-label');
+                if (notifLabelEl) { notifLabelEl.textContent = getNotifLabel(); }
+            }
             menu.hidden = !next;
             cogBtn.setAttribute('aria-expanded', String(next));
         };
