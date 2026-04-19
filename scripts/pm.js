@@ -671,6 +671,14 @@
         // Drag — pointerdown on #tab_list
         const tabList = root.querySelector('#tab_list');
         if (tabList) {
+            // Block jQuery UI draggable (which listens on mousedown) from competing
+            // with our pointer-based drag handler.
+            tabList.addEventListener('mousedown', event => {
+                if (event.button !== 0) { return; }
+                if (event.target.closest('.ui-icon-close, .ui-tabs-anchor, input, button, textarea, a')) { return; }
+                event.stopImmediatePropagation();
+            }, true);
+
             tabList.addEventListener('pointerdown', event => {
                 if (event.button !== 0) { return; }
                 if (event.target.closest('.ui-icon-close, .ui-tabs-anchor, input, button, textarea, a')) { return; }
