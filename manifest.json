@@ -1,0 +1,27 @@
+{
+  "manifest_version": 2,
+  "name": "icanhazbetter",
+  "version": "1.0",
+  "description": "Dark theme, flexible room layout, cam management, and chat improvements for icanhazchat.com",
+  "permissions": [
+    "https://images.icanhazchat.com/*"
+  ],
+  "web_accessible_resources": ["gifs.txt"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.icanhazchat.com/*"],
+      "css": [
+        "styles/theme.css",
+        "styles/pm.css"
+      ],
+      "js": [
+        "scripts/persist-hidecams.js",
+        "scripts/theme.js",
+        "scripts/chat.js",
+        "scripts/pm.js",
+        "scripts/modernize.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}
