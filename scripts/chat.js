@@ -286,25 +286,40 @@
         return [...rows];
     }
 
+    function isLightTheme() {
+        return document.documentElement.classList.contains('ichc-light-theme');
+    }
+
     function applyChatTheme(scope = getChatLog()) {
         const log = getChatLog();
         const root = scope || log;
         if (!log || !root || !(root instanceof Element)) { return; }
 
+        const lightMode = isLightTheme();
+
         getScopedChatElements(root, 'a').forEach(anchor => {
             if (!isLikelyChatNickAnchor(anchor)) { return; }
             const color = extractChatNickColor(anchor);
-            const resolved = color ? makeReadableChatColor(color) : '#dbeafe';
+            let resolved;
+            if (lightMode) {
+                // In light mode keep the nick color as-is if it's dark enough,
+                // otherwise darken it so it's readable on a light background.
+                resolved = color ? (isDarkChatColor(color) ? color : '#1a1d23') : '#1a1d23';
+            } else {
+                resolved = color ? makeReadableChatColor(color) : '#dbeafe';
+            }
             anchor.dataset.ichcChatNick = '1';
             anchor.style.setProperty('--ichc-chat-name-color', resolved, 'important');
             anchor.style.setProperty('color', resolved, 'important');
             anchor.style.setProperty('font-weight', '700', 'important');
 
-            const parent = anchor.parentElement;
-            if (parent) {
-                const parentColor = extractInlineColor(parent);
-                if (parentColor && isDarkChatColor(parentColor)) {
-                    parent.style.setProperty('color', '#d5e2ef', 'important');
+            if (!lightMode) {
+                const parent = anchor.parentElement;
+                if (parent) {
+                    const parentColor = extractInlineColor(parent);
+                    if (parentColor && isDarkChatColor(parentColor)) {
+                        parent.style.setProperty('color', '#d5e2ef', 'important');
+                    }
                 }
             }
         });
@@ -312,8 +327,15 @@
         getScopedChatElements(root, 'font[color], [style*="color"]').forEach(node => {
             if (node.matches?.('a.userlink')) { return; }
             const color = extractInlineColor(node);
-            if (color && isDarkChatColor(color)) {
-                node.style.setProperty('color', '#d5e2ef', 'important');
+            if (lightMode) {
+                // In light mode: light-colored text → force dark so it's readable.
+                if (color && !isDarkChatColor(color)) {
+                    node.style.setProperty('color', '#111214', 'important');
+                }
+            } else {
+                if (color && isDarkChatColor(color)) {
+                    node.style.setProperty('color', '#d5e2ef', 'important');
+                }
             }
         });
 
@@ -347,16 +369,54 @@
             if (anchor.dataset.ichcImgEmbed) { return; }
             const href = (anchor.getAttribute('href') || '').trim();
             if (!href || /^javascript:/i.test(href)) { return; }
-            if (!/\.(jpe?g|gif|png|webp)(\?[^#]*)?$/i.test(href)) { return; }
+
+            // Resolve imgur page URLs and gifv to embeddable media
+            let embedUrl = null;
+            let embedType = 'img'; // 'img' or 'video'
+
+            const imgurPage = href.match(/^https?:\/\/(?:www\.)?imgur\.com\/([a-zA-Z0-9]+)\/?(?:\?[^#]*)?$/i);
+            const imgurDirect = href.match(/^https?:\/\/i\.imgur\.com\/([a-zA-Z0-9]+)(\.[a-z0-9]+)?(?:\?[^#]*)?$/i);
+
+            if (imgurPage) {
+                embedUrl = 'https://i.imgur.com/' + imgurPage[1] + '.jpg';
+                embedType = 'img';
+            } else if (imgurDirect) {
+                const ext = (imgurDirect[2] || '').toLowerCase();
+                if (ext === '.gifv') {
+                    embedUrl = 'https://i.imgur.com/' + imgurDirect[1] + '.mp4';
+                    embedType = 'video';
+                } else if (/^\.(jpe?g|gif|png|webp|mp4)$/.test(ext)) {
+                    embedUrl = href;
+                    embedType = ext === '.mp4' ? 'video' : 'img';
+                }
+            } else if (/\.(jpe?g|gif|png|webp)(\?[^#]*)?$/i.test(href)) {
+                embedUrl = href;
+                embedType = 'img';
+            }
+
+            if (!embedUrl) { return; }
             anchor.dataset.ichcImgEmbed = '1';
-            const img = document.createElement('img');
-            img.src = href;
-            img.className = 'ichc-chat-inline-img';
-            img.alt = '';
-            img.loading = 'lazy';
-            img.addEventListener('click', () => { window.open(href, '_blank', 'noopener,noreferrer'); });
+
+            let el;
+            if (embedType === 'video') {
+                el = document.createElement('video');
+                el.src = embedUrl;
+                el.className = 'ichc-chat-inline-img';
+                el.autoplay = true;
+                el.loop = true;
+                el.muted = true;
+                el.playsInline = true;
+                el.addEventListener('click', () => { window.open(href, '_blank', 'noopener,noreferrer'); });
+            } else {
+                el = document.createElement('img');
+                el.src = embedUrl;
+                el.className = 'ichc-chat-inline-img';
+                el.alt = '';
+                el.loading = 'lazy';
+                el.addEventListener('click', () => { window.open(href, '_blank', 'noopener,noreferrer'); });
+            }
             const ref = anchor.nextSibling;
-            anchor.parentNode.insertBefore(img, ref || null);
+            anchor.parentNode.insertBefore(el, ref || null);
         });
     }
 
@@ -563,6 +623,12 @@
         }, true);
     }
 
+    // Re-process all existing messages when the theme is toggled.
+    document.addEventListener('ichc-theme-change', () => {
+        const log = getChatLog();
+        if (log) { applyChatTheme(log); }
+    });
+
     function initChatScrollSync() {
         const log = getChatLog();
         if (!log) { return; }
@@ -643,9 +709,10 @@
         }
         chatScrollState.pauseCheckTimer = window.setInterval(() => {
             if (!chatScrollState.auto) { return; }
-            // Skip if a non-chat input is focused (e.g. userlist filter, gif search)
+            // Skip if focus is inside the PM window or on any non-chat input
             // — resumeNativeChat invokes the site's cR() which focuses txtMsg.
             const active = document.activeElement;
+            if (active && active.closest?.('#tabs')) { return; }
             if (active && active.tagName === 'INPUT' && active.id !== 'txtMsg') { return; }
             clearNativeChatPause();
         }, 2000);
@@ -655,5 +722,26 @@
             scheduleChatFollow(true);
         }
     }
+
+    // ─── Auto-dismiss "Support the Site!" modal ──────────────────────────────────
+
+    function dismissSupportModal() {
+        const links = document.querySelectorAll('a');
+        for (const link of links) {
+            if (/not right now/i.test(link.textContent)) {
+                link.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    (function initSupportModalDismisser() {
+        if (dismissSupportModal()) { return; }
+        const obs = new MutationObserver(() => {
+            if (dismissSupportModal()) { obs.disconnect(); }
+        });
+        obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    })();
 
 })();

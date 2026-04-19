@@ -561,10 +561,33 @@
         document.addEventListener('click', guard, true);
     }
 
+    // Wrap #txtMsg.focus so the site's own JS can't steal focus away from a
+    // PM input that the user is actively typing in.
+    function installPmFocusGuard() {
+        runInPageContext(`
+            if (window._ichcPmFocusGuard) { return; }
+            window._ichcPmFocusGuard = true;
+            var el = document.getElementById('txtMsg');
+            if (!el) { return; }
+            var _origFocus = el.focus;
+            el.focus = function() {
+                var active = document.activeElement;
+                if (active && active.tagName === 'INPUT' &&
+                    active.id && active.id.indexOf('txt_to_') === 0) {
+                    return; // PM input has focus — don't steal it
+                }
+                return _origFocus.apply(this, arguments);
+            };
+        `);
+    }
+
     function bindPmWindow(root) {
         if (!root || root.dataset.ichcPmBound === '1') { return; }
         root.dataset.ichcPmBound = '1';
         root.classList.remove('ui-tabs-collapsible');
+
+        installPmFocusGuard();
+        window.setTimeout(installPmFocusGuard, 500);
 
         function disableJquiOnTabs() {
             runInPageContext(`

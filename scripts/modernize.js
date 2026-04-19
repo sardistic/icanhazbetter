@@ -30,6 +30,8 @@
         chevronRight:`<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02z" clip-rule="evenodd"/></svg>`,
         chevronLeft: `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02z" clip-rule="evenodd"/></svg>`,
         shield:      `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M9.661 2.237a.531.531 0 0 1 .678 0 11.947 11.947 0 0 0 7.078 2.749.5.5 0 0 1 .479.425c.069.52.104 1.05.104 1.589 0 5.162-3.384 9.563-8.06 11.076a.475.475 0 0 1-.32 0C4.384 16.563 1 12.162 1 7c0-.539.035-1.069.104-1.589a.5.5 0 0 1 .48-.425 11.947 11.947 0 0 0 7.077-2.749z" clip-rule="evenodd"/></svg>`,
+        sun:         `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M10 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 2zM10 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 15zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM15.657 5.404a.75.75 0 1 0-1.06-1.06l-1.061 1.06a.75.75 0 0 0 1.06 1.06l1.061-1.06zM6.464 14.596a.75.75 0 1 0-1.06-1.06l-1.06 1.06a.75.75 0 0 0 1.06 1.06l1.06-1.06zM18 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 18 10zM5 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 5 10zM14.596 15.657a.75.75 0 0 0 1.06-1.06l-1.06-1.061a.75.75 0 1 0-1.06 1.06l1.06 1.061zM5.404 6.464a.75.75 0 0 0 1.06-1.06L5.403 4.343a.75.75 0 0 0-1.06 1.06l1.06 1.061z"/></svg>`,
+        moon:        `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M7.455 2.004a.75.75 0 0 1 .26.77 7 7 0 0 0 9.958 7.967.75.75 0 0 1 1.067.853A8.5 8.5 0 1 1 6.647 1.921a.75.75 0 0 1 .808.083z" clip-rule="evenodd"/></svg>`,
     };
 
     const PREF_KEY = 'ichc_layout_prefs';
@@ -45,6 +47,7 @@
         srcObservedEl: null,
         camsObservedEl: null,
         avatarObserver: null,  // IntersectionObserver — only fetches avatars for visible rows
+        searchFocused: false,  // true while filter input has focus — suppresses frequent rebuilds
     };
     const lurkState = {
         pollTimer: null,
@@ -195,6 +198,11 @@
     ];
 
     // ─── JS ──────────────────────────────────────────────────────────────────────
+
+    // Apply saved theme before first paint
+    if (localStorage.getItem('ichc_theme') === 'light') {
+        document.documentElement.classList.add('ichc-light-theme');
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
         installStageLayout();
@@ -1427,17 +1435,7 @@
                 label: getNotifLabel(),
                 icon: ICONS.bell,
                 action(labelEl) {
-                    // Click the native button directly — it owns the cycling logic and
-                    // state, so invokeNativeElementAction is more reliable than calling
-                    // toggleNotifications() blindly from page context.
-                    const nativeLink = document.querySelector('#showNotifications a');
-                    if (nativeLink) {
-                        invokeNativeElementAction(nativeLink);
-                    } else {
-                        runInPageContext('if (typeof toggleNotifications === "function") { toggleNotifications(); }');
-                    }
-                    // Reflect the new state in the label after a tick (site updates the
-                    // img title synchronously inside toggleNotifications).
+                    runInPageContext('if (typeof toggleNotifications === "function") { toggleNotifications(); }');
                     window.setTimeout(() => {
                         if (labelEl) { labelEl.textContent = getNotifLabel(); }
                     }, 50);
@@ -1710,11 +1708,31 @@
 
         const sidebarStrip = document.getElementById('ichc-ul-toggle-btn');
         if (sidebarStrip) {
+            // Theme toggle button (above PM button)
+            let themeBtn = document.getElementById('ichc-theme-toggle-btn');
+            if (!themeBtn) {
+                themeBtn = document.createElement('button');
+                themeBtn.id = 'ichc-theme-toggle-btn';
+                themeBtn.className = 'ichc-sidebar-btn';
+                themeBtn.title = 'Toggle light/dark theme';
+                const isLight = document.documentElement.classList.contains('ichc-light-theme');
+                themeBtn.innerHTML = isLight ? ICONS.moon : ICONS.sun;
+                themeBtn.addEventListener('click', () => {
+                    const nowLight = document.documentElement.classList.toggle('ichc-light-theme');
+                    themeBtn.innerHTML = nowLight ? ICONS.moon : ICONS.sun;
+                    localStorage.setItem('ichc_theme', nowLight ? 'light' : 'dark');
+                    document.dispatchEvent(new CustomEvent('ichc-theme-change'));
+                });
+            }
+
             [pmBtn, wrapper].forEach(el => {
                 if (el && !sidebarStrip.contains(el)) {
                     sidebarStrip.appendChild(el);
                 }
             });
+            if (!sidebarStrip.contains(themeBtn)) {
+                sidebarStrip.insertBefore(themeBtn, pmBtn);
+            }
         } else {
             // Strip not built yet — retry after buildUserList creates it.
             [200, 600, 1400].forEach(d => window.setTimeout(transformCommandBar, d));
@@ -1803,6 +1821,7 @@
         // Include ghost-slot AND hidden-slot entries — hidden just means the viewer
         // has chosen to hide the cam, but the user IS still broadcasting.
         const s = new Set();
+        let hasUnnamedSlot = false;
         [...document.querySelectorAll('#cams .videocontainer[id]')].forEach(container => {
             const camId = container.id.replace(/^id-/, '');
             const card = container.closest('.rounded_square');
@@ -1813,8 +1832,18 @@
                 ''
             );
             const key = name.trim().toLowerCase();
-            if (key && !looksLikePlaceholderName(key)) { s.add(key); }
+            if (key && !looksLikePlaceholderName(key)) {
+                s.add(key);
+            } else {
+                // Cam slot present but name not yet populated — the site sets
+                // textContent asynchronously after inserting the card.
+                hasUnnamedSlot = true;
+            }
         });
+        // If any slot had no name, retry once names may have loaded.
+        // The camsObserver (characterData: true) should also catch this, but the
+        // deferred rebuild is a safety net for sources that don't mutate the DOM.
+        if (hasUnnamedSlot) { scheduleUserListBuild(900); }
         return s;
     }
 
@@ -1876,8 +1905,10 @@
         const src = document.getElementById('activeUserList');
         if (!src) { return; }
         // Track focus — panel.innerHTML='' blurs anything focused inside the panel.
+        // Use the persistent state flag as the source of truth: panel.innerHTML='' fires blur
+        // synchronously, which would zero out activeElement before we can read it below.
         const _blFocusedId = document.activeElement?.id;
-        const _hadSearchFocus = document.activeElement?.classList?.contains('ichc-ul-search-input') ?? false;
+        const _hadSearchFocus = userListState.searchFocused || (document.activeElement?.classList?.contains('ichc-ul-search-input') ?? false);
         const shell = document.getElementById('ichc-chat-shell');
 
         const modSet = new Set();
@@ -2118,6 +2149,8 @@
         searchInput.setAttribute('autocomplete', 'off');
         searchInput.setAttribute('spellcheck', 'false');
         if (prevQuery) { searchInput.value = prevQuery; }
+        searchInput.addEventListener('focus', () => { userListState.searchFocused = true; });
+        searchInput.addEventListener('blur',  () => { userListState.searchFocused = false; });
         searchRow.appendChild(searchInput);
 
         header.appendChild(titleRow);
@@ -2424,19 +2457,30 @@
             }
         }
         // Restore focus — panel.innerHTML='' blurs anything that was focused inside it.
-        // Defer one tick so any late async DOM side-effects don't re-steal focus.
+        // _hadSearchFocus is captured before innerHTML='' so it survives the synchronous blur.
+        // Use a short delay so site JS that runs on the same tick can't re-steal focus after us.
         if (_hadSearchFocus || (_blFocusedId === 'txtMsg' && document.activeElement?.id !== 'txtMsg')) {
             window.setTimeout(() => {
                 if (_hadSearchFocus) {
-                    panel.querySelector('.ichc-ul-search-input')?.focus();
+                    const inp = panel.querySelector('.ichc-ul-search-input');
+                    if (inp) {
+                        inp.focus();
+                        // Place cursor at end of any existing query text
+                        const len = inp.value.length;
+                        inp.setSelectionRange(len, len);
+                    }
                 } else if (_blFocusedId === 'txtMsg' && document.activeElement?.id !== 'txtMsg') {
                     document.getElementById('txtMsg')?.focus();
                 }
-            }, 0);
+            }, 50);
         }
     }
 
     function scheduleUserListBuild(delay = 180) {
+        // While the filter input has focus, suppress frequent background rebuilds — they
+        // nuke the panel DOM (panel.innerHTML='') and steal focus from the input.
+        // Allow rebuilds eventually (2 s after the last mutation) so the list stays fresh.
+        if (userListState.searchFocused && delay < 2000) { delay = 2000; }
         window.clearTimeout(userListState.timer);
         userListState.timer = window.setTimeout(() => {
             buildUserList();
@@ -2464,6 +2508,11 @@
                 // this the userlist would not rebuild after a cam is hidden/shown.
                 attributes: true,
                 attributeFilter: ['style'],
+                // characterData: catches the site setting #name-{camId} textContent
+                // after the cam card is already in the DOM (common async pattern).
+                // Without this, cams with names that load after the initial childList
+                // mutation are never detected as cammed in the userlist.
+                characterData: true,
             });
             userListState.camsObservedEl = cams;
         }

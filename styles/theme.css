@@ -121,8 +121,8 @@
 
     /* ── Chat container: flex column, fills its parent height ── */
     #chat_container {
-        background: #1e2024 !important;
-        border: 1px solid rgba(255,255,255,0.06) !important;
+        background: #18191c !important;
+        border: none !important;
         border-radius: 8px !important;
         display: flex !important;
         flex-direction: column !important;
@@ -136,11 +136,12 @@
         background: #18191c !important;
         color: #dbdee1 !important;
         border: none !important;
-        padding: 8px 10px !important;
+        padding: 8px 0 8px 10px !important;
         font-size: 12px !important;
         line-height: 1.6 !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
+        scrollbar-width: none !important;
     }
     #txt > table,
     #txt > div,
@@ -148,7 +149,7 @@
     #txt > ul,
     #txt .line {
         margin: 0 0 6px !important;
-        padding: 6px 8px !important;
+        padding: 6px 2px 6px 8px !important;
         border-radius: 12px !important;
         background: rgba(26,28,31,0.82) !important;
         border: 1px solid rgba(255,255,255,0.04) !important;
@@ -438,7 +439,7 @@
         --ichc-cam-aspect: 4 / 3;
         --ichc-chat-width: 430px;
         --ichc-userlist-width: clamp(170px, 13vw, 240px);
-        --ichc-stage-side-width: calc(var(--ichc-chat-width) + var(--ichc-userlist-width) + 44px);
+        --ichc-stage-side-width: calc(var(--ichc-chat-width) + var(--ichc-userlist-width) + 32px);
         --ichc-topbar-height: 40px;
         --ichc-footer-height: 28px;
         --ichc-input-height: 50px;
@@ -909,9 +910,11 @@
         min-width: 0 !important;
         display: grid !important;
         /* chat | sidebar strip | userlist; row 2 = full-width input */
-        grid-template-columns: minmax(0, 1fr) var(--ichc-userlist-width) 44px !important;
+        grid-template-columns: minmax(0, 1fr) var(--ichc-userlist-width) 32px !important;
         grid-template-rows: calc(100vh - var(--ichc-topbar-height) - var(--ichc-input-height)) var(--ichc-input-height) !important;
         gap: 0 !important;
+        column-gap: 0 !important;
+        background: #18191c !important;
         align-items: start !important;
         position: relative !important;
         top: 0 !important;
@@ -928,7 +931,7 @@
         order: 3 !important;
     }
     #ichc-chat-shell.ichc-ul-collapsed {
-        grid-template-columns: minmax(0, 1fr) 0 44px !important;
+        grid-template-columns: minmax(0, 1fr) 0 32px !important;
     }
     /* When userlist is collapsed, input covers only the chat column */
     #ichc-chat-shell.ichc-ul-collapsed #ichc-input-row {
@@ -1638,10 +1641,11 @@
         grid-column: 1 !important;
         grid-row: 1 !important;
         z-index: 2 !important;
-        border-radius: 12px 12px 0 0 !important;
-        border-color: rgba(255,255,255,0.06) !important;
-        background: #1e2024 !important;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.32) !important;
+        border-radius: 12px 0 0 0 !important;
+        border: none !important;
+        padding: 0 !important;
+        background: #18191c !important;
+        box-shadow: none !important;
     }
     /* Input row spans chat + userlist cols (1–2); sidebar strip stays full-height in col 3 */
     #ichc-input-row {
@@ -1661,7 +1665,7 @@
     }
     #txt {
         background: #18191c !important;
-        padding: 12px 14px !important;
+        padding: 8px 0 8px 6px !important;
         font-size: 13px !important;
         position: relative !important;
         z-index: 1 !important;
@@ -1699,16 +1703,19 @@
         flex-direction: column !important;
         align-items: stretch !important;
         gap: 4px !important;
-        padding: 10px 6px 10px 4px !important;
+        padding: 10px 6px 10px 0 !important;
         font-size: 11px !important;
         line-height: 1.2 !important;
         text-align: left !important;
-        background: #0f1012 !important;
-        border: 1px solid rgba(255,255,255,0.06) !important;
-        border-radius: 12px !important;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.32) !important;
+        background: #18191c !important;
+        border: none !important;
+        border-radius: 0 12px 0 0 !important;
+        box-shadow: none !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
+        scrollbar-width: thin !important;
+        scrollbar-color: #2d2f34 transparent !important;
+        margin: 0 !important;
         justify-self: stretch !important;
         align-self: stretch !important;
         position: relative !important;
@@ -1730,7 +1737,7 @@
         flex-direction: column !important;
         align-items: stretch !important;
         gap: 5px !important;
-        padding: 0 2px 8px !important;
+        padding: 0 2px 8px 0 !important;
         border-bottom: 1px solid rgba(255,255,255,0.07) !important;
         margin-bottom: 4px !important;
     }
@@ -2059,7 +2066,7 @@
         /* col1=input(flex), col2=gif(40px), col3=send(auto) */
         align-items: center !important;
         column-gap: 4px !important;
-        padding: 6px 8px !important;
+        padding: 6px 4px !important;
         flex-shrink: 0 !important;
     }
     /* Input spans cols 1–2 so it visually fills behind the gif button */
@@ -2474,8 +2481,8 @@
     }
     /* Sidebar action buttons (PM / cog) */
     .ichc-sidebar-btn {
-        width: 40px !important;
-        height: 40px !important;
+        width: 32px !important;
+        height: 32px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -2503,8 +2510,8 @@
     .ichc-sidebar-btn.ichc-pm-toggle-hidden {
         opacity: 0.38 !important;
     }
-    /* PM button starts the bottom cluster in the strip */
-    #ichc-ul-toggle-btn #ichc-pm-toggle-btn {
+    /* Theme button starts the bottom cluster — PM + cog follow right below */
+    #ichc-ul-toggle-btn #ichc-theme-toggle-btn {
         margin-top: auto !important;
     }
     /* Collapse chevron — inside sidebar strip, above badge */
@@ -2793,4 +2800,259 @@
         #topic {
             flex-basis: 100% !important;
         }
+    }
+
+    /* ── Light theme ── */
+    /* Palette: no pure white — everything uses muted warm-grays */
+    html.ichc-light-theme body,
+    html.ichc-light-theme #aspnetForm {
+        background: #c8ccd2 !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme a { color: #5865f2 !important; }
+
+    /* Header */
+    html.ichc-light-theme [id$="panelHeader"],
+    html.ichc-light-theme .page_header,
+    html.ichc-light-theme .gray_back.page_header {
+        background: #d4d7dc !important;
+        border-bottom: 1px solid #b8bbbe !important;
+    }
+    html.ichc-light-theme .page_header_userlinks,
+    html.ichc-light-theme .page_header_userlinks span { color: #4e5058 !important; }
+    html.ichc-light-theme .page_header_userlinks b { color: #313338 !important; }
+    html.ichc-light-theme #msg_link,
+    html.ichc-light-theme #post_link {
+        background: #c4c8ce !important;
+        border: 1px solid #a8adb6 !important;
+    }
+
+    /* Top bar */
+    html.ichc-light-theme #ichc-topbar {
+        background: #d4d7dc !important;
+        border-bottom: 1px solid #b8bbbe !important;
+        box-shadow: none !important;
+    }
+    html.ichc-light-theme #ichc-topbar * { color: #313338 !important; }
+    html.ichc-light-theme #ichc-topbar a { color: #5865f2 !important; }
+    /* Refresh / reload-cams button */
+    html.ichc-light-theme #ichc-reload-cams-btn,
+    html.ichc-light-theme .ichc-reload-cams-btn {
+        background: #c4c8ce !important;
+        border-color: #a8adb6 !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #ichc-reload-cams-btn:hover,
+    html.ichc-light-theme .ichc-reload-cams-btn:hover {
+        background: #b8bbbe !important;
+    }
+    /* Hamburger button + menu */
+    html.ichc-light-theme #ichc-nav-hamburger-btn {
+        background: #c4c8ce !important;
+        border-color: #a8adb6 !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #ichc-nav-hamburger-btn:hover {
+        background: #b8bbbe !important;
+        border-color: #9a9fa8 !important;
+    }
+    html.ichc-light-theme #ichc-nav-hamburger-menu {
+        background: #d4d7dc !important;
+        border-color: #b8bbbe !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18) !important;
+    }
+    html.ichc-light-theme .ichc-nav-item { color: #313338 !important; }
+    html.ichc-light-theme .ichc-nav-item:hover {
+        background: #c4c8ce !important;
+        color: #111214 !important;
+    }
+    /* Primary action buttons (Go Live, Leave) */
+    html.ichc-light-theme .ichc-leave-btn {
+        background: #c4c8ce !important;
+        border-color: #a8adb6 !important;
+        color: #313338 !important;
+    }
+
+    /* Footer bar */
+    html.ichc-light-theme #ichc-footer-bar {
+        background: #d4d7dc !important;
+        border-top: 1px solid #b8bbbe !important;
+    }
+    html.ichc-light-theme #ichc-footer-bar * { color: #4e5058 !important; }
+    html.ichc-light-theme #ichc-footer-copy a { color: #5865f2 !important; }
+    html.ichc-light-theme .ichc-room-submenu-btn { color: #4e5058 !important; }
+    html.ichc-light-theme .ichc-room-submenu-btn:hover { color: #313338 !important; background: #c4c8ce !important; }
+    html.ichc-light-theme .ichc-room-submenu-panel {
+        background: #d4d7dc !important;
+        border: 1px solid #b8bbbe !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+    }
+    html.ichc-light-theme .ichc-room-submenu-item { color: #313338 !important; }
+    html.ichc-light-theme .ichc-room-submenu-item:hover { background: #c4c8ce !important; }
+
+    /* Room header / topic */
+    html.ichc-light-theme #header {
+        background: #d4d7dc !important;
+        border-bottom: 1px solid #b8bbbe !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #topic,
+    html.ichc-light-theme #topic * { color: #313338 !important; }
+
+    /* Shell / layout panels */
+    html.ichc-light-theme #ichc-chat-shell { background: #dde0e4 !important; }
+    html.ichc-light-theme #chat_container,
+    html.ichc-light-theme #ichc-chat-panel {
+        background: #dde0e4 !important;
+    }
+
+    /* Chat log */
+    html.ichc-light-theme #txt {
+        background: #dde0e4 !important;
+        color: #111214 !important;
+    }
+    /* Beat the dark-theme broad rule (#txt font/span/td etc → #d4dde7 !important) */
+    html.ichc-light-theme #txt font,
+    html.ichc-light-theme #txt span,
+    html.ichc-light-theme #txt b,
+    html.ichc-light-theme #txt div,
+    html.ichc-light-theme #txt td,
+    html.ichc-light-theme #txt tr,
+    html.ichc-light-theme #txt p,
+    html.ichc-light-theme #txt li { color: #111214 !important; }
+    /* Force userlink nicks dark — dark theme sets var(--ichc-chat-name-color) */
+    html.ichc-light-theme #txt a.userlink,
+    html.ichc-light-theme #txt a[data-ichc-chat-nick="1"],
+    html.ichc-light-theme #txt a.userlink:visited,
+    html.ichc-light-theme #txt a[data-ichc-chat-nick="1"]:visited { color: #4752c4 !important; }
+    html.ichc-light-theme #txt a:not(.userlink):not([data-ichc-chat-nick]) { color: #5865f2 !important; }
+    html.ichc-light-theme #txt > table,
+    html.ichc-light-theme #txt > div,
+    html.ichc-light-theme #txt > p,
+    html.ichc-light-theme #txt .line {
+        background: rgba(180,185,194,0.35) !important;
+        border-color: rgba(0,0,0,0.06) !important;
+    }
+    html.ichc-light-theme #txt .ichc-chat-event,
+    html.ichc-light-theme #txt .ichc-chat-event * { color: #5c5f66 !important; }
+
+    /* Input row */
+    html.ichc-light-theme #ichc-input-row {
+        background: #d4d7dc !important;
+        border-top: 1px solid #b8bbbe !important;
+    }
+    html.ichc-light-theme #txtMsg {
+        background: #c8ccd2 !important;
+        border: 1px solid #a8adb6 !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #txtMsg::placeholder { color: #72767d !important; }
+    html.ichc-light-theme #sendChat,
+    html.ichc-light-theme #ichc-send-btn {
+        background: #5865f2 !important;
+        color: #f2f3f5 !important;
+    }
+    html.ichc-light-theme #sendChat:hover,
+    html.ichc-light-theme #ichc-send-btn:hover { background: #4752c4 !important; }
+
+    /* Cams area */
+    html.ichc-light-theme #cams,
+    html.ichc-light-theme #ichc-cams-panel {
+        background: #c8ccd2 !important;
+        border: none !important;
+    }
+    html.ichc-light-theme #cams .rounded_square {
+        background: #b8bbbe !important;
+        border: 1px solid #a8adb6 !important;
+    }
+    html.ichc-light-theme #cams .cam_overlay,
+    html.ichc-light-theme #cams .cam_overlay * { color: #313338 !important; }
+
+    /* User list panel */
+    html.ichc-light-theme #ichc-userlist,
+    html.ichc-light-theme #ichc-ul-inner {
+        background: #dde0e4 !important;
+        border: none !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #ichc-ul-filter {
+        background: #d4d7dc !important;
+        border-bottom: 1px solid #b8bbbe !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #ichc-ul-filter-input {
+        background: #c8ccd2 !important;
+        border: 1px solid #a8adb6 !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user:hover {
+        background: #cdd0d6 !important;
+    }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-username { color: #313338 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-username.ichc-ul-mod { color: #c27c0e !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-dot-online { background: #3ba55c !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-dot-cam { background: #5865f2 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-section-header {
+        color: #4e5058 !important;
+        border-bottom: 1px solid #b8bbbe !important;
+    }
+
+    /* Sidebar strip */
+    html.ichc-light-theme #ichc-ul-toggle-btn {
+        background: #dde0e4 !important;
+        border-left: 1px solid rgba(0,0,0,0.08) !important;
+    }
+    html.ichc-light-theme .ichc-sidebar-btn { color: #4e5058 !important; }
+    html.ichc-light-theme .ichc-sidebar-btn:hover {
+        background: #b8bbbe !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme .ichc-ul-toggle-chevron { color: #4e5058 !important; }
+    html.ichc-light-theme #ichc-sidebar-tip {
+        background: #313338 !important;
+        color: #dde0e4 !important;
+    }
+
+    /* Cog menu */
+    html.ichc-light-theme #ichc-cog-menu,
+    html.ichc-light-theme .ichc-cog-panel {
+        background: #d4d7dc !important;
+        border: 1px solid #b8bbbe !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
+    }
+    html.ichc-light-theme .ichc-cog-item { color: #313338 !important; }
+    html.ichc-light-theme .ichc-cog-item:hover { background: #c4c8ce !important; }
+    html.ichc-light-theme .ichc-cog-divider { border-top: 1px solid #b8bbbe !important; }
+
+    /* GIF / emoji picker */
+    html.ichc-light-theme #ichc-gif-panel,
+    html.ichc-light-theme .ichc-gif-panel {
+        background: #d4d7dc !important;
+        border: 1px solid #b8bbbe !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
+    }
+    html.ichc-light-theme .ichc-gif-tab {
+        background: #c8ccd2 !important;
+        color: #4e5058 !important;
+        border-bottom: 1px solid #b8bbbe !important;
+    }
+    html.ichc-light-theme .ichc-gif-tab.ichc-active {
+        background: #d4d7dc !important;
+        color: #313338 !important;
+        border-bottom-color: #d4d7dc !important;
+    }
+    html.ichc-light-theme #ichc-gif-search {
+        background: #c8ccd2 !important;
+        border: 1px solid #a8adb6 !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme .ichc-emote-item:hover,
+    html.ichc-light-theme .ichc-emoji-item:hover { background: #c4c8ce !important; }
+
+    /* Overlays / modals */
+    html.ichc-light-theme .ichc-overlay-backdrop { background: rgba(0,0,0,0.4) !important; }
+    html.ichc-light-theme .ichc-overlay-panel {
+        background: #d4d7dc !important;
+        border: 1px solid #b8bbbe !important;
+        color: #313338 !important;
     }
