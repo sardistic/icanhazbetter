@@ -1353,9 +1353,13 @@
     .ichc-range strong { color: #dbdee1 !important; }
     .ichc-toolbar-note { margin-left: auto !important; color: #80848e !important; font-size: 12px !important; }
 
-    /* #camPreview / #cambroadcaster: the site's cam feed containers — don't block clicks */
+    /* #camPreview / #cambroadcaster: let the site control sizing; don't block clicks */
     #camPreview, #cambroadcaster {
         pointer-events: none !important;
+        width: auto !important;
+        height: auto !important;
+        max-width: none !important;
+        float: none !important;
     }
 
     /* Go Live camera/mic setup panel — must float above #ichc-room-root (z:2147483000).
