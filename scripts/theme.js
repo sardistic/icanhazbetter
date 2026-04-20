@@ -115,9 +115,10 @@
 
             // Detect "Broadcast!" click → user just went live
             panel.addEventListener('click', (e) => {
-                const target = e.target.closest('button, a, input[type="submit"]');
-                if (target && target.id !== 'ichc-broadcaster-close' &&
-                    /broadcast/i.test(target.textContent.trim())) {
+                if (e.target.closest('#ichc-broadcaster-close')) { return; }
+                const el = e.target.closest('button, a, input, [onclick]') || e.target;
+                const text = el.textContent.trim() || el.value || '';
+                if (/broadcast/i.test(text)) {
                     document.dispatchEvent(new CustomEvent('ichc-live-start'));
                 }
             });
