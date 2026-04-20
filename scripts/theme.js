@@ -99,8 +99,8 @@
             btn.title = 'Close';
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-                panel.style.display = 'none';
+                e.stopImmediatePropagation();
+                panel.style.setProperty('display', 'none', 'important');
             });
             panel.insertBefore(btn, panel.firstChild);
         });

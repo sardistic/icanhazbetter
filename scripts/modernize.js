@@ -716,9 +716,7 @@
                 broadcastBtn.classList.add('ichc-broadcast-btn');
                 let _lastLive = null;
                 const _syncLiveState = () => {
-                    const rtc = document.getElementById('rtc-broadcaster');
-                    const rtcVisible = rtc && window.getComputedStyle(rtc).display !== 'none';
-                    const isLive = !!(rtcVisible ||
+                    const isLive = !!(
                         document.querySelector('#camControl a[href*="broadcast"]')?.textContent.includes('Stop') ||
                         document.querySelector('#camControl .cam-button2') ||
                         document.querySelector('#camControl a.stopBroadcasting'));
@@ -731,8 +729,7 @@
                 _syncLiveState();
                 const _liveObs = new MutationObserver(_syncLiveState);
                 if (camControl) { _liveObs.observe(camControl, { subtree: true, childList: true, characterData: true }); }
-                // Watch for #rtc-broadcaster being added/removed anywhere in the page
-                _liveObs.observe(document.body, { childList: true, subtree: true });
+                _liveObs.observe(broadcastBtn, { subtree: true, childList: true, characterData: true, attributes: true });
             }
             primaryLinks.push(broadcastBtn);
         }
