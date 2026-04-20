@@ -714,22 +714,13 @@
             if (!broadcastBtn.classList.contains('ichc-broadcast-btn')) {
                 broadcastBtn.innerHTML = '<span class="ichc-btn-icon-lg">' + ICONS.broadcast + '</span><span>Go Live</span>';
                 broadcastBtn.classList.add('ichc-broadcast-btn');
-                let _lastLive = null;
-                const _syncLiveState = () => {
-                    const isLive = !!(
-                        document.querySelector('#camControl a[href*="broadcast"]')?.textContent.includes('Stop') ||
-                        document.querySelector('#camControl .cam-button2') ||
-                        document.querySelector('#camControl a.stopBroadcasting'));
-                    if (isLive === _lastLive) { return; }
-                    _lastLive = isLive;
+                const _setLive = (isLive) => {
                     broadcastBtn.classList.toggle('ichc-live', isLive);
                     const label = broadcastBtn.querySelector('span:not(.ichc-btn-icon-lg)');
                     if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
                 };
-                _syncLiveState();
-                const _liveObs = new MutationObserver(_syncLiveState);
-                if (camControl) { _liveObs.observe(camControl, { subtree: true, childList: true, characterData: true }); }
-                _liveObs.observe(broadcastBtn, { subtree: true, childList: true, characterData: true, attributes: true });
+                document.addEventListener('ichc-live-start', () => _setLive(true));
+                document.addEventListener('ichc-live-stop',  () => _setLive(false));
             }
             primaryLinks.push(broadcastBtn);
         }

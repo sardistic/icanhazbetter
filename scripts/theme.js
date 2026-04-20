@@ -86,33 +86,49 @@
 
     function watchBroadcasterPanel() {
         const seen = new WeakSet();
+
+        // When Go Live button is clicked, un-close the panel before the site shows it
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.ichc-broadcast-btn')) {
+                const panel = document.getElementById('rtc-broadcaster');
+                if (panel) { panel.classList.remove('ichc-panel-closed'); }
+            }
+        }, true);
+
         const mo = new MutationObserver(() => {
             const panel = document.getElementById('rtc-broadcaster');
             if (!panel || seen.has(panel)) { return; }
             seen.add(panel);
 
-            panel.style.setProperty('position', 'relative', '');
-
+            // Close button
             const btn = document.createElement('button');
             btn.id = 'ichc-broadcaster-close';
             btn.textContent = '✕';
             btn.title = 'Close';
-
-            // Watch for the site re-showing the panel (Go Live clicked again)
-            // and clear our forced hide so it can open normally.
-            let suppressStyleWatch = false;
-            new MutationObserver(() => {
-                if (suppressStyleWatch) { suppressStyleWatch = false; return; }
-                panel.style.removeProperty('display');
-            }).observe(panel, { attributes: true, attributeFilter: ['style'] });
-
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                suppressStyleWatch = true;
-                panel.style.setProperty('display', 'none', 'important');
+                panel.classList.add('ichc-panel-closed');
+                document.dispatchEvent(new CustomEvent('ichc-live-stop'));
             });
             panel.insertBefore(btn, panel.firstChild);
+
+            // Detect "Broadcast!" click → user just went live
+            panel.addEventListener('click', (e) => {
+                const target = e.target.closest('button, a, input[type="submit"]');
+                if (target && target.id !== 'ichc-broadcaster-close' &&
+                    /broadcast/i.test(target.textContent.trim())) {
+                    document.dispatchEvent(new CustomEvent('ichc-live-start'));
+                }
+            });
+
+            // Detect "or stop" / stop link click → user stopped broadcasting
+            panel.addEventListener('click', (e) => {
+                const target = e.target.closest('a');
+                if (target && /\bstop\b/i.test(target.textContent.trim())) {
+                    document.dispatchEvent(new CustomEvent('ichc-live-stop'));
+                }
+            });
         });
         mo.observe(document.body, { childList: true, subtree: true });
     }

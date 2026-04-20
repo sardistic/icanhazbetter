@@ -1353,6 +1353,8 @@
     .ichc-range strong { color: #dbdee1 !important; }
     .ichc-toolbar-note { margin-left: auto !important; color: #80848e !important; font-size: 12px !important; }
 
+    #rtc-broadcaster.ichc-panel-closed { display: none !important; }
+
     /* Go Live panel — must escape #ichc-room-root stacking context (z:2147483000) */
     #rtc-broadcaster,
     #cams > #rtc-broadcaster,
