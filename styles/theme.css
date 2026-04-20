@@ -2224,10 +2224,8 @@
         transform: translateY(-1px) !important;
     }
     #ichc-reload-cams-btn svg { flex-shrink: 0 !important; width: 1.2em !important; height: 1.2em !important; }
-    #ichc-reload-cams-btn:active svg,
-    #ichc-reload-cams-btn.ichc-spinning svg {
-        animation: ichc-rotate-spin 0.6s linear !important;
-    }
+    #ichc-reload-cams-btn:active svg { animation: ichc-rotate-spin 0.6s linear !important; }
+    #ichc-reload-cams-btn.ichc-spinning svg { animation: ichc-rotate-spin 0.7s linear infinite !important; }
 
     /* ── User list hidden cam entries ── */
     #ichc-userlist .ichc-ul-hidden-live {

@@ -90,6 +90,9 @@
         btn.classList.toggle('ichc-live', isLive);
         const label = btn.querySelector('span:not(.ichc-btn-icon-lg)');
         if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
+        if (!isLive) {
+            window.setTimeout(() => document.dispatchEvent(new CustomEvent('ichc-trigger-reload')), 1500);
+        }
     }
 
     function watchBroadcasterPanel() {

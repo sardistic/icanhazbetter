@@ -222,15 +222,13 @@
                     window._ichcLastRefresh = window._ichcLastRefresh || 0;
                     window.refreshCams = function(force) {
                         const now = Date.now();
-                        if (!force && now - window._ichcLastRefresh < 60000) {
-                            console.log('[ichc] refreshCams throttled (' + Math.round((now - window._ichcLastRefresh) / 1000) + 's since last)');
+                        if (!force && now - window._ichcLastRefresh < 10000) {
                             return;
                         }
                         window._ichcLastRefresh = now;
                         return _orig.apply(this, arguments);
                     };
                     window.refreshCams._ichcThrottled = true;
-                    console.log('[ichc] refreshCams throttled (15s cooldown, pass true to force)');
                 }
             `);
         };
@@ -728,9 +726,7 @@
             reloadBtn.title = 'Reload cams';
             reloadBtn.innerHTML = ICONS.rotate;
             reloadBtn.addEventListener('click', () => {
-                reloadCams();
-                reloadBtn.classList.add('ichc-spinning');
-                window.setTimeout(() => reloadBtn.classList.remove('ichc-spinning'), 700);
+                triggerReload();
             });
         }
         primaryLinks.push(reloadBtn);
@@ -1284,6 +1280,17 @@
 
     let _lastReloadAt = 0;
     let _reloadQueuedTimer = null;
+
+    function triggerReload() {
+        const btn = document.getElementById('ichc-reload-cams-btn');
+        if (btn) {
+            btn.classList.add('ichc-spinning');
+            window.setTimeout(() => btn.classList.remove('ichc-spinning'), 2000);
+        }
+        reloadCams();
+    }
+
+    document.addEventListener('ichc-trigger-reload', () => triggerReload());
 
     function reloadCams() {
         // Throttle: at most one reload per 15 seconds.
