@@ -95,11 +95,14 @@
     function watchBroadcasterPanel() {
         const seen = new WeakSet();
 
-        // When Go Live button is clicked, un-close the panel before the site shows it
+        // When Go Live/Stop Live button is clicked: clear closed state and sync live flag
         document.addEventListener('click', (e) => {
-            if (e.target.closest('.ichc-broadcast-btn')) {
-                const panel = document.getElementById('rtc-broadcaster');
-                if (panel) { panel.classList.remove('ichc-panel-closed'); }
+            const btn = e.target.closest('.ichc-broadcast-btn');
+            if (!btn) { return; }
+            const panel = document.getElementById('rtc-broadcaster');
+            if (panel) { panel.classList.remove('ichc-panel-closed'); }
+            if (btn.classList.contains('ichc-live')) {
+                setLiveState(false);
             }
         }, true);
 
