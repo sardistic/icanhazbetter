@@ -716,7 +716,9 @@
                 broadcastBtn.classList.add('ichc-broadcast-btn');
                 let _lastLive = null;
                 const _syncLiveState = () => {
-                    const isLive = !!(document.getElementById('rtc-broadcaster') ||
+                    const rtc = document.getElementById('rtc-broadcaster');
+                    const rtcVisible = rtc && window.getComputedStyle(rtc).display !== 'none';
+                    const isLive = !!(rtcVisible ||
                         document.querySelector('#camControl a[href*="broadcast"]')?.textContent.includes('Stop') ||
                         document.querySelector('#camControl .cam-button2') ||
                         document.querySelector('#camControl a.stopBroadcasting'));

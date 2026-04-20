@@ -97,7 +97,9 @@
             btn.id = 'ichc-broadcaster-close';
             btn.textContent = '✕';
             btn.title = 'Close';
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 panel.style.display = 'none';
             });
             panel.insertBefore(btn, panel.firstChild);
