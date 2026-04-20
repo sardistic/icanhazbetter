@@ -98,8 +98,7 @@
             btn.textContent = '✕';
             btn.title = 'Close';
             btn.addEventListener('click', () => {
-                const stop = panel.querySelector('a[href*="stop"], a[onclick*="stop"], a[onclick*="Stop"]');
-                if (stop) { stop.click(); } else { panel.style.display = 'none'; }
+                panel.style.display = 'none';
             });
             panel.insertBefore(btn, panel.firstChild);
         });

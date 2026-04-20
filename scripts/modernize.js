@@ -715,7 +715,8 @@
                 broadcastBtn.innerHTML = '<span class="ichc-btn-icon-lg">' + ICONS.broadcast + '</span><span>Go Live</span>';
                 broadcastBtn.classList.add('ichc-broadcast-btn');
                 const _syncLiveState = () => {
-                    const isLive = !!(document.querySelector('#camControl a[href*="broadcast"]')?.textContent.includes('Stop') ||
+                    const isLive = !!(document.getElementById('rtc-broadcaster') ||
+                        document.querySelector('#camControl a[href*="broadcast"]')?.textContent.includes('Stop') ||
                         document.querySelector('#camControl .cam-button2') ||
                         document.querySelector('#camControl a.stopBroadcasting'));
                     broadcastBtn.classList.toggle('ichc-live', isLive);
@@ -725,8 +726,8 @@
                 _syncLiveState();
                 const _liveObs = new MutationObserver(_syncLiveState);
                 if (camControl) { _liveObs.observe(camControl, { subtree: true, childList: true, characterData: true }); }
-                // Also watch document body for #rtc-broadcaster removal (broadcast ended)
-                _liveObs.observe(document.body, { childList: true, subtree: false });
+                // Watch for #rtc-broadcaster being added/removed anywhere in the page
+                _liveObs.observe(document.body, { childList: true, subtree: true });
             }
             primaryLinks.push(broadcastBtn);
         }
