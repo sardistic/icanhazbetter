@@ -714,13 +714,6 @@
             if (!broadcastBtn.classList.contains('ichc-broadcast-btn')) {
                 broadcastBtn.innerHTML = '<span class="ichc-btn-icon-lg">' + ICONS.broadcast + '</span><span>Go Live</span>';
                 broadcastBtn.classList.add('ichc-broadcast-btn');
-                const _setLive = (isLive) => {
-                    broadcastBtn.classList.toggle('ichc-live', isLive);
-                    const label = broadcastBtn.querySelector('span:not(.ichc-btn-icon-lg)');
-                    if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
-                };
-                document.addEventListener('ichc-live-start', () => _setLive(true));
-                document.addEventListener('ichc-live-stop',  () => _setLive(false));
             }
             primaryLinks.push(broadcastBtn);
         }

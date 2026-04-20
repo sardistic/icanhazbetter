@@ -84,6 +84,14 @@
         chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
     }
 
+    function setLiveState(isLive) {
+        const btn = document.querySelector('a.ichc-broadcast-btn');
+        if (!btn) { return; }
+        btn.classList.toggle('ichc-live', isLive);
+        const label = btn.querySelector('span:not(.ichc-btn-icon-lg)');
+        if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
+    }
+
     function watchBroadcasterPanel() {
         const seen = new WeakSet();
 
@@ -109,25 +117,25 @@
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 panel.classList.add('ichc-panel-closed');
-                document.dispatchEvent(new CustomEvent('ichc-live-stop'));
+                setLiveState(false);
             });
             panel.insertBefore(btn, panel.firstChild);
 
-            // Detect "Broadcast!" click → user just went live
+            // Detect "Broadcast!" click → mark Go Live button as live
             panel.addEventListener('click', (e) => {
                 if (e.target.closest('#ichc-broadcaster-close')) { return; }
                 const el = e.target.closest('button, a, input, [onclick]') || e.target;
                 const text = el.textContent.trim() || el.value || '';
                 if (/broadcast/i.test(text)) {
-                    document.dispatchEvent(new CustomEvent('ichc-live-start'));
+                    setLiveState(true);
                 }
             });
 
-            // Detect "or stop" / stop link click → user stopped broadcasting
+            // Detect "or stop" click → clear live state
             panel.addEventListener('click', (e) => {
                 const target = e.target.closest('a');
                 if (target && /\bstop\b/i.test(target.textContent.trim())) {
-                    document.dispatchEvent(new CustomEvent('ichc-live-stop'));
+                    setLiveState(false);
                 }
             });
         });
