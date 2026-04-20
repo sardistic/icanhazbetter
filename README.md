@@ -2,9 +2,7 @@
 
 A browser extension that upgrades [icanhazchat.com](https://www.icanhazchat.com) with a dark theme, a smarter user list, cam management, and chat improvements.
 
-> **Browser support**
-> - **Firefox** — this branch (`master`)
-> - **Chrome, Opera, Edge** — use the [`chrome` branch](../../tree/chrome)
+> **Browser support** — Chrome, Firefox, Opera, Edge (all use this branch)
 
 ---
 
@@ -42,7 +40,7 @@ Firefox supports unsigned extensions in **Developer Edition** and **Nightly**, o
 
 #### Option A — Temporary install (any Firefox, resets on restart)
 
-1. Download **[icanhazbetter.zip](./icanhazbetter.zip)** and extract it to a folder.
+1. Download **[icanhazbetter.zip](../../raw/master/icanhazbetter.zip)** and extract it to a folder.
 2. Open Firefox and go to `about:debugging`.
 3. Click **This Firefox** in the left sidebar.
 4. Click **Load Temporary Add-on…**
@@ -52,7 +50,7 @@ Firefox supports unsigned extensions in **Developer Edition** and **Nightly**, o
 
 #### Option B — Permanent install (Firefox Developer Edition or Nightly only)
 
-1. Download **[icanhazbetter.zip](./icanhazbetter.zip)** and extract it.
+1. Download **[icanhazbetter.zip](../../raw/master/icanhazbetter.zip)** and extract it.
 2. Go to `about:config`, search for `xpinstall.signatures.required`, set it to **`false`**.
 3. Go to `about:addons` → gear icon → **Install Add-on From File…**
 4. Select the extracted folder's **`manifest.json`**.
@@ -61,9 +59,7 @@ Firefox supports unsigned extensions in **Developer Edition** and **Nightly**, o
 
 ### Chrome
 
-> Uses the [`chrome` branch](../../tree/chrome) — download its zip, not this one.
-
-1. Download **[icanhazbetter.zip](../../raw/chrome/icanhazbetter.zip)** (chrome branch) and extract it.
+1. Download **[icanhazbetter.zip](../../raw/master/icanhazbetter.zip)** and extract it.
 2. Go to `chrome://extensions`.
 3. Enable **Developer mode** (toggle, top-right).
 4. Click **Load unpacked** and select the extracted folder.
@@ -72,9 +68,7 @@ Firefox supports unsigned extensions in **Developer Edition** and **Nightly**, o
 
 ### Opera
 
-> Uses the [`chrome` branch](../../tree/chrome) — same zip as Chrome.
-
-1. Download **[icanhazbetter.zip](../../raw/chrome/icanhazbetter.zip)** (chrome branch) and extract it.
+1. Download **[icanhazbetter.zip](../../raw/master/icanhazbetter.zip)** and extract it.
 2. Go to `opera://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the extracted folder.
@@ -83,9 +77,7 @@ Firefox supports unsigned extensions in **Developer Edition** and **Nightly**, o
 
 ### Microsoft Edge
 
-> Uses the [`chrome` branch](../../tree/chrome) — same zip as Chrome.
-
-1. Download **[icanhazbetter.zip](../../raw/chrome/icanhazbetter.zip)** (chrome branch) and extract it.
+1. Download **[icanhazbetter.zip](../../raw/master/icanhazbetter.zip)** and extract it.
 2. Go to `edge://extensions`.
 3. Enable **Developer mode** (left sidebar toggle).
 4. Click **Load unpacked** and select the extracted folder.
@@ -94,7 +86,7 @@ Firefox supports unsigned extensions in **Developer Edition** and **Nightly**, o
 
 ## Updating
 
-Re-download the zip for your browser, extract it over your existing folder, then reload:
+Re-download the zip, extract it over your existing folder, then reload:
 
 | Browser | How to reload |
 |---------|---------------|
