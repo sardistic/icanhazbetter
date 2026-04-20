@@ -97,9 +97,19 @@
             btn.id = 'ichc-broadcaster-close';
             btn.textContent = '✕';
             btn.title = 'Close';
+
+            // Watch for the site re-showing the panel (Go Live clicked again)
+            // and clear our forced hide so it can open normally.
+            let suppressStyleWatch = false;
+            new MutationObserver(() => {
+                if (suppressStyleWatch) { suppressStyleWatch = false; return; }
+                panel.style.removeProperty('display');
+            }).observe(panel, { attributes: true, attributeFilter: ['style'] });
+
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopImmediatePropagation();
+                suppressStyleWatch = true;
                 panel.style.setProperty('display', 'none', 'important');
             });
             panel.insertBefore(btn, panel.firstChild);
