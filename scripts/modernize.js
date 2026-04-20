@@ -719,10 +719,14 @@
                         document.querySelector('#camControl .cam-button2') ||
                         document.querySelector('#camControl a.stopBroadcasting'));
                     broadcastBtn.classList.toggle('ichc-live', isLive);
+                    const label = broadcastBtn.querySelector('span:not(.ichc-btn-icon-lg)');
+                    if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
                 };
                 _syncLiveState();
                 const _liveObs = new MutationObserver(_syncLiveState);
                 if (camControl) { _liveObs.observe(camControl, { subtree: true, childList: true, characterData: true }); }
+                // Also watch document body for #rtc-broadcaster removal (broadcast ended)
+                _liveObs.observe(document.body, { childList: true, subtree: false });
             }
             primaryLinks.push(broadcastBtn);
         }
