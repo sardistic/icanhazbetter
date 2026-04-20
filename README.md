@@ -121,6 +121,12 @@ Clone the repo and load as an unpacked extension per the instructions above for 
 
 ---
 
+## Privacy
+
+icanhazbetter collects no user data. It does not transmit, store, or share any information with any server or third party.
+
+The only data written to storage is your hidden-cam list, saved to `localStorage` in your own browser on icanhazchat.com. This never leaves your device.
+
 ## License
 
 MIT
