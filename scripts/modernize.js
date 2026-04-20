@@ -714,11 +714,14 @@
             if (!broadcastBtn.classList.contains('ichc-broadcast-btn')) {
                 broadcastBtn.innerHTML = '<span class="ichc-btn-icon-lg">' + ICONS.broadcast + '</span><span>Go Live</span>';
                 broadcastBtn.classList.add('ichc-broadcast-btn');
+                let _lastLive = null;
                 const _syncLiveState = () => {
                     const isLive = !!(document.getElementById('rtc-broadcaster') ||
                         document.querySelector('#camControl a[href*="broadcast"]')?.textContent.includes('Stop') ||
                         document.querySelector('#camControl .cam-button2') ||
                         document.querySelector('#camControl a.stopBroadcasting'));
+                    if (isLive === _lastLive) { return; }
+                    _lastLive = isLive;
                     broadcastBtn.classList.toggle('ichc-live', isLive);
                     const label = broadcastBtn.querySelector('span:not(.ichc-btn-icon-lg)');
                     if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
