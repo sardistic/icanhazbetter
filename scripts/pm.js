@@ -516,9 +516,35 @@
         delete root.dataset.ichcPmGeometryApplied;
     }
 
+    function fmtTime() {
+        const d = new Date();
+        const h = d.getHours(), m = d.getMinutes();
+        return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + (h < 12 ? 'am' : 'pm');
+    }
+
+    function stampPmRow(row) {
+        if (!(row instanceof HTMLElement)) { return; }
+        if (row.querySelector('.ichc-pm-ts')) { return; }
+        const ts = document.createElement('span');
+        ts.className = 'ichc-pm-ts';
+        ts.textContent = fmtTime();
+        row.appendChild(ts);
+    }
+
+    const _watchedConvos = new WeakSet();
+    function watchPmConvo(convo) {
+        if (_watchedConvos.has(convo)) { return; }
+        _watchedConvos.add(convo);
+        [...convo.children].forEach(stampPmRow);
+        new MutationObserver(mutations => {
+            mutations.forEach(m => m.addedNodes.forEach(n => stampPmRow(n)));
+        }).observe(convo, { childList: true });
+    }
+
     function applyPmTheme(root = getPmRoot()) {
         if (!root) { return; }
         root.querySelectorAll('.pm_convo').forEach(convo => {
+            watchPmConvo(convo);
             convo.querySelectorAll('a').forEach(anchor => {
                 if (!(anchor.matches('a.userlink') || isLikelyChatNickAnchor(anchor))) { return; }
                 const color = extractChatNickColor(anchor);
