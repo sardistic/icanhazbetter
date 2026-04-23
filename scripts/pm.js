@@ -585,26 +585,25 @@
     // Track deliberate user clicks on the main chat input so we don't
     // redirect focus when the user intentionally switches back to it.
     let _userClickedMain = false;
-    (function installFocusRedirect() {
-        if (document.getElementById('txtMsg')) { _bindMainClick(); }
-        else {
-            const obs = new MutationObserver(() => {
-                if (document.getElementById('txtMsg')) { obs.disconnect(); _bindMainClick(); }
-            });
-            obs.observe(document.body, { childList: true, subtree: true });
-        }
-        function _bindMainClick() {
-            document.getElementById('txtMsg').addEventListener('mousedown', () => {
-                _userClickedMain = true;
-                setTimeout(() => { _userClickedMain = false; }, 300);
-            }, true);
-        }
-        document.addEventListener('focusin', (e) => {
-            if (e.target.id !== 'txtMsg' || _userClickedMain) { return; }
-            const pmInput = document.querySelector('input[id^="txt_to_"]');
-            if (pmInput) { pmInput.focus(); }
+    function _bindMainClick() {
+        const el = document.getElementById('txtMsg');
+        if (!el || el._ichcMainClickBound) { return; }
+        el._ichcMainClickBound = true;
+        el.addEventListener('mousedown', () => {
+            _userClickedMain = true;
+            setTimeout(() => { _userClickedMain = false; }, 300);
         }, true);
-    }());
+    }
+    document.addEventListener('focusin', (e) => {
+        if (e.target.id !== 'txtMsg' || _userClickedMain) { return; }
+        const pmInput = document.querySelector('input[id^="txt_to_"]');
+        if (pmInput) { pmInput.focus(); }
+    }, true);
+    document.addEventListener('DOMContentLoaded', () => {
+        _bindMainClick();
+        const obs = new MutationObserver(() => { _bindMainClick(); });
+        obs.observe(document.body, { childList: true, subtree: true });
+    });
 
     // Wrap #txtMsg.focus so the site's own JS can't steal focus away from a
     // PM input that the user is actively typing in.
