@@ -414,6 +414,14 @@
         button.style.height = '1px';
         button.style.visibility = 'hidden';
 
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (!_userClickedMain && document.activeElement?.id === 'txtMsg') {
+                    input.focus();
+                }
+            }, 0);
+        });
+
         outgoing.appendChild(input);
         outgoing.appendChild(button);
         panel.appendChild(convo);
@@ -596,8 +604,12 @@
     }
     document.addEventListener('focusin', (e) => {
         if (e.target.id !== 'txtMsg' || _userClickedMain) { return; }
-        const pmInput = document.querySelector('input[id^="txt_to_"]');
-        if (pmInput) { pmInput.focus(); }
+        setTimeout(() => {
+            if (document.activeElement?.id !== 'txtMsg' || _userClickedMain) { return; }
+            const pmInput = document.querySelector('.ichc-pm-active input[id^="txt_to_"]')
+                         || document.querySelector('input[id^="txt_to_"]');
+            if (pmInput) { pmInput.focus(); }
+        }, 0);
     }, true);
     document.addEventListener('DOMContentLoaded', () => {
         _bindMainClick();
