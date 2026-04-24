@@ -553,7 +553,7 @@
         if (!root) { return; }
         root.querySelectorAll('.pm_convo').forEach(convo => {
             watchPmConvo(convo);
-            convo.querySelectorAll('a').forEach(anchor => {
+            convo.querySelectorAll('a:not([data-ichc-pm-nick])').forEach(anchor => {
                 if (!(anchor.matches('a.userlink') || isLikelyChatNickAnchor(anchor))) { return; }
                 const color = extractChatNickColor(anchor);
                 const resolved = color ? makeReadableChatColor(color) : '#dbeafe';
@@ -562,15 +562,17 @@
                 anchor.style.setProperty('color', resolved, 'important');
                 anchor.style.setProperty('font-weight', '700', 'important');
             });
-            convo.querySelectorAll('font[color], [style*="color"]').forEach(node => {
+            convo.querySelectorAll('font[color]:not([data-ichc-color-fixed]), [style*="color"]:not([data-ichc-color-fixed])').forEach(node => {
                 if (node.matches?.('a.userlink')) { return; }
                 const color = extractInlineColor(node);
                 if (color && isDarkChatColor(color)) {
                     node.style.setProperty('color', '#d5e2ef', 'important');
                 }
+                node.dataset.ichcColorFixed = '1';
             });
             [...convo.children].forEach(row => {
-                if (!(row instanceof HTMLElement)) { return; }
+                if (!(row instanceof HTMLElement) || row.dataset.ichcEventChecked) { return; }
+                row.dataset.ichcEventChecked = '1';
                 row.classList.toggle('ichc-pm-event', isCompactChatEventText(row.textContent || ''));
             });
         });
@@ -613,7 +615,10 @@
     }, true);
     document.addEventListener('DOMContentLoaded', () => {
         _bindMainClick();
-        const obs = new MutationObserver(() => { _bindMainClick(); });
+        const obs = new MutationObserver(() => {
+            _bindMainClick();
+            if (document.getElementById('txtMsg')?._ichcMainClickBound) { obs.disconnect(); }
+        });
         obs.observe(document.body, { childList: true, subtree: true });
     });
 
@@ -1570,7 +1575,11 @@
                 const root = getPmRoot();
                 if (!root) { return; }
                 liftPmRootToBody(root);
-                if (root.dataset.ichcPmBound === '1') { return; }
+                if (root.dataset.ichcPmBound === '1') {
+                    pmState.mountObserver.disconnect();
+                    pmState.mountObserver = null;
+                    return;
+                }
                 initPmWindows();
             });
             pmState.mountObserver.observe(document.body || document.documentElement, {
@@ -1626,7 +1635,7 @@
                 syncPmVisibility(root);
                 applyPmTheme(root);
             }, 80);
-        }).observe(document.documentElement, { childList: true, subtree: true });
+        }).observe(document.body || document.documentElement, { childList: true, subtree: true });
     })();
 
 })();
