@@ -2156,8 +2156,8 @@
 
     /* ── Sidebar buttons: PM / cog / gif — base style from .ichc-sidebar-btn ── */
     @keyframes ichc-pm-strobe {
-        0%, 100% { filter: brightness(1)   drop-shadow(0 0 3px rgba(239,68,68,0.2)); }
-        50%       { filter: brightness(1.5) drop-shadow(0 0 8px rgba(239,68,68,0.8)); }
+        0%, 100% { filter: brightness(1)   drop-shadow(0 0 4px rgba(239,68,68,0.4)); box-shadow: none; }
+        50%       { filter: brightness(1.8) drop-shadow(0 0 12px rgba(239,68,68,1)); box-shadow: 0 0 0 3px rgba(239,68,68,0.35) !important; }
     }
     #ichc-cog-wrapper {
         position: relative !important;

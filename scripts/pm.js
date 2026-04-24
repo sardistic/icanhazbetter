@@ -713,6 +713,7 @@
                 event.stopPropagation();
                 const href = anchor.getAttribute('href') || '';
                 const key = getPmKeyFromId(href.replace(/^#/, ''), 'from_');
+                clearPmTabUnread(root, key);
                 activatePmTab(root, key);
             }
         }, true);
@@ -1207,6 +1208,7 @@
             allPanels[0].setAttribute('aria-hidden', 'false');
         }
 
+        clearPmTabUnread(root, nick);
         applyPmTheme(root);
         schedulePmSave(200);
         startPmPoll();
@@ -1247,8 +1249,32 @@
         msgs.appendChild(line);
         msgs.scrollTop = msgs.scrollHeight;
 
+        // Alert the toggle button regardless of which path delivered the message.
+        window.dispatchEvent(new CustomEvent('ichc-pm-open'));
+
+        // Mark the tab unread if it isn't the currently active one.
+        const tabEl = root.querySelector(`#pm_${CSS.escape(nick)}`);
+        if (tabEl && !tabEl.classList.contains('ui-tabs-active')) {
+            tabEl.classList.add('ichc-pm-tab-unread');
+            let badge = tabEl.querySelector('.ichc-pm-unread-badge');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'ichc-pm-unread-badge';
+                const anchor = tabEl.querySelector('.ui-tabs-anchor');
+                if (anchor) { anchor.appendChild(badge); }
+            }
+            badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
+        }
+
         applyPmTheme(root);
         schedulePmSave(200);
+    }
+
+    function clearPmTabUnread(root, nick) {
+        const tabEl = root?.querySelector(`#pm_${CSS.escape(nick)}`);
+        if (!tabEl) { return; }
+        tabEl.classList.remove('ichc-pm-tab-unread');
+        tabEl.querySelector('.ichc-pm-unread-badge')?.remove();
     }
 
     function hookSitePmOpen() {
