@@ -2397,6 +2397,8 @@
             btn.title = on ? 'Switch to user list' : 'Switch to word cloud';
         }
         if (on) { buildUserList({ force: true }); }
+        // Resize cam cards to fit the new panel height
+        requestCamRelayout(60);
     }
 
     function buildUserList({ force = false } = {}) {
@@ -3575,9 +3577,19 @@
         const hiddenBarHeight = hiddenBar && !hiddenBar.hidden
             ? Math.ceil(hiddenBar.getBoundingClientRect().height || 0) + 10
             : 0;
+        // In word cloud mode, reserve height for the word cloud panel so cam cards
+        // don't expand to fill the full column (which would leave word cloud with 0px).
+        let rawPanelH = panel?.clientHeight || stage?.clientHeight || window.innerHeight * 0.72;
+        if (_wordCloudMode) {
+            const col = document.getElementById('ichc-cams-col');
+            const footer = document.getElementById('ichc-footer-bar');
+            const colH = col?.clientHeight || rawPanelH;
+            const footerH = footer?.offsetHeight || 28;
+            rawPanelH = Math.max(160, colH - footerH - 160); // reserve 160px min for word cloud
+        }
         const availableHeight = Math.max(
             240,
-            Math.round((panel?.clientHeight || stage?.clientHeight || window.innerHeight * 0.72) - hiddenBarHeight - 6),
+            Math.round(rawPanelH - hiddenBarHeight - 6),
         );
 
         if (window.innerWidth > 760 && densityCount > 0) {
