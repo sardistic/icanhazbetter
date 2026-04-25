@@ -954,11 +954,13 @@
     .ichc-wc-nick.ichc-wc-idle { opacity: 0.45 !important; }
     .ichc-wc-empty { color: #4e5058 !important; font-size: 12px !important; font-style: italic !important; }
 
-    /* Word cloud sits inside #ichc-cams-panel after the cam grid,
-       filling the natural whitespace below active cams.
-       #cams must not grow so the word cloud can claim the remaining space. */
-    #ichc-cams-panel > #cams {
+    /* Word cloud mode: stop the cams panel from filling the full column so the
+       word cloud (flex:1 1 0) can claim the space below it. */
+    #ichc-cams-col.ichc-wc-active #ichc-cams-panel {
         flex: 0 0 auto !important;
+    }
+    #ichc-cams-col.ichc-wc-active #ichc-wordcloud {
+        min-height: 80px !important;
     }
 
     /* Footer is always 28px; keep this for override if needed */

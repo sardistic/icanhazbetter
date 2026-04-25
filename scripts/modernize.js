@@ -2366,18 +2366,20 @@
     }
 
     function ensureWordCloud() {
-        // Word cloud lives inside #ichc-cams-panel, after #cams,
-        // so it fills the natural whitespace below the cam grid.
-        const panel = document.getElementById('ichc-cams-panel');
-        if (!panel) { return null; }
+        // Word cloud lives in #ichc-cams-col, just before #ichc-footer-bar.
+        // Keeping it outside #ichc-cams-panel avoids triggering the panel's
+        // ResizeObserver and the updateCamDensity cascade.
+        const camsCol = document.getElementById('ichc-cams-col');
+        if (!camsCol) { return null; }
         let wc = document.getElementById('ichc-wordcloud');
         if (!wc) {
             wc = document.createElement('div');
             wc.id = 'ichc-wordcloud';
         }
-        // Keep wc as the last child of the panel (after #cams)
-        if (panel.lastElementChild !== wc) {
-            panel.appendChild(wc);
+        const footer = document.getElementById('ichc-footer-bar');
+        const anchor = (footer?.parentElement === camsCol) ? footer : null;
+        if (wc.parentElement !== camsCol || wc.nextSibling !== anchor) {
+            camsCol.insertBefore(wc, anchor);
         }
         return wc;
     }
@@ -2385,14 +2387,28 @@
     function setWordCloudMode(on) {
         _wordCloudMode = on;
         localStorage.setItem('ichc_wc_mode', on ? '1' : '0');
+        const camsCol = document.getElementById('ichc-cams-col');
+        if (camsCol) { camsCol.classList.toggle('ichc-wc-active', on); }
         const wc = ensureWordCloud();
-        if (wc) { wc.classList.toggle('ichc-wc-visible', on); }
+        // Hide the cloud first; show it after the cam relayout shrinks the panel,
+        // otherwise the cloud appears before cams have had a chance to resize.
+        if (wc) { wc.classList.remove('ichc-wc-visible'); }
         const btn = document.getElementById('ichc-wc-toggle-btn');
         if (btn) {
             btn.classList.toggle('ichc-wc-active', on);
             btn.title = on ? 'Hide word cloud' : 'Show word cloud';
         }
         if (on) { buildUserList({ force: true }); }
+        // Resize cams to target height, then reveal the cloud once layout settles.
+        requestCamRelayout(30);
+        if (on) {
+            window.setTimeout(() => {
+                if (_wordCloudMode) {
+                    const w = document.getElementById('ichc-wordcloud');
+                    if (w) { w.classList.add('ichc-wc-visible'); }
+                }
+            }, 120);
+        }
     }
 
     function buildUserList({ force = false } = {}) {
@@ -3571,9 +3587,22 @@
         const hiddenBarHeight = hiddenBar && !hiddenBar.hidden
             ? Math.ceil(hiddenBar.getBoundingClientRect().height || 0) + 10
             : 0;
+        // In word cloud mode the cams panel has flex:0 0 auto, so panel.clientHeight
+        // equals the cam grid height. Using it directly for availableHeight creates a
+        // cascade (estimateHeight > availableHeight → more columns → shorter grid →
+        // smaller panel → smaller availableHeight → repeat). Use the column height
+        // minus reserved word-cloud space instead, which is a stable external value.
+        let rawPanelH = panel?.clientHeight || stage?.clientHeight || window.innerHeight * 0.72;
+        if (_wordCloudMode) {
+            const col = document.getElementById('ichc-cams-col');
+            const footer = document.getElementById('ichc-footer-bar');
+            const colH = col?.clientHeight || rawPanelH;
+            const footerH = footer?.offsetHeight || 28;
+            rawPanelH = Math.max(240, colH - footerH - 160);
+        }
         const availableHeight = Math.max(
             240,
-            Math.round((panel?.clientHeight || stage?.clientHeight || window.innerHeight * 0.72) - hiddenBarHeight - 6),
+            Math.round(rawPanelH - hiddenBarHeight - 6),
         );
 
         if (window.innerWidth > 760 && densityCount > 0) {
