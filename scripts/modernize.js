@@ -2341,7 +2341,7 @@
     }
 
     function buildWordCloud(users) {
-        let wc = document.getElementById('ichc-wordcloud');
+        let wc = ensureWordCloud();
         if (!wc) { return; }
         wc.innerHTML = '';
         const visible = users.filter(u => !u.cammed && !u.hidden);
@@ -2387,6 +2387,8 @@
         localStorage.setItem('ichc_wc_mode', on ? '1' : '0');
         const shell = document.getElementById('ichc-chat-shell');
         if (shell) { shell.classList.toggle('ichc-wordcloud-mode', on); }
+        const camsCol = document.getElementById('ichc-cams-col');
+        if (camsCol) { camsCol.classList.toggle('ichc-wc-active', on); }
         const wc = ensureWordCloud();
         if (wc) { wc.classList.toggle('ichc-wc-visible', on); }
         const btn = document.getElementById('ichc-wc-toggle-btn');

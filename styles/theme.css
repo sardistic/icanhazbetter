@@ -960,6 +960,14 @@
     }
     #ichc-chat-shell.ichc-wordcloud-mode #ichc-userlist,
     #ichc-chat-shell.ichc-wordcloud-mode #ichc-ul-toggle-btn { display: none !important; }
+    /* Prevent cams panel from consuming all flex space so word cloud can show */
+    #ichc-cams-col.ichc-wc-active #ichc-cams-panel {
+        flex: 0 0 auto !important;
+        overflow-y: auto !important;
+    }
+    #ichc-cams-col.ichc-wc-active #ichc-wordcloud {
+        min-height: 80px !important;
+    }
 
     /* Footer is always 28px; keep this for override if needed */
     #ichc-footer-bar:has(.ichc-submenu-open) {
