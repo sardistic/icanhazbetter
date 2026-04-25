@@ -412,6 +412,45 @@
             const ref = anchor.nextSibling;
             anchor.parentNode.insertBefore(el, ref || null);
         });
+
+        // Also embed image URLs that weren't wrapped in <a> tags by the site
+        _embedPlainImageUrls(root);
+    }
+
+    const _PLAIN_IMG_RE = /https?:\/\/[^\s<>"']+\.(?:jpe?g|gif|png|webp)(?:\?[^\s<>"']*)?/gi;
+
+    function _embedPlainImageUrls(scope) {
+        if (!scope) { return; }
+        const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+        const nodes = [];
+        let n;
+        while ((n = walker.nextNode())) {
+            if (n.parentElement?.closest('a, img, video')) { continue; }
+            _PLAIN_IMG_RE.lastIndex = 0;
+            if (_PLAIN_IMG_RE.test(n.textContent)) { nodes.push(n); }
+        }
+        nodes.forEach(textNode => {
+            if (!textNode.parentNode) { return; }
+            const text = textNode.textContent;
+            _PLAIN_IMG_RE.lastIndex = 0;
+            const frag = document.createDocumentFragment();
+            let last = 0, m;
+            while ((m = _PLAIN_IMG_RE.exec(text)) !== null) {
+                if (m.index > last) { frag.appendChild(document.createTextNode(text.slice(last, m.index))); }
+                const img = document.createElement('img');
+                img.src = m[0];
+                img.className = 'ichc-chat-inline-img';
+                img.alt = '';
+                img.loading = 'lazy';
+                img.dataset.ichcImgEmbed = '1';
+                const url = m[0];
+                img.addEventListener('click', () => window.open(url, '_blank', 'noopener,noreferrer'));
+                frag.appendChild(img);
+                last = m.index + url.length;
+            }
+            if (last < text.length) { frag.appendChild(document.createTextNode(text.slice(last))); }
+            textNode.parentNode.replaceChild(frag, textNode);
+        });
     }
 
     const chatScrollState = {
@@ -515,6 +554,9 @@
             hideChatPauseNotice();
             return;
         }
+        // Don't call cR() (which may focus txtMsg) if a non-chat input has focus
+        const active = document.activeElement;
+        if (active && active.tagName === 'INPUT' && active.id !== 'txtMsg') { return; }
         resumeNativeChat();
     }
 

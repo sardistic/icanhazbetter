@@ -1160,9 +1160,9 @@
     // Opens (or activates) the PM window for a specific nick.
     // Called when bO fires with a 5-arg PM-open call, and also from the
     // _pmArrivalObserver when the site adds PM nodes on its own.
-    function openPmForNick(nick) {
+    function openPmForNick(nick, { forceShow = false } = {}) {
         if (!nick || !isRoomPage()) { return; }
-        _D('openPmForNick:', nick);
+        _D('openPmForNick:', nick, 'forceShow:', forceShow);
 
         // Ensure the PM shell exists.
         const root = ensurePmShell();
@@ -1174,6 +1174,9 @@
 
         // Create the conversation panel + tab if not already present.
         ensurePmConversation(root, { key: nick, title: nick });
+
+        // forceShow (e.g. avatar strip click) overrides the user-hidden state.
+        if (forceShow) { _userHiddenPm = false; }
 
         // Show the window unless the user has manually hidden PMs via the toggle button.
         if (!_userHiddenPm) {
@@ -1286,7 +1289,7 @@
             const nick = typeof e.detail?.nick === 'string' ? e.detail.nick.trim() : null;
             _D('ichc-pm-open event: nick=', nick);
             if (nick) {
-                openPmForNick(nick);
+                openPmForNick(nick, { forceShow: !!e.detail?.forceShow });
             } else {
                 // Generic show (e.g. incoming PM from arrival observer)
                 window.setTimeout(() => {

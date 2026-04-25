@@ -48,6 +48,7 @@
         camsObservedEl: null,
         avatarObserver: null,  // IntersectionObserver — only fetches avatars for visible rows
         searchFocused: false,  // true while filter input has focus — suppresses frequent rebuilds
+        _suppressBlur: false,  // true during panel.innerHTML='' so the sync blur doesn't clear searchFocused
     };
     const lurkState = {
         pollTimer: null,
@@ -204,6 +205,8 @@
         document.documentElement.classList.add('ichc-light-theme');
     }
 
+    installBroadcastQualityPatch();
+
     document.addEventListener('DOMContentLoaded', () => {
         installStageLayout();
         installUnifiedHeader();
@@ -247,6 +250,131 @@
         chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
     }
 
+
+    function installBroadcastQualityPatch() {
+        const source = `
+(() => {
+    if (window.__ichcBroadcastQualityPatch) { return; }
+    window.__ichcBroadcastQualityPatch = true;
+
+    const target = {
+        width: { ideal: 640, max: 1280 },
+        height: { ideal: 480, max: 720 },
+        frameRate: { ideal: 15, max: 30 },
+        bitrate: 1500000,
+    };
+
+    function liftNumber(value, minimum) {
+        return typeof value === 'number' ? Math.max(value, minimum) : minimum;
+    }
+
+    function liftConstraint(existing, desired) {
+        if (existing == null || existing === true) { return Object.assign({}, desired); }
+        if (typeof existing === 'number') {
+            return { ideal: liftNumber(existing, desired.ideal), max: desired.max };
+        }
+        if (typeof existing !== 'object') { return existing; }
+
+        const next = Object.assign({}, existing);
+        delete next.exact;
+        next.ideal = liftNumber(next.ideal, desired.ideal);
+        next.max = liftNumber(next.max, desired.max);
+        return next;
+    }
+
+    function improveConstraints(constraints) {
+        const next = Object.assign({}, constraints || {});
+        const video = next.video;
+        if (!video) { return constraints; }
+        if (video === true) {
+            next.video = {
+                width: Object.assign({}, target.width),
+                height: Object.assign({}, target.height),
+                frameRate: Object.assign({}, target.frameRate),
+            };
+            return next;
+        }
+        if (typeof video !== 'object') { return constraints; }
+
+        next.video = Object.assign({}, video, {
+            width: liftConstraint(video.width, target.width),
+            height: liftConstraint(video.height, target.height),
+            frameRate: liftConstraint(video.frameRate, target.frameRate),
+        });
+        return next;
+    }
+
+    function tuneSender(sender) {
+        try {
+            const track = sender && sender.track;
+            if (!track || track.kind !== 'video') { return; }
+            track.contentHint = 'detail';
+            if (!sender.getParameters || !sender.setParameters) { return; }
+            const params = sender.getParameters() || {};
+            params.encodings = params.encodings && params.encodings.length ? params.encodings : [{}];
+            params.encodings.forEach(encoding => {
+                if (encoding.scaleResolutionDownBy && encoding.scaleResolutionDownBy > 1) {
+                    encoding.scaleResolutionDownBy = 1;
+                }
+                encoding.maxBitrate = Math.max(encoding.maxBitrate || 0, target.bitrate);
+                encoding.maxFramerate = Math.max(encoding.maxFramerate || 0, target.frameRate.ideal);
+            });
+            sender.setParameters(params).catch(() => {});
+        } catch (_) {}
+    }
+
+    function tunePeer(peer) {
+        try { peer.getSenders().forEach(tuneSender); } catch (_) {}
+    }
+
+    const mediaDevices = navigator.mediaDevices;
+    if (mediaDevices && mediaDevices.getUserMedia && !mediaDevices.getUserMedia.__ichcQualityPatched) {
+        const original = mediaDevices.getUserMedia.bind(mediaDevices);
+        const patched = function(constraints) {
+            return original(improveConstraints(constraints));
+        };
+        patched.__ichcQualityPatched = true;
+        mediaDevices.getUserMedia = patched;
+    }
+
+    ['getUserMedia', 'webkitGetUserMedia', 'mozGetUserMedia'].forEach(name => {
+        const original = navigator[name];
+        if (typeof original !== 'function' || original.__ichcQualityPatched) { return; }
+        const patched = function(constraints, success, failure) {
+            return original.call(navigator, improveConstraints(constraints), success, failure);
+        };
+        patched.__ichcQualityPatched = true;
+        navigator[name] = patched;
+    });
+
+    const NativePeer = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (!NativePeer || NativePeer.__ichcQualityPatched) { return; }
+
+    ['addTrack', 'addTransceiver', 'addStream', 'setLocalDescription', 'setRemoteDescription', 'createOffer', 'createAnswer'].forEach(method => {
+        const original = NativePeer.prototype[method];
+        if (typeof original !== 'function' || original.__ichcQualityPatched) { return; }
+        NativePeer.prototype[method] = function(...args) {
+            const result = original.apply(this, args);
+            setTimeout(() => tunePeer(this), 0);
+            setTimeout(() => tunePeer(this), 250);
+            if (result && typeof result.then === 'function') {
+                return result.then(value => {
+                    tunePeer(this);
+                    return value;
+                });
+            }
+            return result;
+        };
+        NativePeer.prototype[method].__ichcQualityPatched = true;
+    });
+
+    NativePeer.__ichcQualityPatched = true;
+})();
+        `;
+        runInPageContext(source);
+        window.setTimeout(() => runInPageContext(source), 1000);
+        window.setTimeout(() => runInPageContext(source), 3000);
+    }
     function invokeNativeElementAction(element) {
         if (!element || !element.isConnected) { return; }
 
@@ -1102,6 +1230,134 @@
         return null; // profileImageCache already set to null above
     }
 
+    // ── PM avatar strip helpers ────────────────────────────────────────────────
+    function _pmAvNode(nick) {
+        return document.querySelector(`#ichc-pm-avatars [data-nick="${CSS.escape(nick)}"]`);
+    }
+
+    function ensurePmAvatarItem(nick, color) {
+        const strip = document.getElementById('ichc-pm-avatars');
+        if (!strip || !nick) { return null; }
+        let item = _pmAvNode(nick);
+        if (item) { return item; }
+
+        item = document.createElement('div');
+        item.className = 'ichc-pm-avatar-item';
+        item.dataset.nick = nick;
+        item.title = nick;
+
+        const inner = document.createElement('div');
+        inner.className = 'ichc-pm-avatar-inner';
+        inner.style.setProperty('--av-bg', color ? `#${color.replace(/^#/, '')}` : userAvatarColor(nick));
+
+        const letter = document.createElement('span');
+        letter.className = 'ichc-pm-avatar-letter';
+        letter.textContent = (nick[0] || '?').toUpperCase();
+        inner.appendChild(letter);
+
+        const badge = document.createElement('span');
+        badge.className = 'ichc-pm-avatar-badge';
+        badge.setAttribute('aria-hidden', 'true');
+
+        item.appendChild(inner);
+        item.appendChild(badge);
+
+        item.addEventListener('click', () => {
+            window.dispatchEvent(new CustomEvent('ichc-pm-open', { detail: { nick, forceShow: true } }));
+            _clearPmAvatarBadge(nick);
+        });
+
+        strip.appendChild(item);
+
+        fetchProfileImage(nick).then(url => {
+            if (!url || !document.contains(item)) { return; }
+            const img = new Image();
+            img.className = 'ichc-pm-avatar-img';
+            img.src = url;
+            img.onerror = () => img.remove();
+            inner.appendChild(img);
+        });
+
+        return item;
+    }
+
+    function setPmAvatarBadge(nick, count) {
+        const item = _pmAvNode(nick);
+        if (!item) { return; }
+        item.classList.add('ichc-pm-avatar-unread');
+        const b = item.querySelector('.ichc-pm-avatar-badge');
+        if (b) { b.textContent = count > 0 ? String(count) : ''; }
+    }
+
+    function _clearPmAvatarBadge(nick) {
+        const item = _pmAvNode(nick);
+        if (!item) { return; }
+        item.classList.remove('ichc-pm-avatar-unread');
+        const b = item.querySelector('.ichc-pm-avatar-badge');
+        if (b) { b.textContent = ''; }
+    }
+
+    let _pmAvObsDone = false;
+    function initPmAvatarObserver() {
+        if (_pmAvObsDone) { return; }
+
+        window.addEventListener('ichc-pm-open', e => {
+            const nick = e.detail?.nick;
+            if (nick) { ensurePmAvatarItem(nick, e.detail?.color || null); }
+        });
+
+        function connect(tabList) {
+            _pmAvObsDone = true;
+
+            for (const tab of tabList.querySelectorAll('li[id^="pm_"]')) {
+                const nick = tab.id.slice(3);
+                ensurePmAvatarItem(nick, null);
+                if (tab.classList.contains('ichc-pm-tab-unread')) {
+                    const b = tab.querySelector('.ichc-pm-unread-badge');
+                    setPmAvatarBadge(nick, parseInt(b?.textContent) || 1);
+                }
+            }
+
+            new MutationObserver(muts => {
+                for (const m of muts) {
+                    if (m.type === 'childList') {
+                        for (const n of m.removedNodes) {
+                            if (n.nodeType !== 1 || !n.id.startsWith('pm_')) { continue; }
+                            _pmAvNode(n.id.slice(3))?.remove();
+                        }
+                        for (const n of m.addedNodes) {
+                            if (n.nodeType !== 1 || !n.id.startsWith('pm_')) { continue; }
+                            ensurePmAvatarItem(n.id.slice(3), null);
+                        }
+                    } else if (m.type === 'attributes' && m.attributeName === 'class') {
+                        const tab = m.target;
+                        if (!tab.id || !tab.id.startsWith('pm_')) { continue; }
+                        const nick = tab.id.slice(3);
+                        if (tab.classList.contains('ichc-pm-tab-unread')) {
+                            window.setTimeout(() => {
+                                const b = tab.querySelector('.ichc-pm-unread-badge');
+                                setPmAvatarBadge(nick, parseInt(b?.textContent) || 1);
+                            }, 0);
+                        } else {
+                            _clearPmAvatarBadge(nick);
+                        }
+                    }
+                }
+            }).observe(tabList, { childList: true, attributes: true, attributeFilter: ['class'], subtree: true });
+        }
+
+        const tabList = document.getElementById('tab_list');
+        if (tabList) {
+            connect(tabList);
+        } else {
+            const wait = new MutationObserver(() => {
+                const tl = document.getElementById('tab_list');
+                if (tl) { wait.disconnect(); connect(tl); }
+            });
+            wait.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
     function debounce(fn, wait) {
         let timeoutId = null;
         return (...args) => {
@@ -1389,6 +1645,11 @@
                         sidebarStrip.appendChild(el);
                     }
                 });
+                const pmAvStrip = document.getElementById('ichc-pm-avatars');
+                if (pmAvStrip && !sidebarStrip.contains(pmAvStrip)) {
+                    const tb = document.getElementById('ichc-theme-toggle-btn');
+                    sidebarStrip.insertBefore(pmAvStrip, tb || sidebarStrip.firstChild);
+                }
             }
             // gif lives directly in inputRow, between txtMsg and sendBtn
             const gifWrap = document.getElementById('ichc-gif-wrapper');
@@ -1725,6 +1986,17 @@
             if (!sidebarStrip.contains(themeBtn)) {
                 sidebarStrip.insertBefore(themeBtn, pmBtn);
             }
+
+            // PM avatar strip — sits above the theme button
+            let pmAvatarStrip = document.getElementById('ichc-pm-avatars');
+            if (!pmAvatarStrip) {
+                pmAvatarStrip = document.createElement('div');
+                pmAvatarStrip.id = 'ichc-pm-avatars';
+            }
+            if (!sidebarStrip.contains(pmAvatarStrip)) {
+                sidebarStrip.insertBefore(pmAvatarStrip, themeBtn);
+            }
+            initPmAvatarObserver();
         } else {
             // Strip not built yet — retry after buildUserList creates it.
             [200, 600, 1400].forEach(d => window.setTimeout(transformCommandBar, d));
@@ -1835,7 +2107,7 @@
         // If any slot had no name, retry once names may have loaded.
         // The camsObserver (characterData: true) should also catch this, but the
         // deferred rebuild is a safety net for sources that don't mutate the DOM.
-        if (hasUnnamedSlot) { scheduleUserListBuild(900); }
+        if (hasUnnamedSlot) { scheduleUserListBuild(900, true); }
         return s;
     }
 
@@ -1911,30 +2183,49 @@
             }
         });
 
-        const cammed  = getCammedNames();
+        const cammed      = getCammedNames();
+        const liveEntries = getLiveCamEntries();
+        const liveKeys    = new Set(liveEntries.map(e => e.name.trim().toLowerCase()));
         const blocked = loadBlockedUsers();
         const seen    = new Set();
         const users   = [];
 
-        // Pre-scan: find supporter smicons and map them to the nearest userlink.
-        // The site places img.smicon as a sibling of a.userlink (not a child), so
-        // a.querySelector() misses them entirely. Walk each smicon's siblings to
-        // find the associated name.
+        // Pre-scan: find supporter markers and map them to the nearest userlink.
+        // theme.js may replace smicon images with span[data-icon], so check both forms.
         const supporterNames = new Set();
-        src.querySelectorAll('img.smicon').forEach(icon => {
-            const src2 = icon.src || '';
-            const ttl  = (icon.title || icon.alt || '').toLowerCase();
-            if (!src2.includes('heart') && !ttl.includes('supporter')) { return; }
-            // Search prev siblings first, then next siblings for the userlink
-            let el = icon.previousElementSibling;
-            while (el && !el.classList.contains('userlink')) { el = el.previousElementSibling; }
-            if (!el) {
-                el = icon.nextElementSibling;
-                while (el && !el.classList.contains('userlink')) { el = el.nextElementSibling; }
-            }
-            // Fallback: check parent element for a userlink child
-            if (!el) { el = icon.parentElement?.querySelector('a.userlink') || null; }
-            const n = el?.textContent?.trim().toLowerCase();
+        const supporterPattern = /(get[_-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_-]?supporter|heart_delete|valentine)/i;
+        const markerSelector = [
+            'img.smicon',
+            'img[src*="heart" i]',
+            'img[src*="support" i]',
+            'img[src*="trophy" i]',
+            'span[data-icon]',
+            '[title*="heart" i]',
+            '[title*="support" i]',
+            '[aria-label*="heart" i]',
+            '[aria-label*="support" i]'
+        ].join(',');
+        const markerText = node => [
+            node.getAttribute?.('src'),
+            node.getAttribute?.('data-icon'),
+            node.getAttribute?.('title'),
+            node.getAttribute?.('alt'),
+            node.getAttribute?.('aria-label'),
+            node.className,
+        ].filter(Boolean).join(' ');
+        const isSupporterMarker = node => !!node && supporterPattern.test(markerText(node));
+        const nearestUserlink = node => {
+            let el = node.previousElementSibling;
+            while (el && !el.matches?.('a.userlink')) { el = el.previousElementSibling; }
+            if (el) { return el; }
+            el = node.nextElementSibling;
+            while (el && !el.matches?.('a.userlink')) { el = el.nextElementSibling; }
+            if (el) { return el; }
+            return node.closest?.('a.userlink') || node.parentElement?.querySelector('a.userlink') || node.closest?.('li, p, div')?.querySelector('a.userlink') || null;
+        };
+        src.querySelectorAll(markerSelector).forEach(marker => {
+            if (!isSupporterMarker(marker)) { return; }
+            const n = nearestUserlink(marker)?.textContent?.trim().toLowerCase();
             if (n) { supporterNames.add(n); }
         });
 
@@ -1959,19 +2250,19 @@
                 name,
                 idle:    a.innerHTML.includes('<strike') || a.parentElement?.tagName === 'STRIKE',
                 mod:     modSet.has(key),
-                cammed:  cammed.has(key) || hasCamLogo,
+                cammed:  cammed.has(key) || hasCamLogo || liveKeys.has(key),
                 hidden:  blocked.has(key),
                 karma:   extractKarmaFromUserAnchor(a),
                 trigger: a,
                 icon:      smicon ? { src: smicon.src, title: smicon.title || smicon.alt || '' } : null,
-                supporter: supporterNames.has(key),
+                supporter: supporterNames.has(key) || !!(parentLi && Array.from(parentLi.querySelectorAll(markerSelector)).some(isSupporterMarker)),
             });
         });
 
         // Also include any users who are broadcasting (in #cams) but absent from
         // #activeUserList — this covers hidden-cam users the site may omit from
         // its own list.
-        getLiveCamEntries().forEach(entry => {
+        liveEntries.forEach(entry => {
             const key = entry.name.trim().toLowerCase();
             if (!key || seen.has(key)) { return; }
             seen.add(key);
@@ -2013,7 +2304,9 @@
         const prevMoreOpen = panel.querySelector('.ichc-ul-more-menu')?.hidden === false;
         const prevOfflineOpen = panel.querySelector('.ichc-ul-offline-hidden.is-open') !== null;
 
+        userListState._suppressBlur = true;
         panel.innerHTML = '';
+        userListState._suppressBlur = false;
         if (prevSearchOpen) { panel.classList.add('ichc-ul-search-open'); }
 
         const activeCount = users.filter(u => !u.idle).length;
@@ -2142,7 +2435,7 @@
         searchInput.setAttribute('spellcheck', 'false');
         if (prevQuery) { searchInput.value = prevQuery; }
         searchInput.addEventListener('focus', () => { userListState.searchFocused = true; });
-        searchInput.addEventListener('blur',  () => { userListState.searchFocused = false; });
+        searchInput.addEventListener('blur',  () => { if (!userListState._suppressBlur) { userListState.searchFocused = false; } });
         searchRow.appendChild(searchInput);
 
         header.appendChild(titleRow);
@@ -2170,7 +2463,8 @@
                     (u.hidden ? ' ichc-ul-hidden-live' : '') +
                     (u.cammed && !u.hidden ? ' cammed' : '') +
                     (u.mod    ? ' mod'    : '') +
-                    (u.idle   ? ' idle'   : '');
+                    (u.idle   ? ' idle'   : '') +
+                    (u.supporter ? ' ichc-ul-supporter-row' : '');
                 span.href = u.trigger?.getAttribute('href') || '#';
                 span.setAttribute('draggable', 'false');
                 span.setAttribute('tabindex', '0');
@@ -2231,6 +2525,7 @@
                     u.hidden && 'hidden',
                     u.mod && 'mod',
                     u.cammed && 'on cam',
+                    u.supporter && 'Get Hearted',
                     u.idle && 'idle',
                     u.karma != null && `${u.karma} karma`,
                 ].filter(Boolean).join(' · ') || u.name;
@@ -2468,11 +2763,12 @@
         }
     }
 
-    function scheduleUserListBuild(delay = 180) {
+    function scheduleUserListBuild(delay = 180, bypassFocusThrottle = false) {
         // While the filter input has focus, suppress frequent background rebuilds — they
         // nuke the panel DOM (panel.innerHTML='') and steal focus from the input.
         // Allow rebuilds eventually (2 s after the last mutation) so the list stays fresh.
-        if (userListState.searchFocused && delay < 2000) { delay = 2000; }
+        // bypassFocusThrottle is set for time-sensitive updates (e.g. unnamed cam slot retry).
+        if (userListState.searchFocused && delay < 2000 && !bypassFocusThrottle) { delay = 2000; }
         window.clearTimeout(userListState.timer);
         userListState.timer = window.setTimeout(() => {
             buildUserList();

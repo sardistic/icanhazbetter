@@ -3,7 +3,7 @@
         height: 100vh !important;
         min-height: 100vh !important;
     }
-    html, body {
+    html:has(#chat_container), html:has(#chat_container) body {
         overflow: hidden !important;
     }
     #aspnetForm {
@@ -1950,27 +1950,35 @@
     }
     /* Site supporter avatar decoration */
     .ichc-ul-avatar-wrap.ichc-ul-supporter {
-        box-shadow: 0 0 0 2px rgba(255, 130, 160, 0.45) !important;
-        transition: box-shadow 0.2s !important;
+        overflow: visible !important;
+        border: 1px solid rgba(255, 130, 190, 0.9) !important;
+        box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.35), 0 0 16px rgba(255, 105, 180, 0.42) !important;
+        transition: box-shadow 0.2s, border-color 0.2s !important;
+        isolation: isolate !important;
     }
     .ichc-ul-avatar-wrap.ichc-ul-supporter::after {
-        content: '♥' !important;
+        content: '' !important;
         position: absolute !important;
-        bottom: -1px !important;
-        right: -3px !important;
-        font-size: 8px !important;
-        line-height: 1 !important;
-        color: #ff7fa0 !important;
-        opacity: 0 !important;
-        transition: opacity 0.15s !important;
-        pointer-events: none !important;
-        z-index: 1 !important;
-    }
-    .ichc-ul-user:hover .ichc-ul-avatar-wrap.ichc-ul-supporter::after {
+        left: 50% !important;
+        bottom: -8px !important;
+        width: 30px !important;
+        height: 10px !important;
+        border-radius: 999px !important;
+        background: rgba(255, 82, 170, 0.78) !important;
+        filter: blur(6px) !important;
         opacity: 1 !important;
+        transform: translateX(-50%) !important;
+        transition: opacity 0.15s, background 0.15s, filter 0.15s !important;
+        pointer-events: none !important;
+        z-index: -1 !important;
     }
     .ichc-ul-user:hover .ichc-ul-avatar-wrap.ichc-ul-supporter {
-        box-shadow: 0 0 0 2px rgba(255, 130, 160, 0.75) !important;
+        border-color: rgba(255, 160, 210, 1) !important;
+        box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.5), 0 0 22px rgba(255, 105, 180, 0.62) !important;
+    }
+    .ichc-ul-user:hover .ichc-ul-avatar-wrap.ichc-ul-supporter::after {
+        background: rgba(255, 72, 176, 0.95) !important;
+        filter: blur(7px) !important;
     }
     /* Sidebar collapsed-state broadcasting avatars */
     #ichc-ul-sidebar-avatars {
@@ -2156,8 +2164,8 @@
 
     /* ── Sidebar buttons: PM / cog / gif — base style from .ichc-sidebar-btn ── */
     @keyframes ichc-pm-strobe {
-        0%, 100% { filter: brightness(1)   drop-shadow(0 0 4px rgba(239,68,68,0.4)); box-shadow: none; }
-        50%       { filter: brightness(1.8) drop-shadow(0 0 12px rgba(239,68,68,1)); box-shadow: 0 0 0 3px rgba(239,68,68,0.35) !important; }
+        0%, 100% { background: rgba(120,10,10,0.55) !important; color: #fca5a5 !important; transform: scale(1)    !important; filter: brightness(1)   drop-shadow(0 0 3px rgba(239,68,68,0.3));  box-shadow: none !important; }
+        50%       { background: #dc2626              !important; color: #fff     !important; transform: scale(1.18) !important; filter: brightness(1.6) drop-shadow(0 0 18px rgba(255,0,0,1));    box-shadow: 0 0 0 4px rgba(239,68,68,0.7), 0 0 16px 4px rgba(255,0,0,0.55) !important; }
     }
     #ichc-cog-wrapper {
         position: relative !important;
@@ -2551,17 +2559,101 @@
         border-color: rgba(255,255,255,0.12) !important;
     }
     .ichc-sidebar-btn.ichc-pm-toggle-alert {
-        animation: ichc-pm-strobe 0.7s ease-in-out infinite !important;
-        background: rgba(153,27,27,0.75) !important;
-        color: #fca5a5 !important;
-        border-color: rgba(239,68,68,0.4) !important;
+        animation: ichc-pm-strobe 0.55s ease-in-out infinite !important;
+        border-color: rgba(239,68,68,0.6) !important;
     }
     .ichc-sidebar-btn.ichc-pm-toggle-hidden {
         opacity: 0.38 !important;
     }
+    /* ── PM avatar strip ── */
+    #ichc-pm-avatars {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 6px !important;
+        padding: 4px 0 8px !important;
+        width: 100% !important;
+        margin-top: auto !important;
+    }
+    .ichc-pm-avatar-item {
+        position: relative !important;
+        width: 34px !important;
+        height: 34px !important;
+        flex-shrink: 0 !important;
+        cursor: pointer !important;
+    }
+    .ichc-pm-avatar-inner {
+        position: relative !important;
+        width: 100% !important;
+        height: 100% !important;
+        border-radius: 50% !important;
+        overflow: hidden !important;
+        border: 2px solid rgba(255,255,255,0.10) !important;
+        background: var(--av-bg, #5865f2) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: border-color 0.15s !important;
+    }
+    .ichc-pm-avatar-item:hover .ichc-pm-avatar-inner {
+        border-color: rgba(255,255,255,0.32) !important;
+    }
+    .ichc-pm-avatar-letter {
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        color: rgba(255,255,255,0.9) !important;
+        line-height: 1 !important;
+        pointer-events: none !important;
+        user-select: none !important;
+    }
+    .ichc-pm-avatar-img {
+        position: absolute !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        border-radius: 50% !important;
+    }
+    .ichc-pm-avatar-badge {
+        position: absolute !important;
+        top: -3px !important;
+        right: -3px !important;
+        min-width: 14px !important;
+        height: 14px !important;
+        padding: 0 3px !important;
+        border-radius: 7px !important;
+        background: #ef4444 !important;
+        color: #fff !important;
+        font-size: 9px !important;
+        font-weight: 800 !important;
+        line-height: 14px !important;
+        text-align: center !important;
+        pointer-events: none !important;
+        display: none !important;
+        z-index: 2 !important;
+        border: 2px solid #1e2024 !important;
+        box-sizing: content-box !important;
+    }
+    .ichc-pm-avatar-item.ichc-pm-avatar-unread .ichc-pm-avatar-badge {
+        display: block !important;
+    }
+    @keyframes ichc-av-bounce {
+        0%        { transform: translateY(0)     scale(1);    }
+        18%       { transform: translateY(-9px)  scale(1.13); }
+        36%       { transform: translateY(0)     scale(0.92); }
+        52%       { transform: translateY(-4px)  scale(1.04); }
+        68%, 100% { transform: translateY(0)     scale(1);    }
+    }
+    .ichc-pm-avatar-item.ichc-pm-avatar-unread .ichc-pm-avatar-inner {
+        animation: ichc-av-bounce 0.8s ease-in-out infinite !important;
+        border-color: #ef4444 !important;
+        box-shadow: 0 0 0 2px rgba(239,68,68,0.55), 0 2px 10px rgba(239,68,68,0.4) !important;
+    }
+    html.ichc-light-theme .ichc-pm-avatar-badge { border-color: #dde0e4 !important; }
+
     /* Theme button starts the bottom cluster — PM + cog follow right below */
     #ichc-ul-toggle-btn #ichc-theme-toggle-btn {
-        margin-top: auto !important;
+        margin-top: 0 !important;
     }
     /* Collapse chevron — inside sidebar strip, above badge */
     .ichc-ul-toggle-chevron {

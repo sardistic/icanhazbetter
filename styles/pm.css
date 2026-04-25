@@ -201,11 +201,11 @@
         filter: invert(1) brightness(1.6) !important;
     }
     @keyframes ichc-tab-unread-pulse {
-        0%, 100% { background: rgba(239,68,68,0.18) !important; border-color: rgba(239,68,68,0.35) !important; }
-        50%       { background: rgba(239,68,68,0.42) !important; border-color: rgba(239,68,68,0.7) !important; }
+        0%, 100% { background: rgba(239,68,68,0.12) !important; border-color: rgba(239,68,68,0.3) !important; box-shadow: none !important; color: #dbdee1 !important; }
+        50%       { background: #ef4444 !important; border-color: #ff2222 !important; box-shadow: 0 0 12px 4px rgba(239,68,68,0.85), 0 0 4px 1px #ff0000 !important; color: #fff !important; }
     }
     #tabs .ui-tabs-tab.ichc-pm-tab-unread {
-        animation: ichc-tab-unread-pulse 0.9s ease-in-out infinite !important;
+        animation: ichc-tab-unread-pulse 0.65s ease-in-out infinite !important;
         border-color: rgba(239,68,68,0.5) !important;
     }
     .ichc-pm-unread-badge {
