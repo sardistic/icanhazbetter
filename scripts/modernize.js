@@ -64,7 +64,18 @@
         syncRetryTimer: null,
     };
     // Cache: username_lower → image URL string | null ('pending' while fetching)
+    // Capped at 200 entries — evict oldest 50 when full to avoid unbounded growth.
     const profileImageCache = new Map();
+    function _profileCacheSet(key, value) {
+        if (profileImageCache.size >= 200) {
+            let evicted = 0;
+            for (const k of profileImageCache.keys()) {
+                profileImageCache.delete(k);
+                if (++evicted >= 50) { break; }
+            }
+        }
+        profileImageCache.set(key, value);
+    }
     // Cache: username_lower → <img> element (reused across userlist rebuilds to prevent abort loops)
     const avatarImgCache = new Map();
 
@@ -585,6 +596,19 @@
         if (camsCol && bar.parentElement !== camsCol) {
             camsCol.appendChild(bar);
         }
+
+        // Word cloud toggle button
+        if (!document.getElementById('ichc-wc-toggle-btn')) {
+            const wcBtn = document.createElement('button');
+            wcBtn.id = 'ichc-wc-toggle-btn';
+            wcBtn.type = 'button';
+            wcBtn.title = _wordCloudMode ? 'Switch to user list' : 'Switch to word cloud';
+            wcBtn.textContent = '☁';
+            wcBtn.className = 'ichc-wc-toggle-btn' + (_wordCloudMode ? ' ichc-wc-active' : '');
+            wcBtn.addEventListener('click', () => setWordCloudMode(!_wordCloudMode));
+            bar.appendChild(wcBtn);
+        }
+
         return bar;
     }
 
@@ -1042,6 +1066,8 @@
 
         collectRoomLinks(stage);
         ensureFooterBar(); // ensure footer bar is in cams-col
+        ensureWordCloud();
+        if (_wordCloudMode) { setWordCloudMode(true); }
         installRoomRoot(stage);
         installUnifiedHeader();
         resetRoomShell(stage);
@@ -1153,7 +1179,7 @@
         if (profileImageCache.has(key)) { return Promise.resolve(profileImageCache.get(key)); }
 
         // Mark pending immediately so concurrent renders don't queue duplicate fetches
-        profileImageCache.set(key, null);
+        _profileCacheSet(key, null);
 
         // Check localStorage — avoids any HTTP request for recently-seen users
         try {
@@ -1162,7 +1188,7 @@
                 const { url, ts } = JSON.parse(stored);
                 const ttl = url ? _AV_HIT_TTL : _AV_MISS_TTL;
                 if ((Date.now() - ts) < ttl) {
-                    profileImageCache.set(key, url || null);
+                    _profileCacheSet(key, url || null);
                     return Promise.resolve(url || null);
                 }
             }
@@ -1191,7 +1217,7 @@
                     if (!fname.startsWith('badge_')) {
                         let url = sm[1].trim();
                         if (url.startsWith('//')) { url = 'https:' + url; }
-                        profileImageCache.set(key, url);
+                        _profileCacheSet(key, url);
                         _lsAvSave(key, url);
                         return url;
                     }
@@ -1214,7 +1240,7 @@
                 const fname = resp.url.split('/').pop().split('?')[0];
                 if (!fname.startsWith('badge_')) {
                     const url = resp.url.startsWith('//') ? 'https:' + resp.url : resp.url;
-                    profileImageCache.set(key, url);
+                    _profileCacheSet(key, url);
                     _lsAvSave(key, url);
                     return url;
                 }
@@ -1242,7 +1268,7 @@
                     const imageUrl = /^https?:\/\//i.test(raw) ? raw :
                         raw.startsWith('/') ? `https://images.icanhazchat.com${raw}` :
                         `https://images.icanhazchat.com/users/${encodeURIComponent(prefix)}/${encodeURIComponent(key)}/${raw}`;
-                    profileImageCache.set(key, imageUrl);
+                    _profileCacheSet(key, imageUrl);
                     _lsAvSave(key, imageUrl);
                     return imageUrl;
                 }
@@ -1430,11 +1456,13 @@
         });
 
         // Watch #tab_list for tabs being added or removed.
+        let _tabListObs = null;
         function connect(tabList) {
+            _tabListObs?.disconnect();
             for (const tab of tabList.querySelectorAll('li[id^="pm_"]')) {
                 ensurePmAvatarItem(tab.id.slice(3), null);
             }
-            new MutationObserver(muts => {
+            _tabListObs = new MutationObserver(muts => {
                 for (const m of muts) {
                     if (m.type !== 'childList') { continue; }
                     for (const n of m.removedNodes) {
@@ -1449,7 +1477,8 @@
                         }
                     }
                 }
-            }).observe(tabList, { childList: true });
+            });
+            _tabListObs.observe(tabList, { childList: true });
         }
 
         const tabList = document.getElementById('tab_list');
@@ -1462,6 +1491,11 @@
             });
             wait.observe(document.body, { childList: true, subtree: true });
         }
+
+        window.addEventListener('pagehide', () => {
+            _stopSidebarPulse();
+            _tabListObs?.disconnect();
+        }, { once: true });
     }
 
     function debounce(fn, wait) {
@@ -2296,6 +2330,73 @@
         return userListState.searchFocused || !!document.activeElement?.classList?.contains('ichc-ul-search-input');
     }
 
+    // ── Word cloud ────────────────────────────────────────────────────────────────
+    let _wordCloudMode = localStorage.getItem('ichc_wc_mode') === '1';
+
+    function _wcFontSize(karma) {
+        if (typeof karma === 'number' && karma > 0) {
+            return Math.round(Math.min(22, 12 + Math.sqrt(karma) * 0.8)) + 'px';
+        }
+        return (12 + Math.floor(Math.random() * 5)) + 'px';
+    }
+
+    function buildWordCloud(users) {
+        let wc = document.getElementById('ichc-wordcloud');
+        if (!wc) { return; }
+        wc.innerHTML = '';
+        const visible = users.filter(u => !u.cammed && !u.hidden);
+        if (!visible.length) {
+            const empty = document.createElement('span');
+            empty.className = 'ichc-wc-empty';
+            empty.textContent = 'no one lurking';
+            wc.appendChild(empty);
+            return;
+        }
+        for (const u of visible) {
+            const el = document.createElement('span');
+            el.className = 'ichc-wc-nick' + (u.mod ? ' ichc-wc-mod' : '') + (u.idle ? ' ichc-wc-idle' : '');
+            el.textContent = u.name;
+            el.style.fontSize = _wcFontSize(u.karma);
+            el.title = u.karma != null ? `${u.name} · karma ${u.karma}` : u.name;
+            el.addEventListener('click', () => {
+                u.trigger?.click();
+            });
+            wc.appendChild(el);
+        }
+    }
+
+    function ensureWordCloud() {
+        const camsCol = document.getElementById('ichc-cams-col');
+        if (!camsCol) { return null; }
+        let wc = document.getElementById('ichc-wordcloud');
+        if (!wc) {
+            wc = document.createElement('div');
+            wc.id = 'ichc-wordcloud';
+        }
+        const footer = document.getElementById('ichc-footer-bar');
+        if (footer && wc.nextSibling !== footer) {
+            camsCol.insertBefore(wc, footer);
+        } else if (!wc.parentElement) {
+            camsCol.appendChild(wc);
+        }
+        return wc;
+    }
+
+    function setWordCloudMode(on) {
+        _wordCloudMode = on;
+        localStorage.setItem('ichc_wc_mode', on ? '1' : '0');
+        const shell = document.getElementById('ichc-chat-shell');
+        if (shell) { shell.classList.toggle('ichc-wordcloud-mode', on); }
+        const wc = ensureWordCloud();
+        if (wc) { wc.classList.toggle('ichc-wc-visible', on); }
+        const btn = document.getElementById('ichc-wc-toggle-btn');
+        if (btn) {
+            btn.classList.toggle('ichc-wc-active', on);
+            btn.title = on ? 'Switch to user list' : 'Switch to word cloud';
+        }
+        if (on) { buildUserList({ force: true }); }
+    }
+
     function buildUserList({ force = false } = {}) {
         const src = document.getElementById('activeUserList');
         if (!src) { return; }
@@ -2887,6 +2988,9 @@
                 titleRow.appendChild(moreBtn); // far-right of title row
             }
         }
+        // Word cloud — rebuild whenever userlist rebuilds
+        if (_wordCloudMode) { buildWordCloud(users); }
+
         // Restore focus — panel.innerHTML='' blurs anything that was focused inside it.
         // _hadSearchFocus is captured before innerHTML='' so it survives the synchronous blur.
         // Use a short delay so site JS that runs on the same tick can't re-steal focus after us.
