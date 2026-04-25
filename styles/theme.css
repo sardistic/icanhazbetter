@@ -954,19 +954,11 @@
     .ichc-wc-nick.ichc-wc-idle { opacity: 0.45 !important; }
     .ichc-wc-empty { color: #4e5058 !important; font-size: 12px !important; font-style: italic !important; }
 
-    /* In word cloud mode: collapse userlist + sidebar toggle */
-    #ichc-chat-shell.ichc-wordcloud-mode {
-        grid-template-columns: minmax(0, 1fr) 0 0 !important;
-    }
-    #ichc-chat-shell.ichc-wordcloud-mode #ichc-userlist,
-    #ichc-chat-shell.ichc-wordcloud-mode #ichc-ul-toggle-btn { display: none !important; }
-    /* Word cloud mode: cams panel takes natural height; word cloud fills the rest */
-    #ichc-cams-col.ichc-wc-active #ichc-cams-panel {
+    /* Word cloud sits inside #ichc-cams-panel after the cam grid,
+       filling the natural whitespace below active cams.
+       #cams must not grow so the word cloud can claim the remaining space. */
+    #ichc-cams-panel > #cams {
         flex: 0 0 auto !important;
-        overflow-y: auto !important;
-    }
-    #ichc-cams-col.ichc-wc-active #ichc-wordcloud {
-        min-height: 160px !important;
     }
 
     /* Footer is always 28px; keep this for override if needed */
