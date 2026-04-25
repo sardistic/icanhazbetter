@@ -1252,8 +1252,8 @@
         msgs.appendChild(line);
         msgs.scrollTop = msgs.scrollHeight;
 
-        // Alert the toggle button regardless of which path delivered the message.
-        window.dispatchEvent(new CustomEvent('ichc-pm-open'));
+        // Alert the sidebar PM button regardless of which path delivered the message.
+        window.dispatchEvent(new CustomEvent('ichc-pm-alert', { detail: { nick } }));
 
         // Mark the tab unread if it isn't the currently active one.
         const tabEl = root.querySelector(`#pm_${CSS.escape(nick)}`);
@@ -1347,6 +1347,7 @@
                                             const nick = extractPmNickFromWs(data);
                                             if (nick) {
                                                 _D('WS incoming PM from:', nick);
+                                                window.dispatchEvent(new CustomEvent('ichc-pm-alert', { detail: { nick } }));
                                                 window.dispatchEvent(new CustomEvent('ichc-pm-open',
                                                     { detail: { nick } }));
                                             }
@@ -1391,6 +1392,7 @@
                                                 const nick = extractPmNickFromWs(data);
                                                 if (nick) {
                                                     _D('WS(om) incoming PM from:', nick);
+                                                    window.dispatchEvent(new CustomEvent('ichc-pm-alert', { detail: { nick } }));
                                                     window.dispatchEvent(new CustomEvent('ichc-pm-open',
                                                         { detail: { nick } }));
                                                 }

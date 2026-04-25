@@ -49,6 +49,7 @@
         avatarObserver: null,  // IntersectionObserver — only fetches avatars for visible rows
         searchFocused: false,  // true while filter input has focus — suppresses frequent rebuilds
         _suppressBlur: false,  // true during panel.innerHTML='' so the sync blur doesn't clear searchFocused
+        rebuildPendingAfterSearch: false,
     };
     const lurkState = {
         pollTimer: null,
@@ -587,6 +588,29 @@
         return bar;
     }
 
+
+    function isRoomRulesLink(link) {
+        const text = normalizeText(link?.textContent || '');
+        const href = (link?.getAttribute?.('href') || '').toLowerCase();
+        return /room\s+rules?|rules/.test(text) || /roomrules|room-rules|rules/.test(href);
+    }
+
+    function placeRoomRulesInFooter(sourceLink) {
+        const copy = document.getElementById('ichc-footer-copy');
+        if (!copy || !sourceLink) { return; }
+        let rulesLink = document.getElementById('ichc-footer-room-rules');
+        if (!rulesLink) {
+            rulesLink = document.createElement('a');
+            rulesLink.id = 'ichc-footer-room-rules';
+            rulesLink.target = '_blank';
+            rulesLink.rel = 'noopener noreferrer';
+            rulesLink.textContent = sourceLink.textContent.trim() || 'Room Rules';
+            copy.appendChild(document.createTextNode(' \u00b7 '));
+            copy.appendChild(rulesLink);
+        }
+        rulesLink.href = sourceLink.href || sourceLink.getAttribute('href') || '#';
+        rulesLink.textContent = sourceLink.textContent.trim() || 'Room Rules';
+    }
     function collectRoomLinks(stage, _retries = 0) {
         if (!stage) { return; }
 
@@ -622,7 +646,6 @@
             const siteLinksDiv = document.createElement('div');
             siteLinksDiv.className = 'ichc-room-site-links';
             const SITE_LINKS = [
-                ['Help', '/Help'],
                 ['Support', '/GetHearted'],
                 ['Status', 'http://www.imssr.com/#/view/www.icanhazchat.com'],
                 ['Directory', '/lobby'],
@@ -632,8 +655,6 @@
                 ['Developers', '/icanhazcode'],
                 ['Terms', '/TermsOfService'],
                 ['Privacy', '/PrivacyPolicy'],
-                ['Credits', '/credits'],
-                ['Contact', '/contact'],
             ];
             SITE_LINKS.forEach(([label, href]) => {
                 const a = document.createElement('a');
@@ -662,8 +683,11 @@
         const siteLinksDiv = panel.querySelector('.ichc-room-site-links');
         const linkNodes = [...document.querySelectorAll('.room_footer_links')]
             .filter(link => !panel.contains(link));
+        const roomRulesLink = linkNodes.find(isRoomRulesLink);
+        if (roomRulesLink) { placeRoomRulesInFooter(roomRulesLink); }
+        const menuLinkNodes = linkNodes.filter(link => link !== roomRulesLink);
 
-        if (!linkNodes.length) {
+        if (!menuLinkNodes.length) {
             if (_retries < 4) {
                 setTimeout(() => collectRoomLinks(stage, _retries + 1), 700);
             }
@@ -671,7 +695,7 @@
         }
 
         const originNodes = new Set();
-        linkNodes.forEach(link => {
+        menuLinkNodes.forEach(link => {
             const holder = link.closest('td, div, span') || link.parentElement;
             if (holder) { originNodes.add(holder); }
             // Insert room links before the site links section
@@ -1245,6 +1269,8 @@
         item.className = 'ichc-pm-avatar-item';
         item.dataset.nick = nick;
         item.title = nick;
+        // Force size + positioning context inline so CSS caching can't break the badge
+        item.style.cssText = 'position:relative!important;width:28px!important;height:28px!important;flex-shrink:0!important;cursor:pointer!important;';
 
         const inner = document.createElement('div');
         inner.className = 'ichc-pm-avatar-inner';
@@ -1258,6 +1284,8 @@
         const badge = document.createElement('span');
         badge.className = 'ichc-pm-avatar-badge';
         badge.setAttribute('aria-hidden', 'true');
+        // All positioning inline — left side, above avatar, red glow
+        badge.style.cssText = 'position:absolute!important;top:-4px!important;left:-2px!important;right:auto!important;min-width:16px!important;height:16px!important;padding:0 3px!important;border-radius:8px!important;background:#ff1111!important;color:#fff!important;font-size:10px!important;font-weight:800!important;line-height:16px!important;text-align:center!important;pointer-events:none!important;display:none!important;z-index:3!important;border:1.5px solid #1e2024!important;box-sizing:border-box!important;box-shadow:0 0 5px 1px rgba(255,0,0,.55)!important;';
 
         item.appendChild(inner);
         item.appendChild(badge);
@@ -1281,12 +1309,33 @@
         return item;
     }
 
+    function _syncSidebarUnread() {
+        const hasUnread = !!document.querySelector('#ichc-pm-avatars .ichc-pm-avatar-unread');
+        if (hasUnread) {
+            _startSidebarPulse();
+        } else {
+            _stopSidebarPulse();
+            const pmBtn = document.getElementById('ichc-pm-toggle-btn');
+            if (pmBtn) {
+                pmBtn.dataset.pmUnread = '0';
+                pmBtn.classList.remove('ichc-pm-toggle-alert');
+                pmBtn.title = 'Toggle PM window';
+                const pmBadge = pmBtn.querySelector('.ichc-pm-toggle-badge');
+                if (pmBadge) { pmBadge.hidden = true; pmBadge.textContent = ''; }
+            }
+        }
+    }
+
     function setPmAvatarBadge(nick, count) {
         const item = _pmAvNode(nick);
         if (!item) { return; }
         item.classList.add('ichc-pm-avatar-unread');
         const b = item.querySelector('.ichc-pm-avatar-badge');
-        if (b) { b.textContent = count > 0 ? String(count) : ''; }
+        if (b) {
+            b.textContent = count > 0 ? String(count) : '';
+            b.style.setProperty('display', 'block', 'important');
+        }
+        _syncSidebarUnread();
     }
 
     function _clearPmAvatarBadge(nick) {
@@ -1294,56 +1343,113 @@
         if (!item) { return; }
         item.classList.remove('ichc-pm-avatar-unread');
         const b = item.querySelector('.ichc-pm-avatar-badge');
-        if (b) { b.textContent = ''; }
+        if (b) {
+            b.textContent = '';
+            b.style.setProperty('display', 'none', 'important');
+        }
+        _syncSidebarUnread();
+    }
+
+    function _injectPmAvStyles() {
+        if (document.getElementById('ichc-pm-av-styles')) { return; }
+        const s = document.createElement('style');
+        s.id = 'ichc-pm-av-styles';
+        s.textContent = '/* ichc pm avatar styles placeholder */';
+        (document.head || document.documentElement).appendChild(s);
+    }
+
+    // JS-driven pulse — CSS animations can't override !important author declarations,
+    // but inline styles set via setProperty(..., 'important') can.
+    let _sidebarPulseTimer = null;
+    let _sidebarPulseT = 0;
+
+    function _startSidebarPulse() {
+        if (_sidebarPulseTimer) { return; }
+        _sidebarPulseT = 0;
+        _sidebarPulseTimer = setInterval(() => {
+            const strip = document.getElementById('ichc-ul-toggle-btn');
+            if (!strip || !document.querySelector('#ichc-pm-avatars .ichc-pm-avatar-unread')) {
+                _stopSidebarPulse();
+                return;
+            }
+            _sidebarPulseT = (_sidebarPulseT + 1) % 28;
+            const t = Math.sin((_sidebarPulseT / 28) * Math.PI); // smooth 0→1→0
+            strip.style.setProperty('background', `rgba(160,10,10,${(t * 0.22).toFixed(3)})`, 'important');
+            strip.style.setProperty('box-shadow', `inset -6px 0 20px rgba(239,68,68,${(t * 0.28).toFixed(3)})`, 'important');
+            strip.style.setProperty('border-left-color', `rgba(239,68,68,${(0.06 + t * 0.35).toFixed(3)})`, 'important');
+        }, 50);
+    }
+
+    function _stopSidebarPulse() {
+        if (_sidebarPulseTimer) { clearInterval(_sidebarPulseTimer); _sidebarPulseTimer = null; }
+        const strip = document.getElementById('ichc-ul-toggle-btn');
+        if (strip) {
+            strip.style.removeProperty('background');
+            strip.style.removeProperty('box-shadow');
+            strip.style.removeProperty('border-left-color');
+            strip.style.removeProperty('animation');
+        }
     }
 
     let _pmAvObsDone = false;
     function initPmAvatarObserver() {
         if (_pmAvObsDone) { return; }
+        _pmAvObsDone = true;
+        _injectPmAvStyles();
 
-        window.addEventListener('ichc-pm-open', e => {
+        // ichc-pm-alert fires for every incoming PM unconditionally — use this
+        // instead of watching ichc-pm-tab-unread, which never gets added because
+        // handleIncomingPmMessage calls openPmForNick first (which activates the tab).
+        window.addEventListener('ichc-pm-alert', e => {
             const nick = e.detail?.nick;
-            if (nick) { ensurePmAvatarItem(nick, e.detail?.color || null); }
+            if (!nick) { return; }
+            ensurePmAvatarItem(nick, null);
+            const item = _pmAvNode(nick);
+            if (!item) { return; }
+            const b = item.querySelector('.ichc-pm-avatar-badge');
+            const prev = b ? (parseInt(b.textContent) || 0) : 0;
+            setPmAvatarBadge(nick, prev + 1);
         });
 
-        function connect(tabList) {
-            _pmAvObsDone = true;
-
-            for (const tab of tabList.querySelectorAll('li[id^="pm_"]')) {
-                const nick = tab.id.slice(3);
-                ensurePmAvatarItem(nick, null);
-                if (tab.classList.contains('ichc-pm-tab-unread')) {
-                    const b = tab.querySelector('.ichc-pm-unread-badge');
-                    setPmAvatarBadge(nick, parseInt(b?.textContent) || 1);
-                }
+        // Ensure avatar exists when a PM window opens.
+        // Only clear the badge if the user explicitly opened the PM (forceShow = true).
+        window.addEventListener('ichc-pm-open', e => {
+            const nick = e.detail?.nick;
+            if (nick) {
+                ensurePmAvatarItem(nick, e.detail?.color || null);
+                if (e.detail?.forceShow) { _clearPmAvatarBadge(nick); }
             }
+        });
 
+        // PM toggle button clicked — clear all avatar badges.
+        window.addEventListener('ichc-pm-user-toggle', () => {
+            document.querySelectorAll('#ichc-pm-avatars [data-nick]').forEach(item => {
+                const nick = item.dataset.nick;
+                if (nick) { _clearPmAvatarBadge(nick); }
+            });
+        });
+
+        // Watch #tab_list for tabs being added or removed.
+        function connect(tabList) {
+            for (const tab of tabList.querySelectorAll('li[id^="pm_"]')) {
+                ensurePmAvatarItem(tab.id.slice(3), null);
+            }
             new MutationObserver(muts => {
                 for (const m of muts) {
-                    if (m.type === 'childList') {
-                        for (const n of m.removedNodes) {
-                            if (n.nodeType !== 1 || !n.id.startsWith('pm_')) { continue; }
+                    if (m.type !== 'childList') { continue; }
+                    for (const n of m.removedNodes) {
+                        if (n.nodeType === 1 && n.id.startsWith('pm_')) {
                             _pmAvNode(n.id.slice(3))?.remove();
+                            _syncSidebarUnread();
                         }
-                        for (const n of m.addedNodes) {
-                            if (n.nodeType !== 1 || !n.id.startsWith('pm_')) { continue; }
+                    }
+                    for (const n of m.addedNodes) {
+                        if (n.nodeType === 1 && n.id.startsWith('pm_')) {
                             ensurePmAvatarItem(n.id.slice(3), null);
-                        }
-                    } else if (m.type === 'attributes' && m.attributeName === 'class') {
-                        const tab = m.target;
-                        if (!tab.id || !tab.id.startsWith('pm_')) { continue; }
-                        const nick = tab.id.slice(3);
-                        if (tab.classList.contains('ichc-pm-tab-unread')) {
-                            window.setTimeout(() => {
-                                const b = tab.querySelector('.ichc-pm-unread-badge');
-                                setPmAvatarBadge(nick, parseInt(b?.textContent) || 1);
-                            }, 0);
-                        } else {
-                            _clearPmAvatarBadge(nick);
                         }
                     }
                 }
-            }).observe(tabList, { childList: true, attributes: true, attributeFilter: ['class'], subtree: true });
+            }).observe(tabList, { childList: true });
         }
 
         const tabList = document.getElementById('tab_list');
@@ -1774,16 +1880,37 @@
         pmBtn.id = 'ichc-pm-toggle-btn';
         pmBtn.title = 'Toggle PM window';
         pmBtn.innerHTML = ICONS.chat;
+        pmBtn.dataset.pmUnread = '0';
+        const pmBadge = document.createElement('span');
+        pmBadge.className = 'ichc-pm-toggle-badge';
+        pmBadge.setAttribute('aria-hidden', 'true');
+        pmBtn.appendChild(pmBadge);
+
+        const clearPmButtonAlert = () => {
+            pmBtn.dataset.pmUnread = '0';
+            pmBtn.classList.remove('ichc-pm-toggle-alert');
+            pmBadge.textContent = '';
+            pmBadge.hidden = true;
+            pmBtn.title = 'Toggle PM window';
+        };
+        const markPmButtonAlert = detail => {
+            const count = Math.min(99, (parseInt(pmBtn.dataset.pmUnread, 10) || 0) + 1);
+            const nick = typeof detail?.nick === 'string' ? detail.nick.trim() : '';
+            pmBtn.dataset.pmUnread = String(count);
+            pmBtn.classList.add('ichc-pm-toggle-alert');
+            pmBadge.hidden = false;
+            pmBadge.textContent = count > 9 ? '9+' : String(count);
+            pmBtn.title = nick ? `New PM from ${nick}` : `${count} unread PM${count === 1 ? '' : 's'}`;
+        };
+
         let _pmVisible = true;
         pmBtn.addEventListener('click', () => {
             _pmVisible = !_pmVisible;
             window.dispatchEvent(new CustomEvent('ichc-pm-user-toggle'));
             pmBtn.classList.toggle('ichc-pm-toggle-hidden', !_pmVisible);
-            pmBtn.classList.remove('ichc-pm-toggle-alert');
+            clearPmButtonAlert();
         });
-        window.addEventListener('ichc-pm-open', () => {
-            pmBtn.classList.add('ichc-pm-toggle-alert');
-        });
+        window.addEventListener('ichc-pm-alert', e => markPmButtonAlert(e.detail));
         // GIF/emote picker button
         let gifWrapper = document.getElementById('ichc-gif-wrapper');
         if (!gifWrapper) {
@@ -2165,9 +2292,20 @@
         return qi === query.length ? score : -1;
     }
 
-    function buildUserList() {
+    function isUserListSearchActive() {
+        return userListState.searchFocused || !!document.activeElement?.classList?.contains('ichc-ul-search-input');
+    }
+
+    function buildUserList({ force = false } = {}) {
         const src = document.getElementById('activeUserList');
         if (!src) { return; }
+
+        if (!force && isUserListSearchActive()) {
+            userListState.rebuildPendingAfterSearch = true;
+            window.clearTimeout(userListState.timer);
+            return;
+        }
+        userListState.rebuildPendingAfterSearch = false;
         // Track focus — panel.innerHTML='' blurs anything focused inside the panel.
         // Use the persistent state flag as the source of truth: panel.innerHTML='' fires blur
         // synchronously, which would zero out activeElement before we can read it below.
@@ -2435,7 +2573,13 @@
         searchInput.setAttribute('spellcheck', 'false');
         if (prevQuery) { searchInput.value = prevQuery; }
         searchInput.addEventListener('focus', () => { userListState.searchFocused = true; });
-        searchInput.addEventListener('blur',  () => { if (!userListState._suppressBlur) { userListState.searchFocused = false; } });
+        searchInput.addEventListener('blur',  () => {
+            if (userListState._suppressBlur) { return; }
+            userListState.searchFocused = false;
+            if (userListState.rebuildPendingAfterSearch) {
+                scheduleUserListBuild(80, true);
+            }
+        });
         searchRow.appendChild(searchInput);
 
         header.appendChild(titleRow);
@@ -2768,10 +2912,15 @@
         // nuke the panel DOM (panel.innerHTML='') and steal focus from the input.
         // Allow rebuilds eventually (2 s after the last mutation) so the list stays fresh.
         // bypassFocusThrottle is set for time-sensitive updates (e.g. unnamed cam slot retry).
+        if (isUserListSearchActive() && !bypassFocusThrottle) {
+            userListState.rebuildPendingAfterSearch = true;
+            window.clearTimeout(userListState.timer);
+            return;
+        }
         if (userListState.searchFocused && delay < 2000 && !bypassFocusThrottle) { delay = 2000; }
         window.clearTimeout(userListState.timer);
         userListState.timer = window.setTimeout(() => {
-            buildUserList();
+            buildUserList({ force: bypassFocusThrottle });
         }, delay);
     }
 
