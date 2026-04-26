@@ -2897,6 +2897,16 @@
         renderUsers(prevQuery);
         observeAvatarRows();
 
+        // Proactively prefetch in priority order: cammed (A-Z) → non-idle (A-Z) → idle (A-Z).
+        // Calling fetchProfileImage() here just enqueues; profileImageCache deduplicates so
+        // IntersectionObserver hits are instant no-ops for anything already queued/resolved.
+        [...users]
+            .sort((a, b) => {
+                const rank = u => (u.cammed ? 0 : u.idle ? 2 : 1);
+                return (rank(a) - rank(b)) || a.name.localeCompare(b.name);
+            })
+            .forEach(u => fetchProfileImage(u.name.toLowerCase()));
+
         // ── Search toggle ──
         searchBtn.addEventListener('click', () => {
             const open = panel.classList.toggle('ichc-ul-search-open');
