@@ -2506,6 +2506,24 @@
             if (n) { supporterNames.add(n); }
         });
 
+        // Check the anchor's broader DOM context for supporter markers —
+        // catches class-based markers (e.g. li.hearted, li.site-support) that
+        // don't produce img/span elements and so aren't found by markerSelector.
+        const contextSupporterCheck = (a, parentLi) => {
+            const parts = [
+                a.className,
+                a.getAttribute('title'),
+                a.getAttribute('data-original-title'),
+                parentLi?.className,
+                a.previousElementSibling?.className,
+                a.previousElementSibling?.getAttribute?.('title'),
+                a.previousElementSibling?.getAttribute?.('src'),
+                a.nextElementSibling?.className,
+                a.nextElementSibling?.getAttribute?.('title'),
+            ].filter(Boolean).join(' ');
+            return supporterPattern.test(parts);
+        };
+
         src.querySelectorAll('a.userlink').forEach(a => {
             const name = a.textContent.trim();
             const key  = name.toLowerCase();
@@ -2532,7 +2550,9 @@
                 karma:   extractKarmaFromUserAnchor(a),
                 trigger: a,
                 icon:      smicon ? { src: smicon.src, title: smicon.title || smicon.alt || '' } : null,
-                supporter: supporterNames.has(key) || !!(parentLi && Array.from(parentLi.querySelectorAll(markerSelector)).some(isSupporterMarker)),
+                supporter: supporterNames.has(key) ||
+                           !!(parentLi && Array.from(parentLi.querySelectorAll(markerSelector)).some(isSupporterMarker)) ||
+                           contextSupporterCheck(a, parentLi),
             });
         });
 
