@@ -1219,86 +1219,64 @@
         return _scheduleAvatarFetch(() => _doFetchProfileImage(key));
     }
 
-    // Performs the two-pass HTTP lookup and writes results to cache + localStorage.
+    function _isUserAvatarUrl(url) {
+        if (!url || typeof url !== 'string') { return false; }
+        if (/smicon|trophy|supporter|heart|control_|logo|favicon|18_and_up|roomrating|assets\//i.test(url)) { return false; }
+        const fname = url.split('/').pop().split('?')[0];
+        if (fname.startsWith('badge_')) { return false; }
+        return /\/cache\/|\/user\/|profile|avatar|thumb|_sqr|_med|vidble\.com|images\.icanhazchat\.com\/users\//i.test(url);
+    }
+
+    function _extractAvatarFromDoc(doc, baseUrl) {
+        const resolve = raw => {
+            if (!raw) { return ''; }
+            try { return new URL(raw, baseUrl).href; } catch (_) { return raw; }
+        };
+        // Prioritised selectors — most specific first
+        const selectors = [
+            'meta[property="og:image"]',
+            'meta[name="twitter:image"]',
+            'link[rel~="image_src"]',
+            '.profile img', '#profile img', '#userProfile img',
+            'img[src*="/cache/" i]', 'img[src*="profile" i]',
+            'img[src*="avatar" i]', 'img[src*="vidble.com" i]',
+            'img[src*="images.icanhazchat.com/users/" i]',
+        ];
+        for (const sel of selectors) {
+            const el = doc.querySelector(sel);
+            if (!el) { continue; }
+            const raw = el.getAttribute('content') || el.getAttribute('src') || el.getAttribute('href');
+            const url = resolve(raw);
+            if (url && _isUserAvatarUrl(url)) { return url; }
+        }
+        // Full image scan as last resort
+        for (const img of doc.querySelectorAll('img')) {
+            const url = resolve(img.getAttribute('src'));
+            if (url && _isUserAvatarUrl(url)) { return url; }
+        }
+        return '';
+    }
+
+    // Fetches the profile page and extracts the avatar URL.
     async function _doFetchProfileImage(key) {
-        // ── Pass 1: profile page (same-origin) — look for CDN user image in img src ──
+        const pageUrl = `https://www.icanhazchat.com/user/${encodeURIComponent(key)}`;
         try {
-            const pageResp = await fetch(`https://www.icanhazchat.com/user/${encodeURIComponent(key)}`, {
-                method: 'GET',
-                credentials: 'include',
-                cache: 'default',
-            });
-            if (pageResp.ok) {
-                const html = await pageResp.text();
-                // Loop through all CDN user img srcs; skip badge_ filenames (not profile pics)
-                const srcRe = /src=["']((?:https?:)?\/\/images\.icanhazchat\.com\/users\/[^"']+\.(?:jpe?g|png|gif|webp)(?:\?[^"']*)?)["']/ig;
-                let sm;
-                while ((sm = srcRe.exec(html)) !== null) {
-                    const fname = sm[1].split('/').pop().split('?')[0];
-                    if (!fname.startsWith('badge_')) {
-                        let url = sm[1].trim();
-                        if (url.startsWith('//')) { url = 'https:' + url; }
-                        _profileCacheSet(key, url);
-                        _lsAvSave(key, url);
-                        return url;
-                    }
-                }
-            }
-        } catch (_) {}
-
-        // ── Pass 2: CDN directory listing (credentials:omit avoids strict CORS) ──
-        try {
-            const prefix = key.slice(0, 2);
-            const dirUrl = `https://images.icanhazchat.com/users/${encodeURIComponent(prefix)}/${encodeURIComponent(key)}/`;
-            const resp = await fetch(dirUrl, {
-                method: 'GET',
-                credentials: 'omit',
-                cache: 'default',
-            });
-
-            // Server may redirect straight to the image file — skip badge_ filenames
-            if (/\.(jpe?g|png|gif|webp)(\?.*)?$/i.test(resp.url) && resp.url !== dirUrl) {
-                const fname = resp.url.split('/').pop().split('?')[0];
-                if (!fname.startsWith('badge_')) {
-                    const url = resp.url.startsWith('//') ? 'https:' + resp.url : resp.url;
+            const resp = await fetch(pageUrl, { method: 'GET', credentials: 'include', cache: 'default' });
+            if (resp.ok) {
+                const html = await resp.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const url = _extractAvatarFromDoc(doc, pageUrl);
+                if (url) {
                     _profileCacheSet(key, url);
                     _lsAvSave(key, url);
                     return url;
-                }
-            }
-
-            if (resp.ok) {
-                const html = await resp.text();
-                // Loop through all href matches; skip badge_ filenames (achievement badges, not avatars).
-                // Check the filename portion after the last '/' to handle both bare names and full paths.
-                let raw = null;
-                let m;
-                const hrefRe = /href="([^"<>?#]+\.(?:jpe?g|png|gif|webp))"/ig;
-                while ((m = hrefRe.exec(html)) !== null) {
-                    const fname = m[1].split('/').pop().split('?')[0];
-                    if (!fname.startsWith('badge_')) { raw = m[1]; break; }
-                }
-                if (!raw) {
-                    // Fallback: unquoted bare filename (no slashes)
-                    const nameRe = /"([^"<>?#/\\]+\.(?:jpe?g|png|gif|webp))"/ig;
-                    while ((m = nameRe.exec(html)) !== null) {
-                        if (!m[1].startsWith('badge_')) { raw = m[1]; break; }
-                    }
-                }
-                if (raw) {
-                    const imageUrl = /^https?:\/\//i.test(raw) ? raw :
-                        raw.startsWith('/') ? `https://images.icanhazchat.com${raw}` :
-                        `https://images.icanhazchat.com/users/${encodeURIComponent(prefix)}/${encodeURIComponent(key)}/${raw}`;
-                    _profileCacheSet(key, imageUrl);
-                    _lsAvSave(key, imageUrl);
-                    return imageUrl;
                 }
             }
         } catch (_) {}
 
         // No avatar found — record the miss so we don't retry for 24 h
         _lsAvSave(key, null);
-        return null; // profileImageCache already set to null above
+        return null;
     }
 
     // ── PM avatar strip helpers ────────────────────────────────────────────────
@@ -2450,10 +2428,30 @@
         const shell = document.getElementById('ichc-chat-shell');
 
         const modSet = new Set();
+        // Section-based mod + supporter detection: icanhazchat groups users under
+        // <p> section headers (e.g. "Mods", "Site Supports", "Get Hearted Users").
+        // Scan every <p> and tag all userlinks in that section accordingly.
+        const supporterPattern = /(get[_-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_-]?supporter|heart_delete|valentine|site[_-]?support|staff)/i;
+        const supporterNames = new Set();
         src.querySelectorAll('p').forEach(p => {
-            if (/mod/i.test(p.textContent)) {
-                p.querySelectorAll('a.userlink').forEach(a =>
-                    modSet.add(a.textContent.trim().toLowerCase()));
+            const text = p.textContent || '';
+            const isModSection       = /mod/i.test(text);
+            const isSupporterSection = supporterPattern.test(text);
+            if (!isModSection && !isSupporterSection) { return; }
+            p.querySelectorAll('a.userlink').forEach(a => {
+                const key = a.textContent.trim().toLowerCase();
+                if (isModSection)       { modSet.add(key); }
+                if (isSupporterSection) { supporterNames.add(key); }
+            });
+            // Section headers are often followed by sibling <li>/<ul> nodes, not children
+            let sib = p.nextElementSibling;
+            while (sib && sib.tagName !== 'P') {
+                sib.querySelectorAll('a.userlink').forEach(a => {
+                    const key = a.textContent.trim().toLowerCase();
+                    if (isModSection)       { modSet.add(key); }
+                    if (isSupporterSection) { supporterNames.add(key); }
+                });
+                sib = sib.nextElementSibling;
             }
         });
 
@@ -2464,10 +2462,8 @@
         const seen    = new Set();
         const users   = [];
 
-        // Pre-scan: find supporter markers and map them to the nearest userlink.
-        // theme.js may replace smicon images with span[data-icon], so check both forms.
-        const supporterNames = new Set();
-        const supporterPattern = /(get[_-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_-]?supporter|heart_delete|valentine|site[_-]?support|staff)/i;
+        // Per-element marker scan — catches inline img/span supporter icons
+        // on individual rows that aren't covered by the section scan above.
         const markerSelector = [
             'img.smicon',
             'img[src*="heart" i]',
@@ -2506,9 +2502,8 @@
             if (n) { supporterNames.add(n); }
         });
 
-        // Check the anchor's broader DOM context for supporter markers —
-        // catches class-based markers (e.g. li.hearted, li.site-support) that
-        // don't produce img/span elements and so aren't found by markerSelector.
+        // Broad context check — catches class-based markers (li.hearted, li.site-support)
+        // and tooltip/data-original-title attributes that the above scans miss.
         const contextSupporterCheck = (a, parentLi) => {
             const parts = [
                 a.className,
@@ -2520,6 +2515,7 @@
                 a.previousElementSibling?.getAttribute?.('src'),
                 a.nextElementSibling?.className,
                 a.nextElementSibling?.getAttribute?.('title'),
+                a.nextElementSibling?.getAttribute?.('src'),
             ].filter(Boolean).join(' ');
             return supporterPattern.test(parts);
         };
@@ -2898,14 +2894,23 @@
         observeAvatarRows();
 
         // Proactively prefetch in priority order: cammed (A-Z) → non-idle (A-Z) → idle (A-Z).
-        // Calling fetchProfileImage() here just enqueues; profileImageCache deduplicates so
-        // IntersectionObserver hits are instant no-ops for anything already queued/resolved.
+        // Wire up .then() so the img src is set as each fetch resolves, regardless of visibility.
         [...users]
             .sort((a, b) => {
                 const rank = u => (u.cammed ? 0 : u.idle ? 2 : 1);
                 return (rank(a) - rank(b)) || a.name.localeCompare(b.name);
             })
-            .forEach(u => fetchProfileImage(u.name.toLowerCase()));
+            .forEach(u => {
+                const key = u.name.toLowerCase();
+                fetchProfileImage(key).then(url => {
+                    if (!url) { return; }
+                    const avatarImg = avatarImgCache.get(key);
+                    if (avatarImg && !avatarImg.src) {
+                        avatarImg.src = url;
+                        avatarImg.classList.add('ichc-ul-avatar-loaded');
+                    }
+                });
+            });
 
         // ── Search toggle ──
         searchBtn.addEventListener('click', () => {
