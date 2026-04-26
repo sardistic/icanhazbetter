@@ -50,6 +50,7 @@
         searchFocused: false,  // true while filter input has focus — suppresses frequent rebuilds
         _suppressBlur: false,  // true during panel.innerHTML='' so the sync blur doesn't clear searchFocused
         rebuildPendingAfterSearch: false,
+        moreMenuDismissBound: false,
     };
     const lurkState = {
         pollTimer: null,
@@ -77,16 +78,37 @@
         profileImageCache.set(key, value);
     }
     // Cache: username_lower → <img> element (reused across userlist rebuilds to prevent abort loops)
+    // Capped separately from URL cache because these are real DOM nodes.
     const avatarImgCache = new Map();
+    function _avatarImgCacheSet(key, img) {
+        if (avatarImgCache.size >= 200 && !avatarImgCache.has(key)) {
+            let evicted = 0;
+            for (const [oldKey, oldImg] of avatarImgCache.entries()) {
+                if (oldImg?.isConnected) { continue; }
+                oldImg?.removeAttribute?.('src');
+                avatarImgCache.delete(oldKey);
+                if (++evicted >= 50) { break; }
+            }
+            if (avatarImgCache.size >= 220) {
+                for (const [oldKey, oldImg] of avatarImgCache.entries()) {
+                    oldImg?.removeAttribute?.('src');
+                    avatarImgCache.delete(oldKey);
+                    if (++evicted >= 50) { break; }
+                }
+            }
+        }
+        avatarImgCache.set(key, img);
+    }
 
     // ── Avatar fetch rate limiter ─────────────────────────────────────────────────
-    // Keep at most 2 in-flight HTTP requests; 350 ms gap between each start to avoid
-    // hammering the CDN with a full room of users all at once.
+    // Keep avatar lookup deliberately gentle for big rooms: one HTTP request lane,
+    // with a short gap between each start, so profile/CDN fallback fetches trickle.
     const _AV_LS          = 'ichc_av2_';        // localStorage key prefix
     const _AV_HIT_TTL     = 7 * 24 * 3600e3;   // 7 days: successful avatar URL
     const _AV_MISS_TTL    =     24 * 3600e3;    // 1 day:  "no avatar found" marker
     let   _avActive       = 0;
-    const _AV_MAX         = 2;
+    const _AV_MAX         = 1;
+    const _AV_START_GAP   = 900;
     const _avQueue        = [];
 
     function _lsAvSave(key, url) {
@@ -101,7 +123,7 @@
                     resolve(result);
                     _avActive--;
                     if (_avQueue.length > 0) {
-                        window.setTimeout(() => (_avQueue.shift())?.(), 350);
+                        window.setTimeout(() => (_avQueue.shift())?.(), _AV_START_GAP);
                     }
                 });
             };
@@ -2337,7 +2359,7 @@
         if (typeof karma === 'number' && karma > 0) {
             return Math.round(Math.min(22, 12 + Math.sqrt(karma) * 0.8)) + 'px';
         }
-        return (12 + Math.floor(Math.random() * 5)) + 'px';
+        return '12px';
     }
 
     function buildWordCloud(users) {
@@ -2366,20 +2388,21 @@
     }
 
     function ensureWordCloud() {
-        // Word cloud lives in #ichc-cams-col, just before #ichc-footer-bar.
-        // Keeping it outside #ichc-cams-panel avoids triggering the panel's
-        // ResizeObserver and the updateCamDensity cascade.
-        const camsCol = document.getElementById('ichc-cams-col');
-        if (!camsCol) { return null; }
+        // Word cloud is the last child of #ichc-cams-panel (after #cams).
+        // The panel stays flex:1 1 auto (full column height), #cams sits at its
+        // natural grid height (flex-grow:0 by default), and the word cloud fills
+        // the remaining space with flex:1 1 0. box-sizing:border-box on the WC
+        // element prevents padding from causing overflow → no scrollbar → no
+        // ResizeObserver trigger → no updateCamDensity cascade.
+        const panel = document.getElementById('ichc-cams-panel');
+        if (!panel) { return null; }
         let wc = document.getElementById('ichc-wordcloud');
         if (!wc) {
             wc = document.createElement('div');
             wc.id = 'ichc-wordcloud';
         }
-        const footer = document.getElementById('ichc-footer-bar');
-        const anchor = (footer?.parentElement === camsCol) ? footer : null;
-        if (wc.parentElement !== camsCol || wc.nextSibling !== anchor) {
-            camsCol.insertBefore(wc, anchor);
+        if (wc.parentElement !== panel) {
+            panel.appendChild(wc);
         }
         return wc;
     }
@@ -2387,33 +2410,32 @@
     function setWordCloudMode(on) {
         _wordCloudMode = on;
         localStorage.setItem('ichc_wc_mode', on ? '1' : '0');
-        const camsCol = document.getElementById('ichc-cams-col');
-        if (camsCol) { camsCol.classList.toggle('ichc-wc-active', on); }
         const wc = ensureWordCloud();
-        // Hide the cloud first; show it after the cam relayout shrinks the panel,
-        // otherwise the cloud appears before cams have had a chance to resize.
-        if (wc) { wc.classList.remove('ichc-wc-visible'); }
+        if (wc) { wc.classList.toggle('ichc-wc-visible', on); }
         const btn = document.getElementById('ichc-wc-toggle-btn');
         if (btn) {
             btn.classList.toggle('ichc-wc-active', on);
             btn.title = on ? 'Hide word cloud' : 'Show word cloud';
         }
         if (on) { buildUserList({ force: true }); }
-        // Resize cams to target height, then reveal the cloud once layout settles.
-        requestCamRelayout(30);
-        if (on) {
-            window.setTimeout(() => {
-                if (_wordCloudMode) {
-                    const w = document.getElementById('ichc-wordcloud');
-                    if (w) { w.classList.add('ichc-wc-visible'); }
+    }
+
+    function bindUserListMoreMenuDismiss() {
+        if (userListState.moreMenuDismissBound) { return; }
+        userListState.moreMenuDismissBound = true;
+        document.addEventListener('click', event => {
+            document.querySelectorAll('#ichc-userlist .ichc-ul-more-menu').forEach(menu => {
+                if (!menu.closest('.ichc-ul-more-btn')?.contains(event.target)) {
+                    menu.hidden = true;
                 }
-            }, 120);
-        }
+            });
+        }, true);
     }
 
     function buildUserList({ force = false } = {}) {
         const src = document.getElementById('activeUserList');
         if (!src) { return; }
+        bindUserListMoreMenuDismiss();
 
         if (!force && isUserListSearchActive()) {
             userListState.rebuildPendingAfterSearch = true;
@@ -2557,6 +2579,7 @@
         const prevMoreOpen = panel.querySelector('.ichc-ul-more-menu')?.hidden === false;
         const prevOfflineOpen = panel.querySelector('.ichc-ul-offline-hidden.is-open') !== null;
 
+        userListState.avatarObserver?.disconnect();
         userListState._suppressBlur = true;
         panel.innerHTML = '';
         userListState._suppressBlur = false;
@@ -2756,7 +2779,7 @@
                         // Keep null in profileImageCache — don't delete or we'll retry every rebuild
                         _lsAvSave(imgKey, null);
                     };
-                    avatarImgCache.set(imgKey, avatarImg);
+                    _avatarImgCacheSet(imgKey, avatarImg);
                 }
                 // If URL is already resolved (localStorage hit on this session), show immediately
                 const cachedUrl = profileImageCache.get(imgKey); // undefined = not yet fetched
@@ -2995,9 +3018,6 @@
                     e.stopPropagation();
                     moreMenu.hidden = !moreMenu.hidden;
                 });
-                document.addEventListener('click', e => {
-                    if (!moreBtn.contains(e.target)) { moreMenu.hidden = true; }
-                }, true);
 
                 titleRow.appendChild(moreBtn); // far-right of title row
             }
@@ -3587,19 +3607,7 @@
         const hiddenBarHeight = hiddenBar && !hiddenBar.hidden
             ? Math.ceil(hiddenBar.getBoundingClientRect().height || 0) + 10
             : 0;
-        // In word cloud mode the cams panel has flex:0 0 auto, so panel.clientHeight
-        // equals the cam grid height. Using it directly for availableHeight creates a
-        // cascade (estimateHeight > availableHeight → more columns → shorter grid →
-        // smaller panel → smaller availableHeight → repeat). Use the column height
-        // minus reserved word-cloud space instead, which is a stable external value.
         let rawPanelH = panel?.clientHeight || stage?.clientHeight || window.innerHeight * 0.72;
-        if (_wordCloudMode) {
-            const col = document.getElementById('ichc-cams-col');
-            const footer = document.getElementById('ichc-footer-bar');
-            const colH = col?.clientHeight || rawPanelH;
-            const footerH = footer?.offsetHeight || 28;
-            rawPanelH = Math.max(240, colH - footerH - 160);
-        }
         const availableHeight = Math.max(
             240,
             Math.round(rawPanelH - hiddenBarHeight - 6),

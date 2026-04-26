@@ -1,10 +1,12 @@
 {
   "manifest_version": 3,
   "name": "icanhazbetter",
-  "version": "1.4",
+  "version": "1.5",
   "description": "Dark theme, flexible room layout, cam management, and chat improvements for icanhazchat.com",
   "permissions": ["scripting"],
   "host_permissions": [
+    "https://*/*",
+    "http://*/*",
     "https://images.icanhazchat.com/*",
     "https://www.icanhazchat.com/*"
   ],

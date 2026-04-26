@@ -7,6 +7,17 @@
         chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
     }
 
+    const ogPreviewState = {
+        cache: new Map(),
+        inflight: new Map(),
+        queue: [],
+        active: 0,
+        timer: null,
+    };
+    const OG_PREVIEW_MAX_CACHE = 100;
+    const OG_PREVIEW_CONCURRENCY = 1;
+    const OG_PREVIEW_DELAY = 300;
+
     function invokeNativeElementAction(element) {
         if (!element || !element.isConnected) { return; }
 
@@ -336,81 +347,89 @@
         getChatRowsInScope(root).forEach(row => {
             const isEvent = isCompactChatEventText(row.textContent || '');
             row.classList.toggle('ichc-chat-event', isEvent);
-            if (isEvent && !row.dataset.ichcTsHidden) {
+            if (!row.dataset.ichcTsHidden) {
                 row.dataset.ichcTsHidden = '1';
-                // 1. Walk text nodes — match H:MM, HH:MM, HH:MM:SS, with optional AM/PM
+                const tsPattern = /^\s*[\[(]?\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?[\])]?\s*$/i;
+                // 1. Walk text nodes — match bare H:MM or [H:MM:SS] style timestamps
                 const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
                 let tnode;
                 while ((tnode = walker.nextNode())) {
-                    if (/^\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?\s*$/i.test(tnode.textContent)) {
+                    if (tsPattern.test(tnode.textContent)) {
                         const parent = tnode.parentElement;
                         if (parent && parent !== row) { parent.classList.add('ichc-ts'); }
                     }
                 }
                 // 2. <small> tags are a common timestamp wrapper in icanhazchat
                 row.querySelectorAll('small').forEach(el => el.classList.add('ichc-ts'));
-                // 3. Table cells with no links and short text are almost always timestamps
+                // 3. Table cells whose entire text looks like a clock time; move to end of row so it sits on the right
                 row.querySelectorAll('td').forEach(td => {
-                    if (!td.querySelector('a') && td.textContent.trim().length <= 12) {
+                    if (!td.querySelector('a') && tsPattern.test(td.textContent)) {
                         td.classList.add('ichc-ts');
+                        const tr = td.parentElement;
+                        if (tr && tr.tagName === 'TR' && tr.lastElementChild !== td) {
+                            tr.appendChild(td);
+                        }
                     }
                 });
             }
         });
 
-        // Embed image links as inline images
+        // Embed image links as inline images, otherwise attach a compact OG preview.
         getScopedChatElements(root, 'a').forEach(anchor => {
             if (anchor.dataset.ichcImgEmbed) { return; }
+            if (anchor.closest('.ichc-og-card')) { return; }
+
             const href = (anchor.getAttribute('href') || '').trim();
-            if (!href || /^javascript:/i.test(href)) { return; }
+            const isJsHref = !href || /^javascript:/i.test(href);
 
-            // Resolve imgur page URLs and gifv to embeddable media
-            let embedUrl = null;
-            let embedType = 'img'; // 'img' or 'video'
-
-            const imgurPage = href.match(/^https?:\/\/(?:www\.)?imgur\.com\/([a-zA-Z0-9]+)\/?(?:\?[^#]*)?$/i);
-            const imgurDirect = href.match(/^https?:\/\/i\.imgur\.com\/([a-zA-Z0-9]+)(\.[a-z0-9]+)?(?:\?[^#]*)?$/i);
-
-            if (imgurPage) {
-                embedUrl = 'https://i.imgur.com/' + imgurPage[1] + '.jpg';
-                embedType = 'img';
-            } else if (imgurDirect) {
-                const ext = (imgurDirect[2] || '').toLowerCase();
-                if (ext === '.gifv') {
-                    embedUrl = 'https://i.imgur.com/' + imgurDirect[1] + '.mp4';
-                    embedType = 'video';
-                } else if (/^\.(jpe?g|gif|png|webp|mp4)$/.test(ext)) {
-                    embedUrl = href;
-                    embedType = ext === '.mp4' ? 'video' : 'img';
-                }
-            } else if (/\.(jpe?g|gif|png|webp)(\?[^#]*)?$/i.test(href)) {
-                embedUrl = href;
-                embedType = 'img';
+            // Try href first, then visible text (handles javascript: hrefs and redirect wrappers)
+            const media = resolveInlineMedia(href) || resolveInlineMedia(anchor.textContent || '');
+            if (!media) {
+                anchor.dataset.ichcImgEmbed = '1';
+                // For OG preview use the real URL: prefer href if it's a proper URL, else try text
+                const previewUrl = isJsHref ? (anchor.textContent || '').trim() : href;
+                maybeAttachOgPreview(anchor, previewUrl);
+                return;
             }
 
-            if (!embedUrl) { return; }
             anchor.dataset.ichcImgEmbed = '1';
-
             let el;
-            if (embedType === 'video') {
+            if (media.type === 'video') {
                 el = document.createElement('video');
-                el.src = embedUrl;
+                el.src = media.url;
                 el.className = 'ichc-chat-inline-img';
                 el.autoplay = true;
                 el.loop = true;
                 el.muted = true;
                 el.playsInline = true;
-                el.addEventListener('click', () => { window.open(href, '_blank', 'noopener,noreferrer'); });
+                el.controls = true;
+                el.addEventListener('click', () => { window.open(media.url, '_blank', 'noopener,noreferrer'); });
             } else {
                 el = document.createElement('img');
-                el.src = embedUrl;
+                el.src = media.url;
                 el.className = 'ichc-chat-inline-img';
                 el.alt = '';
-                el.loading = 'lazy';
-                el.addEventListener('click', () => { window.open(href, '_blank', 'noopener,noreferrer'); });
+                el.referrerPolicy = 'no-referrer';
+                el.onerror = () => el.remove();
+                el.addEventListener('click', () => { window.open(media.url, '_blank', 'noopener,noreferrer'); });
             }
-            const ref = anchor.nextSibling;
-            anchor.parentNode.insertBefore(el, ref || null);
+
+            // Insert after the full chat row (direct #txt child) so the image
+            // appears cleanly below the message rather than crammed inside a <td>.
+            const log = getChatLog();
+            let insertParent = anchor.parentNode;
+            let insertBefore = anchor.nextSibling;
+            if (log && anchor.parentNode !== log) {
+                let node = anchor;
+                while (node.parentElement && node.parentElement !== log) {
+                    node = node.parentElement;
+                }
+                if (node.parentElement === log) {
+                    insertParent = log;
+                    insertBefore = node.nextSibling;
+                }
+            }
+            if (insertParent) { insertParent.insertBefore(el, insertBefore || null); }
         });
 
         // Also embed image URLs that weren't wrapped in <a> tags by the site
@@ -418,6 +437,247 @@
     }
 
     const _PLAIN_IMG_RE = /https?:\/\/[^\s<>"']+\.(?:jpe?g|gif|png|webp)(?:\?[^\s<>"']*)?/gi;
+
+    function resolveInlineMedia(value = '') {
+        const raw = String(value || '').trim().replace(/[)\].,!?]+$/g, '');
+        if (!raw) { return null; }
+
+        let url;
+        try {
+            url = new URL(raw, window.location.href);
+        } catch (_) {
+            return null;
+        }
+        if (!/^https?:$/.test(url.protocol)) { return null; }
+
+        const href = url.href;
+        const path = url.pathname;
+        const imgurPage = href.match(/^https?:\/\/(?:www\.)?imgur\.com\/([a-zA-Z0-9]+)\/?(?:\?[^#]*)?$/i);
+        const imgurDirect = href.match(/^https?:\/\/i\.imgur\.com\/([a-zA-Z0-9]+)(\.[a-z0-9]+)?(?:\?[^#]*)?$/i);
+
+        if (imgurPage) {
+            return { url: `https://i.imgur.com/${imgurPage[1]}.jpg`, type: 'img' };
+        }
+        if (imgurDirect) {
+            const ext = (imgurDirect[2] || '').toLowerCase();
+            if (ext === '.gifv') {
+                return { url: `https://i.imgur.com/${imgurDirect[1]}.mp4`, type: 'video' };
+            }
+            if (!ext) {
+                return { url: `https://i.imgur.com/${imgurDirect[1]}.jpg`, type: 'img' };
+            }
+        }
+
+        if (/\.(mp4|webm|mov)(?:$|\?)/i.test(path)) {
+            return { url: href, type: 'video' };
+        }
+        if (/\.(jpe?g|gif|png|webp|avif)(?:$|\?)/i.test(path)) {
+            return { url: href, type: 'img' };
+        }
+        return null;
+    }
+
+    function normalizeOgUrl(href) {
+        try {
+            const url = new URL(href, window.location.href);
+            if (!/^https?:$/.test(url.protocol)) { return ''; }
+            url.hash = '';
+            return url.href;
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function shouldPreviewLink(anchor, href) {
+        if (!anchor || anchor.matches('a.userlink, [data-ichc-chat-nick="1"]')) { return false; }
+        if (anchor.closest('#ichc-userlist, #ichc-topbar, #ichc-room-links, .chat_button')) { return false; }
+        const url = normalizeOgUrl(href);
+        if (!url) { return false; }
+        if (/\.(jpe?g|gif|png|webp|mp4|webm)(\?[^#]*)?$/i.test(url)) { return false; }
+        try {
+            const parsed = new URL(url);
+            if (/^(www\.)?icanhazchat\.com$/i.test(parsed.hostname)) { return false; }
+        } catch (_) {
+            return false;
+        }
+        return true;
+    }
+
+    function compactText(value = '', limit = 180) {
+        const text = value.replace(/\s+/g, ' ').trim();
+        return text.length > limit ? `${text.slice(0, limit - 1).trim()}…` : text;
+    }
+
+    function getMetaContent(doc, selectors) {
+        for (const selector of selectors) {
+            const value = doc.querySelector(selector)?.getAttribute('content') ||
+                doc.querySelector(selector)?.getAttribute('href') ||
+                '';
+            if (value.trim()) { return value.trim(); }
+        }
+        return '';
+    }
+
+    function parseOgPreview(payload, sourceUrl) {
+        if (!payload?.ok || !payload.html) { return null; }
+        const baseUrl = payload.finalUrl || sourceUrl;
+        let doc;
+        try {
+            doc = new DOMParser().parseFromString(payload.html, 'text/html');
+        } catch (_) {
+            return null;
+        }
+
+        const title = compactText(getMetaContent(doc, [
+            'meta[property="og:title"]',
+            'meta[name="twitter:title"]',
+        ]) || doc.querySelector('title')?.textContent || '', 96);
+        const description = compactText(getMetaContent(doc, [
+            'meta[property="og:description"]',
+            'meta[name="twitter:description"]',
+            'meta[name="description"]',
+        ]), 180);
+        const imageRaw = getMetaContent(doc, [
+            'meta[property="og:image:secure_url"]',
+            'meta[property="og:image"]',
+            'meta[name="twitter:image"]',
+            'link[rel~="image_src"]',
+        ]);
+
+        let image = '';
+        if (imageRaw) {
+            try { image = new URL(imageRaw, baseUrl).href; } catch (_) {}
+        }
+
+        let site = compactText(getMetaContent(doc, ['meta[property="og:site_name"]']), 48);
+        if (!site) {
+            try { site = new URL(baseUrl).hostname.replace(/^www\./i, ''); } catch (_) {}
+        }
+
+        if (!title && !description && !image) { return null; }
+        return { title, description, image, site, url: baseUrl };
+    }
+
+    function rememberOgPreview(url, preview) {
+        if (ogPreviewState.cache.size >= OG_PREVIEW_MAX_CACHE && !ogPreviewState.cache.has(url)) {
+            const drop = Math.ceil(OG_PREVIEW_MAX_CACHE / 4);
+            let count = 0;
+            for (const key of ogPreviewState.cache.keys()) {
+                ogPreviewState.cache.delete(key);
+                if (++count >= drop) { break; }
+            }
+        }
+        ogPreviewState.cache.set(url, preview);
+    }
+
+    function scheduleOgQueue() {
+        if (ogPreviewState.timer) { return; }
+        ogPreviewState.timer = window.setTimeout(processOgQueue, OG_PREVIEW_DELAY);
+    }
+
+    function processOgQueue() {
+        ogPreviewState.timer = null;
+        while (ogPreviewState.active < OG_PREVIEW_CONCURRENCY && ogPreviewState.queue.length) {
+            const job = ogPreviewState.queue.shift();
+            ogPreviewState.active++;
+            job().finally(() => {
+                ogPreviewState.active = Math.max(0, ogPreviewState.active - 1);
+                if (ogPreviewState.queue.length) { scheduleOgQueue(); }
+            });
+        }
+    }
+
+    function enqueueOgFetch(job) {
+        const request = new Promise(resolve => {
+            ogPreviewState.queue.push(() => job().then(resolve, () => resolve(null)));
+        });
+        scheduleOgQueue();
+        return request;
+    }
+
+    function fetchOgPreview(url) {
+        if (ogPreviewState.cache.has(url)) { return Promise.resolve(ogPreviewState.cache.get(url)); }
+        if (ogPreviewState.inflight.has(url)) { return ogPreviewState.inflight.get(url); }
+
+        const request = enqueueOgFetch(() =>
+            chrome.runtime.sendMessage({ type: 'ichc-og-fetch', url })
+                .then(payload => parseOgPreview(payload, url))
+                .catch(() => null)
+        ).then(preview => {
+            rememberOgPreview(url, preview);
+            ogPreviewState.inflight.delete(url);
+            return preview;
+        });
+        ogPreviewState.inflight.set(url, request);
+        return request;
+    }
+
+    function buildOgCard(preview, fallbackUrl) {
+        if (!preview) { return null; }
+        const card = document.createElement('a');
+        card.className = 'ichc-og-card';
+        card.href = preview.url || fallbackUrl;
+        card.target = '_blank';
+        card.rel = 'noopener noreferrer';
+
+        if (preview.image) {
+            const img = document.createElement('img');
+            img.className = 'ichc-og-image';
+            img.src = preview.image;
+            img.alt = '';
+            img.loading = 'lazy';
+            img.addEventListener('error', () => img.remove(), { once: true });
+            card.appendChild(img);
+        }
+
+        const body = document.createElement('span');
+        body.className = 'ichc-og-body';
+        const site = document.createElement('span');
+        site.className = 'ichc-og-site';
+        site.textContent = preview.site || '';
+        const title = document.createElement('span');
+        title.className = 'ichc-og-title';
+        title.textContent = preview.title || preview.url || fallbackUrl;
+        const desc = document.createElement('span');
+        desc.className = 'ichc-og-desc';
+        desc.textContent = preview.description || '';
+        body.appendChild(site);
+        body.appendChild(title);
+        if (preview.description) { body.appendChild(desc); }
+        card.appendChild(body);
+        return card;
+    }
+
+    function maybeAttachOgPreview(anchor, href) {
+        if (!shouldPreviewLink(anchor, href)) { return; }
+        const url = normalizeOgUrl(href);
+        if (!url) { return; }
+        const row = anchor.closest('table, div, p, ul, .line') || anchor.parentElement;
+        if (row?.querySelector('.ichc-og-card')) { return; }
+
+        fetchOgPreview(url).then(preview => {
+            if (!preview || !anchor.isConnected || anchor.dataset.ichcOgAttached === '1') { return; }
+            const card = buildOgCard(preview, url);
+            if (!card) { return; }
+            anchor.dataset.ichcOgAttached = '1';
+
+            // Insert after the full chat row in #txt for clean placement below the message
+            const log = getChatLog();
+            let insertParent = anchor.parentNode;
+            let insertBefore = anchor.nextSibling;
+            if (log && anchor.parentNode !== log) {
+                let node = anchor;
+                while (node.parentElement && node.parentElement !== log) {
+                    node = node.parentElement;
+                }
+                if (node.parentElement === log) {
+                    insertParent = log;
+                    insertBefore = node.nextSibling;
+                }
+            }
+            insertParent?.insertBefore(card, insertBefore || null);
+        });
+    }
 
     function _embedPlainImageUrls(scope) {
         if (!scope) { return; }
@@ -468,7 +728,6 @@
         userScrollAt: 0,
         programmaticUntil: 0,
         boundTargets: new WeakSet(),
-        mutationTimer: null,
         pauseCheckTimer: null,
     };
 
@@ -702,32 +961,30 @@
 
         if (!chatScrollState.observer) {
             chatScrollState.observedRoot = log;
-            const pendingMutations = [];
             chatScrollState.observer = new MutationObserver(mutations => {
-                pendingMutations.push(...mutations);
-                window.clearTimeout(chatScrollState.mutationTimer);
-                chatScrollState.mutationTimer = window.setTimeout(() => {
-                    const batch = pendingMutations.splice(0);
-                    let sawNewRows = false;
+                let sawNewRows = false;
 
-                    batch.forEach(mutation => {
-                        mutation.addedNodes.forEach(node => {
-                            if (node.nodeType === 1) {
-                                applyChatTheme(node);
-                                sawNewRows = true;
-                            } else if (node.nodeType === 3 && mutation.target instanceof Element) {
-                                applyChatTheme(mutation.target);
-                                sawNewRows = true;
-                            }
-                        });
+                mutations.forEach(mutation => {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === 1) {
+                            applyChatTheme(node);
+                            const isInserted = node.classList &&
+                                (node.classList.contains('ichc-chat-inline-img') ||
+                                 node.classList.contains('ichc-og-card') ||
+                                 node.classList.contains('ichc-ts'));
+                            if (!isInserted) { sawNewRows = true; }
+                        } else if (node.nodeType === 3 && mutation.target instanceof Element) {
+                            applyChatTheme(mutation.target);
+                            sawNewRows = true;
+                        }
                     });
+                });
 
-                    if (!sawNewRows) { return; }
-                    bindChatScrollTargets();
-                    if (!chatScrollState.auto) { return; }
-                    clearNativeChatPause();
-                    scheduleChatFollow(false);
-                }, 50);
+                if (!sawNewRows) { return; }
+                bindChatScrollTargets();
+                if (!chatScrollState.auto) { return; }
+                clearNativeChatPause();
+                scheduleChatFollow(false);
             });
             chatScrollState.observer.observe(log, {
                 childList: true,
