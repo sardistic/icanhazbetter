@@ -713,7 +713,7 @@
         to { transform: rotate(360deg); }
     }
     /* ── Shared header button base ── */
-    #camControl a, #camControl div a, #signout a, #ichc-primary-actions > a, #ichc-reload-cams-btn {
+    #camControl a, #camControl div a, #signout a, #ichc-primary-actions > a, #ichc-reload-cams-btn, #ichc-cam-test-btn {
         border-radius: 8px !important;
         padding: 7px 14px !important;
         font-size: 12px !important;
@@ -1684,11 +1684,30 @@
         top: auto !important;
         z-index: 14 !important;
         display: flex !important;
+        align-items: center !important;
         gap: 5px !important;
         opacity: 0 !important;
         transform: translateY(4px) !important;
         pointer-events: none !important;
         transition: opacity 0.18s ease, transform 0.18s ease !important;
+    }
+    .ichc-cam-timer {
+        position: absolute !important;
+        bottom: 6px !important;
+        left: 7px !important;
+        z-index: 13 !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        font-family: ui-monospace, monospace !important;
+        color: rgba(255,255,255,0.88) !important;
+        text-shadow: 0 1px 5px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.6) !important;
+        letter-spacing: 0.02em !important;
+        white-space: nowrap !important;
+        pointer-events: none !important;
+        line-height: 1 !important;
+    }
+    .ichc-cam-timer:empty {
+        display: none !important;
     }
     #cams .rounded_square:hover .ichc-card-tools,
     #cams .rounded_square:focus-within .ichc-card-tools,
@@ -2368,7 +2387,8 @@
     }
 
     /* ── Reload cams header button ── */
-    #ichc-reload-cams-btn {
+    #ichc-reload-cams-btn,
+    #ichc-cam-test-btn {
         background: #18191c !important;
         color: #b5bac1 !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
@@ -2378,14 +2398,139 @@
         cursor: pointer !important;
         transition: background 0.15s, border-color 0.15s, transform 0.15s !important;
     }
-    #ichc-reload-cams-btn:hover {
+    #ichc-reload-cams-btn:hover,
+    #ichc-cam-test-btn:hover {
         background: #25272b !important;
         border-color: rgba(255,255,255,0.14) !important;
         transform: translateY(-1px) !important;
     }
-    #ichc-reload-cams-btn svg { flex-shrink: 0 !important; width: 1.2em !important; height: 1.2em !important; }
+    #ichc-reload-cams-btn svg,
+    #ichc-cam-test-btn svg { flex-shrink: 0 !important; width: 1.2em !important; height: 1.2em !important; }
     #ichc-reload-cams-btn:active svg { animation: ichc-rotate-spin 0.6s linear !important; }
     #ichc-reload-cams-btn.ichc-spinning svg { animation: ichc-rotate-spin 0.7s linear infinite !important; }
+
+    #ichc-cam-diagnostics {
+        position: fixed !important;
+        right: 18px !important;
+        top: 74px !important;
+        z-index: 2147483600 !important;
+        width: min(620px, calc(100vw - 36px)) !important;
+        max-height: min(720px, calc(100vh - 96px)) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        padding: 14px !important;
+        background: #111214 !important;
+        color: #e5e7eb !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 18px 44px rgba(0,0,0,0.45) !important;
+        font: 12px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    }
+    .ichc-camdiag-header,
+    .ichc-camdiag-actions {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+    }
+    .ichc-camdiag-title {
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        color: #f4f4f5 !important;
+    }
+    .ichc-camdiag-subtitle {
+        margin-top: 2px !important;
+        color: #9ca3af !important;
+    }
+    .ichc-camdiag-close,
+    .ichc-camdiag-run,
+    .ichc-camdiag-copy {
+        border-radius: 6px !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: #1b1d21 !important;
+        color: #e5e7eb !important;
+        cursor: pointer !important;
+        min-height: 30px !important;
+        padding: 5px 10px !important;
+    }
+    .ichc-camdiag-close {
+        width: 30px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .ichc-camdiag-run {
+        background: rgba(35,165,89,0.18) !important;
+        border-color: rgba(59,165,92,0.35) !important;
+        color: #7ee787 !important;
+    }
+    .ichc-camdiag-body {
+        overflow: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        min-height: 120px !important;
+    }
+    .ichc-camdiag-section {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 6px !important;
+    }
+    .ichc-camdiag-section-title {
+        color: #cbd5e1 !important;
+        font-weight: 700 !important;
+    }
+    .ichc-camdiag-row,
+    .ichc-camdiag-event,
+    .ichc-camdiag-empty {
+        display: grid !important;
+        grid-template-columns: 54px minmax(120px, 0.8fr) minmax(0, 1.6fr) !important;
+        gap: 8px !important;
+        align-items: start !important;
+        padding: 7px 8px !important;
+        border-radius: 6px !important;
+        background: rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(255,255,255,0.06) !important;
+    }
+    .ichc-camdiag-event {
+        grid-template-columns: 74px 54px minmax(0, 1fr) !important;
+    }
+    .ichc-camdiag-event span:last-child {
+        grid-column: 3 / 4 !important;
+    }
+    .ichc-camdiag-empty {
+        display: block !important;
+        color: #9ca3af !important;
+    }
+    .ichc-camdiag-status {
+        text-transform: uppercase !important;
+        font-size: 10px !important;
+        font-weight: 800 !important;
+        letter-spacing: 0 !important;
+    }
+    .ichc-camdiag-pass .ichc-camdiag-status { color: #7ee787 !important; }
+    .ichc-camdiag-fail .ichc-camdiag-status { color: #f87171 !important; }
+    .ichc-camdiag-warn .ichc-camdiag-status { color: #fbbf24 !important; }
+    .ichc-camdiag-info .ichc-camdiag-status { color: #93c5fd !important; }
+    .ichc-camdiag-label {
+        color: #f4f4f5 !important;
+        font-weight: 650 !important;
+    }
+    .ichc-camdiag-detail,
+    .ichc-camdiag-event span {
+        color: #a1a1aa !important;
+        min-width: 0 !important;
+        overflow-wrap: anywhere !important;
+    }
+    .ichc-camdiag-event code {
+        color: #dbeafe !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
 
     /* ── User list hidden cam entries ── */
     #ichc-userlist .ichc-ul-hidden-live {

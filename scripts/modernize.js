@@ -102,9 +102,9 @@
 
     // ── Avatar fetch rate limiter ─────────────────────────────────────────────────
     // Keep avatar lookup gentle for big rooms but fast enough to be useful.
-    const _AV_LS          = 'ichc_av2_';        // localStorage key prefix
+    const _AV_LS          = 'ichc_av3_';        // localStorage key prefix (v3: invalidates stale CDN-direct misses)
     const _AV_HIT_TTL     = 7 * 24 * 3600e3;   // 7 days: successful avatar URL
-    const _AV_MISS_TTL    =     24 * 3600e3;    // 1 day:  "no avatar found" marker
+    const _AV_MISS_TTL    = 2  * 3600e3;        // 2 hours: "no avatar found" — shorter so broken fetches self-heal
     let   _avActive       = 0;
     const _AV_MAX         = 3;
     const _AV_START_GAP   = 300;
@@ -131,6 +131,39 @@
         });
     }
     let camSeed = 0;
+
+    // ── Broadcast duration timer ──────────────────────────────────────────────────
+    // Records wall-clock time when a cam card first goes live; persists across
+    // page refreshes via localStorage so the counter is never reset by refreshCams().
+    const _BCAST_LS = 'ichc_bcast_';
+
+    function _formatBcastTime(ms) {
+        const s = Math.floor(ms / 1000);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        if (h > 0) {
+            return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        }
+        return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }
+
+    function _updateCamTimers() {
+        document.querySelectorAll('#cams .rounded_square').forEach(card => {
+            const timerEl = card.querySelector('.ichc-cam-timer');
+            if (!timerEl) { return; }
+            const name = getCardName?.(card)?.trim().toLowerCase();
+            if (!name) { timerEl.textContent = ''; return; }
+            try {
+                const raw = localStorage.getItem(_BCAST_LS + name);
+                if (!raw) { timerEl.textContent = ''; return; }
+                const startMs = parseInt(raw, 10);
+                if (!startMs) { timerEl.textContent = ''; return; }
+                timerEl.textContent = _formatBcastTime(Date.now() - startMs);
+            } catch (_) {}
+        });
+    }
+    window.setInterval(_updateCamTimers, 1000);
 
     // ─── Emoji dataset ───────────────────────────────────────────────────────────
     // Each entry: { e: char, n: search name (lowercase) }
@@ -248,6 +281,7 @@
         initLurkBanner();
         initDynamicLayout();
         transformCommandBar();
+        installCamDiagnostics();
         // Throttle refreshCams in page context — the site calls it on its own timer
         // which was causing the "random refresh" disruptions.  Pass true as first arg
         // to bypass the throttle for deliberate extension-triggered reloads.
@@ -927,6 +961,20 @@
             });
         }
         primaryLinks.push(reloadBtn);
+
+        let camTestBtn = document.getElementById('ichc-cam-test-btn');
+        if (!camTestBtn) {
+            camTestBtn = document.createElement('button');
+            camTestBtn.id = 'ichc-cam-test-btn';
+            camTestBtn.type = 'button';
+            camTestBtn.className = 'ichc-cam-test-btn';
+            camTestBtn.title = 'Cam diagnostics';
+            camTestBtn.innerHTML = ICONS.shield;
+            camTestBtn.addEventListener('click', () => {
+                openCamDiagnostics();
+            });
+        }
+        primaryLinks.push(camTestBtn);
 
         // Find leave button: may already be in primaryActions or still in signout element.
         const leaveBtn = primaryActions.querySelector('a.ichc-leave-btn') ||
@@ -1672,6 +1720,384 @@
     // stream disruptions.  The site's own refreshCams() polling (throttled to 15s
     // via _wrapRefreshCams) handles picking up new cams within a reasonable delay.
     // The manual reload button in the header is available for on-demand refresh.
+
+    const camDiagnosticState = {
+        rows: [],
+        wsEvents: [],
+        listening: false,
+        running: false,
+    };
+
+    function installCamDiagnostics() {
+        if (window.__ichcCamDiagnosticsInstalled) { return; }
+        window.__ichcCamDiagnosticsInstalled = true;
+
+        window.addEventListener('message', event => {
+            if (event.source !== window || event.data?.type !== 'ichc-cam-ws-event') { return; }
+            const detail = event.data.detail || {};
+            camDiagnosticState.wsEvents.push({
+                time: new Date().toLocaleTimeString(),
+                phase: detail.phase || 'event',
+                url: detail.url || '',
+                info: detail.info || '',
+            });
+            if (camDiagnosticState.wsEvents.length > 50) {
+                camDiagnosticState.wsEvents.splice(0, camDiagnosticState.wsEvents.length - 50);
+            }
+            renderCamDiagnostics();
+        });
+
+        installCamWebSocketWatcher();
+    }
+
+    function installCamWebSocketWatcher() {
+        if (camDiagnosticState.listening) { return; }
+        camDiagnosticState.listening = true;
+        runInPageContext(`
+(() => {
+    if (window.__ichcCamWsWatcherInstalled) { return; }
+    window.__ichcCamWsWatcherInstalled = true;
+    const NativeWebSocket = window.WebSocket;
+    if (typeof NativeWebSocket !== 'function') { return; }
+
+    function summarizePayload(payload) {
+        try {
+            let text = '';
+            if (typeof payload === 'string') {
+                text = payload;
+            } else if (payload instanceof Blob) {
+                text = 'Blob ' + payload.size + ' bytes ' + (payload.type || '');
+            } else if (payload instanceof ArrayBuffer) {
+                text = 'ArrayBuffer ' + payload.byteLength + ' bytes';
+            } else if (ArrayBuffer.isView(payload)) {
+                text = payload.constructor.name + ' ' + payload.byteLength + ' bytes';
+            } else {
+                text = String(payload);
+            }
+            text = text.replace(/\\s+/g, ' ').trim();
+            return text.length > 260 ? text.slice(0, 260) + '...' : text;
+        } catch (_) {
+            return '[unreadable payload]';
+        }
+    }
+
+    function emit(phase, url, info) {
+        window.postMessage({
+            type: 'ichc-cam-ws-event',
+            detail: { phase, url: String(url || ''), info: String(info || '') },
+        }, '*');
+    }
+
+    function WatchedWebSocket(url, protocols) {
+        const socket = protocols === undefined
+            ? new NativeWebSocket(url)
+            : new NativeWebSocket(url, protocols);
+        const startedAt = Date.now();
+        emit('create', url, '');
+        socket.addEventListener('open', () => emit('open', url, 'readyState=' + socket.readyState));
+        socket.addEventListener('message', event => emit('recv', url, summarizePayload(event.data)));
+        socket.addEventListener('error', () => emit('error', url, ''));
+        socket.addEventListener('close', event => {
+            emit('close', url, 'after=' + (Date.now() - startedAt) + 'ms code=' + event.code + ' reason=' + (event.reason || '') + ' clean=' + event.wasClean);
+        });
+
+        const originalSend = socket.send.bind(socket);
+        socket.send = function(data) {
+            emit('send', url, summarizePayload(data));
+            return originalSend(data);
+        };
+        return socket;
+    }
+
+    WatchedWebSocket.prototype = NativeWebSocket.prototype;
+    Object.setPrototypeOf(WatchedWebSocket, NativeWebSocket);
+    ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(key => {
+        try { Object.defineProperty(WatchedWebSocket, key, { value: NativeWebSocket[key] }); } catch (_) {}
+    });
+    window.WebSocket = WatchedWebSocket;
+})();
+        `);
+    }
+
+    function openCamDiagnostics() {
+        let panel = document.getElementById('ichc-cam-diagnostics');
+        if (!panel) {
+            panel = document.createElement('section');
+            panel.id = 'ichc-cam-diagnostics';
+            panel.innerHTML = `
+                <div class="ichc-camdiag-header">
+                    <div>
+                        <div class="ichc-camdiag-title">Cam diagnostics</div>
+                        <div class="ichc-camdiag-subtitle">Checks browser WebRTC, loaded RTC scripts, and signaling sockets.</div>
+                    </div>
+                    <button type="button" class="ichc-camdiag-close" aria-label="Close">${ICONS.xmark}</button>
+                </div>
+                <div class="ichc-camdiag-actions">
+                    <button type="button" class="ichc-camdiag-run">Run tests</button>
+                    <button type="button" class="ichc-camdiag-copy">Copy report</button>
+                </div>
+                <div class="ichc-camdiag-body"></div>
+            `;
+            document.body.appendChild(panel);
+            panel.querySelector('.ichc-camdiag-close')?.addEventListener('click', () => panel.remove());
+            panel.querySelector('.ichc-camdiag-run')?.addEventListener('click', () => runCamDiagnostics());
+            panel.querySelector('.ichc-camdiag-copy')?.addEventListener('click', () => copyCamDiagnosticReport());
+        }
+        panel.classList.add('is-open');
+        renderCamDiagnostics();
+        if (!camDiagnosticState.rows.length && !camDiagnosticState.running) {
+            runCamDiagnostics();
+        }
+    }
+
+    function addCamDiagnosticRow(status, label, detail = '') {
+        const row = { status, label, detail };
+        camDiagnosticState.rows.push(row);
+        renderCamDiagnostics();
+        return row;
+    }
+
+    function updateCamDiagnosticRow(row, status, detail = '') {
+        row.status = status;
+        row.detail = detail;
+        renderCamDiagnostics();
+    }
+
+    function renderCamDiagnostics() {
+        const panel = document.getElementById('ichc-cam-diagnostics');
+        const body = panel?.querySelector('.ichc-camdiag-body');
+        if (!body) { return; }
+
+        const rows = camDiagnosticState.rows.map(row => `
+            <div class="ichc-camdiag-row ichc-camdiag-${escapeAttr(row.status)}">
+                <span class="ichc-camdiag-status">${escapeHtml(row.status)}</span>
+                <span class="ichc-camdiag-label">${escapeHtml(row.label)}</span>
+                <span class="ichc-camdiag-detail">${escapeHtml(row.detail || '')}</span>
+            </div>
+        `).join('');
+
+        const events = camDiagnosticState.wsEvents.length
+            ? camDiagnosticState.wsEvents.slice(-12).map(event => `
+                <div class="ichc-camdiag-event">
+                    <span>${escapeHtml(event.time)}</span>
+                    <b>${escapeHtml(event.phase)}</b>
+                    <code>${escapeHtml(event.url)}</code>
+                    <span>${escapeHtml(event.info)}</span>
+                </div>
+            `).join('')
+            : '<div class="ichc-camdiag-empty">No site WebSocket attempts captured yet. Leave this panel open and click Go Live to capture publish signaling.</div>';
+
+        body.innerHTML = `
+            <div class="ichc-camdiag-section">${rows}</div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">Live signaling watcher</div>
+                ${events}
+            </div>
+        `;
+    }
+
+    async function runCamDiagnostics() {
+        if (camDiagnosticState.running) { return; }
+        camDiagnosticState.running = true;
+        camDiagnosticState.rows = [];
+        installCamWebSocketWatcher();
+        renderCamDiagnostics();
+
+        try {
+            await probeCamBrowserEnvironment();
+            const candidates = await probeCamScripts();
+            await probeCamWebSockets(candidates);
+            await probeCamLoopbackRtc();
+        } finally {
+            camDiagnosticState.running = false;
+            renderCamDiagnostics();
+        }
+    }
+
+    async function probeCamBrowserEnvironment() {
+        addCamDiagnosticRow(window.isSecureContext ? 'pass' : 'fail', 'Secure browser context', location.origin);
+        addCamDiagnosticRow(navigator.mediaDevices?.getUserMedia ? 'pass' : 'fail', 'getUserMedia API', navigator.mediaDevices?.getUserMedia ? 'available' : 'missing');
+        addCamDiagnosticRow(window.RTCPeerConnection ? 'pass' : 'fail', 'RTCPeerConnection API', window.RTCPeerConnection ? 'available' : 'missing');
+        addCamDiagnosticRow(window.WebSocket ? 'pass' : 'fail', 'WebSocket API', window.WebSocket ? 'available' : 'missing');
+
+        if (navigator.permissions?.query) {
+            const camera = await queryPermissionState('camera');
+            addCamDiagnosticRow(camera === 'denied' ? 'fail' : 'info', 'Camera permission', camera || 'unavailable');
+            const microphone = await queryPermissionState('microphone');
+            addCamDiagnosticRow(microphone === 'denied' ? 'fail' : 'info', 'Microphone permission', microphone || 'unavailable');
+        }
+
+        if (navigator.mediaDevices?.enumerateDevices) {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoInputs = devices.filter(device => device.kind === 'videoinput').length;
+                const audioInputs = devices.filter(device => device.kind === 'audioinput').length;
+                addCamDiagnosticRow(videoInputs ? 'pass' : 'warn', 'Local devices', `${videoInputs} camera(s), ${audioInputs} microphone(s)`);
+            } catch (error) {
+                addCamDiagnosticRow('warn', 'Local devices', error?.message || String(error));
+            }
+        }
+    }
+
+    async function queryPermissionState(name) {
+        try {
+            const status = await navigator.permissions.query({ name });
+            return status.state;
+        } catch (_) {
+            return '';
+        }
+    }
+
+    async function probeCamScripts() {
+        const scriptUrls = [...document.scripts]
+            .map(script => script.src)
+            .filter(src => /rtc|peer|publish|websocket|cam/i.test(src));
+        addCamDiagnosticRow(scriptUrls.length ? 'pass' : 'warn', 'RTC scripts loaded', scriptUrls.length ? `${scriptUrls.length} matching script(s)` : 'none found');
+
+        const candidates = new Set();
+        for (const src of scriptUrls.slice(0, 8)) {
+            const row = addCamDiagnosticRow('info', 'Inspect script', shortUrl(src));
+            try {
+                const response = await fetch(src, { cache: 'no-store', credentials: 'same-origin' });
+                const text = await response.text();
+                const found = extractWebSocketCandidates(text, src);
+                found.forEach(url => candidates.add(url));
+                const hasWsConnect = /wsConnect|WebSocket/i.test(text);
+                updateCamDiagnosticRow(row, response.ok ? 'pass' : 'warn', `${response.status} ${response.statusText}; ${found.length} socket candidate(s); ${hasWsConnect ? 'socket code present' : 'no socket literal'}`);
+            } catch (error) {
+                updateCamDiagnosticRow(row, 'warn', error?.message || String(error));
+            }
+        }
+
+        return [...candidates];
+    }
+
+    function extractWebSocketCandidates(text, baseUrl) {
+        const found = new Set();
+        const absolute = text.match(/wss?:\/\/[^'"`\\\s)<]+/gi) || [];
+        absolute.forEach(url => found.add(url));
+
+        const relativeRe = /["'`](\/[^"'`]*?(?:ws|websocket|rtc|peer|publish|signal)[^"'`]*)["'`]/gi;
+        let match;
+        while ((match = relativeRe.exec(text))) {
+            try { found.add(new URL(match[1], baseUrl).href.replace(/^http/i, location.protocol === 'https:' ? 'wss' : 'ws')); } catch (_) {}
+        }
+        return [...found].filter(url => /^wss?:/i.test(url));
+    }
+
+    async function probeCamWebSockets(candidates) {
+        if (!candidates.length) {
+            addCamDiagnosticRow('warn', 'Static WebSocket probe', 'No literal socket URL found; use live watcher while clicking Go Live');
+            return;
+        }
+
+        for (const url of candidates.slice(0, 6)) {
+            const row = addCamDiagnosticRow('info', 'WebSocket probe', shortUrl(url));
+            const result = await testWebSocket(url);
+            updateCamDiagnosticRow(row, result.ok ? 'pass' : 'fail', result.detail);
+        }
+    }
+
+    function testWebSocket(url) {
+        return new Promise(resolve => {
+            let socket;
+            let settled = false;
+            const timeout = window.setTimeout(() => finish(false, 'timeout after 5s'), 5000);
+            function finish(ok, detail) {
+                if (settled) { return; }
+                settled = true;
+                window.clearTimeout(timeout);
+                try { socket?.close(); } catch (_) {}
+                resolve({ ok, detail });
+            }
+            try {
+                socket = new WebSocket(url);
+                socket.addEventListener('open', () => finish(true, 'opened'));
+                socket.addEventListener('error', () => finish(false, 'error event'));
+                socket.addEventListener('close', event => {
+                    finish(event.code === 1000 || event.code === 1005, `closed code=${event.code} clean=${event.wasClean}`);
+                });
+            } catch (error) {
+                finish(false, error?.message || String(error));
+            }
+        });
+    }
+
+    async function probeCamLoopbackRtc() {
+        const row = addCamDiagnosticRow('info', 'Browser RTC loopback', 'starting');
+        if (!window.RTCPeerConnection) {
+            updateCamDiagnosticRow(row, 'fail', 'RTCPeerConnection unavailable');
+            return;
+        }
+
+        const a = new RTCPeerConnection();
+        const b = new RTCPeerConnection();
+        let timeout;
+        try {
+            const result = await new Promise(async resolve => {
+                timeout = window.setTimeout(() => resolve({ ok: false, detail: 'timeout after 8s' }), 8000);
+                a.onicecandidate = event => event.candidate && b.addIceCandidate(event.candidate).catch(() => {});
+                b.onicecandidate = event => event.candidate && a.addIceCandidate(event.candidate).catch(() => {});
+                b.ondatachannel = event => {
+                    event.channel.onopen = () => resolve({ ok: true, detail: 'data channel opened' });
+                };
+                const channel = a.createDataChannel('ichc-cam-test');
+                channel.onopen = () => resolve({ ok: true, detail: 'data channel opened' });
+                const offer = await a.createOffer();
+                await a.setLocalDescription(offer);
+                await b.setRemoteDescription(offer);
+                const answer = await b.createAnswer();
+                await b.setLocalDescription(answer);
+                await a.setRemoteDescription(answer);
+            });
+            updateCamDiagnosticRow(row, result.ok ? 'pass' : 'fail', result.detail);
+        } catch (error) {
+            updateCamDiagnosticRow(row, 'fail', error?.message || String(error));
+        } finally {
+            window.clearTimeout(timeout);
+            try { a.close(); } catch (_) {}
+            try { b.close(); } catch (_) {}
+        }
+    }
+
+    function copyCamDiagnosticReport() {
+        const lines = [
+            'ICHC cam diagnostics',
+            `URL: ${location.href}`,
+            `Time: ${new Date().toISOString()}`,
+            '',
+            ...camDiagnosticState.rows.map(row => `[${row.status}] ${row.label}: ${row.detail || ''}`),
+            '',
+            'Captured WebSocket events:',
+            ...(camDiagnosticState.wsEvents.length
+                ? camDiagnosticState.wsEvents.map(event => `${event.time} ${event.phase} ${event.url} ${event.info}`)
+                : ['none']),
+        ];
+        navigator.clipboard?.writeText(lines.join('\n')).catch(() => {});
+    }
+
+    function shortUrl(url) {
+        try {
+            const parsed = new URL(url, location.href);
+            return parsed.pathname + parsed.search;
+        } catch (_) {
+            return String(url || '');
+        }
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+        }[char]));
+    }
+
+    function escapeAttr(value) {
+        return String(value).replace(/[^a-z0-9_-]/gi, '');
+    }
 
     let _lastReloadAt = 0;
     let _reloadQueuedTimer = null;
@@ -2429,23 +2855,25 @@
 
         const modSet = new Set();
         // Section-based mod + supporter detection: icanhazchat groups users under
-        // <p> section headers (e.g. "Mods", "Site Supports", "Get Hearted Users").
-        // Scan every <p> and tag all userlinks in that section accordingly.
-        const supporterPattern = /(get[_-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_-]?supporter|heart_delete|valentine|site[_-]?support|staff)/i;
+        // section headers (e.g. "Mods", "Site Supports", "Get Hearted Users").
+        // Browsers may push <p> elements that appear inside <ul> in source HTML
+        // OUTSIDE the <ul> in the parsed DOM — so we scan both #activeUserList
+        // and its direct parent children (siblings of the <ul>).
+        const supporterPattern = /(get[_-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_-]?supporter|heart_delete|valentine|site[_-]?support|\bsupport\b|staff)/i;
         const supporterNames = new Set();
-        src.querySelectorAll('p').forEach(p => {
-            const text = p.textContent || '';
-            const isModSection       = /mod/i.test(text);
+
+        const _addSectionUsers = (header) => {
+            const text = header.textContent || '';
+            const isModSection       = /\bmod(erator)?s?\b/i.test(text);
             const isSupporterSection = supporterPattern.test(text);
             if (!isModSection && !isSupporterSection) { return; }
-            p.querySelectorAll('a.userlink').forEach(a => {
+            header.querySelectorAll('a.userlink').forEach(a => {
                 const key = a.textContent.trim().toLowerCase();
                 if (isModSection)       { modSet.add(key); }
                 if (isSupporterSection) { supporterNames.add(key); }
             });
-            // Section headers are often followed by sibling <li>/<ul> nodes, not children
-            let sib = p.nextElementSibling;
-            while (sib && sib.tagName !== 'P') {
+            let sib = header.nextElementSibling;
+            while (sib && !/^(P|H[1-6])$/.test(sib.tagName)) {
                 sib.querySelectorAll('a.userlink').forEach(a => {
                     const key = a.textContent.trim().toLowerCase();
                     if (isModSection)       { modSet.add(key); }
@@ -2453,7 +2881,17 @@
                 });
                 sib = sib.nextElementSibling;
             }
-        });
+        };
+        // Scan section headers inside #activeUserList
+        src.querySelectorAll('p, h2, h3, h4').forEach(_addSectionUsers);
+        // Also scan direct siblings of #activeUserList (handles browser-pushed-out <p> tags)
+        if (src.parentElement) {
+            [...src.parentElement.children].forEach(child => {
+                if (child !== src && /^(P|H[1-6])$/.test(child.tagName)) {
+                    _addSectionUsers(child);
+                }
+            });
+        }
 
         const cammed      = getCammedNames();
         const liveEntries = getLiveCamEntries();
@@ -3382,6 +3820,12 @@
         `;
         const spotlightButton = tools.querySelector('.ichc-spotlight-btn');
 
+        // Broadcast duration timer — appended directly to card (not inside .ichc-card-tools)
+        // so it's always visible independent of the tools-overlay opacity animation.
+        const timerEl = document.createElement('span');
+        timerEl.className = 'ichc-cam-timer';
+        timerEl.setAttribute('aria-hidden', 'true');
+
         if (toggleButton) {
             toggleButton.addEventListener('pointerdown', event => {
                 event.preventDefault();
@@ -3436,6 +3880,7 @@
 
         card.appendChild(toggleButton);
         card.appendChild(tools);
+        card.appendChild(timerEl);
     }
 
     function syncCardTools(card) {
@@ -3555,6 +4000,23 @@
             card.classList.remove('ichc-portrait-cam');
         }
         card.draggable = !hidden;
+
+        // Broadcast duration timer — record start time on first live appearance;
+        // clear it when the stream goes ghost (stopped broadcasting).
+        // persistHidden means the viewer blocked the cam, NOT that the broadcaster stopped.
+        if (hasRealName && camId && !ghost && !hidden) {
+            const bcastKey = _BCAST_LS + name.trim().toLowerCase();
+            try {
+                if (!localStorage.getItem(bcastKey)) {
+                    localStorage.setItem(bcastKey, String(Date.now()));
+                }
+            } catch (_) {}
+        } else if (ghost) {
+            if (hasRealName) {
+                try { localStorage.removeItem(_BCAST_LS + name.trim().toLowerCase()); } catch (_) {}
+            }
+        }
+
         refreshNativeCamButtons(card);
         syncCardTools(card);
         bindCardSignals(card);
@@ -3933,7 +4395,18 @@
             }
             requestCamRelayout(70);
         }, 100);
-        new MutationObserver(() => {
+        new MutationObserver(muts => {
+            // Clear broadcast timers for cam cards that leave #cams (user stopped broadcasting)
+            muts.forEach(mut => {
+                mut.removedNodes.forEach(node => {
+                    if (node instanceof Element && node.classList.contains('rounded_square')) {
+                        const removedName = getCardName(node)?.trim().toLowerCase();
+                        if (removedName) {
+                            try { localStorage.removeItem(_BCAST_LS + removedName); } catch (_) {}
+                        }
+                    }
+                });
+            });
             // Always schedule syncSoon — never skip mutations outright.
             syncSoon();
         }).observe(cams, {

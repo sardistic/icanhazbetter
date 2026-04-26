@@ -1001,6 +1001,13 @@
             window.clearInterval(chatScrollState.pauseCheckTimer);
         }
         chatScrollState.pauseCheckTimer = window.setInterval(() => {
+            // Re-attach observer if the site replaced #txt with a new element.
+            // This happens during cam refreshes and is the primary cause of chat
+            // "freezing" (the observer silently watches a detached element forever).
+            const currentLog = getChatLog();
+            if (currentLog && currentLog !== chatScrollState.observedRoot) {
+                initChatScrollSync();
+            }
             if (!chatScrollState.auto) { return; }
             // Skip if focus is inside the PM window or on any non-chat input
             // — resumeNativeChat invokes the site's cR() which focuses txtMsg.
