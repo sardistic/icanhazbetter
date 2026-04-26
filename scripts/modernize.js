@@ -3750,19 +3750,38 @@
         const cams = document.getElementById('cams');
         if (!cams) { return; }
 
+        const allCards = getCamCards();
         const byKey = new Map(
-            getCamCards()
+            allCards
                 .filter(card => card.dataset.ichcCam)
                 .map(card => [card.dataset.ichcCam, card]),
         );
 
-        loadStoredList(ORDER_KEY).forEach(key => {
+        const storedKeys = loadStoredList(ORDER_KEY).filter(k => byKey.has(k));
+        if (!storedKeys.length) { return; }
+
+        // Check if cards are already in the stored order — avoid DOM moves that
+        // would trigger the #cams MutationObserver and cause a relayout loop.
+        const currentOrder = allCards.map(c => c.dataset.ichcCam || '');
+        let pos = 0;
+        const alreadyOrdered = storedKeys.every(key => {
+            const idx = currentOrder.indexOf(key, pos);
+            if (idx === -1) { return false; }
+            pos = idx + 1;
+            return true;
+        });
+        if (alreadyOrdered) { return; }
+
+        storedKeys.forEach(key => {
             const card = byKey.get(key);
             if (card) { cams.appendChild(card); }
         });
     }
 
-    let _featuredSetAt = 0;
+    // Initialized to Date.now() if a key is already stored so the 8s grace
+    // period applies on page load (not just within the current session).
+    let _featuredSetAt = localStorage.getItem(FEATURED_KEY) ? Date.now() : 0;
+    let _featuredWasFound = false;
 
     function applyFeaturedCam() {
         const cams = document.getElementById('cams');
@@ -3811,8 +3830,13 @@
 
         if (cams) { cams.classList.toggle('ichc-has-featured', found); }
 
-        if (featured && !found && Date.now() - _featuredSetAt > 8000) {
+        if (found) {
+            _featuredWasFound = true;
+        } else if (featured && _featuredWasFound && Date.now() - _featuredSetAt > 8000) {
+            // Only clear the key once the cam has been confirmed present and then
+            // gone for >8 seconds — prevents clearing during initial card loading.
             localStorage.removeItem(FEATURED_KEY);
+            _featuredWasFound = false;
         }
     }
 
@@ -3820,6 +3844,7 @@
         const key = card.dataset.ichcCam;
         if (!key) { return; }
         _featuredSetAt = Date.now();
+        _featuredWasFound = false;
         const current = (localStorage.getItem(FEATURED_KEY) || '').trim().toLowerCase();
 
         if (current === key) {
