@@ -101,14 +101,13 @@
     }
 
     // ── Avatar fetch rate limiter ─────────────────────────────────────────────────
-    // Keep avatar lookup deliberately gentle for big rooms: one HTTP request lane,
-    // with a short gap between each start, so profile/CDN fallback fetches trickle.
+    // Keep avatar lookup gentle for big rooms but fast enough to be useful.
     const _AV_LS          = 'ichc_av2_';        // localStorage key prefix
     const _AV_HIT_TTL     = 7 * 24 * 3600e3;   // 7 days: successful avatar URL
     const _AV_MISS_TTL    =     24 * 3600e3;    // 1 day:  "no avatar found" marker
     let   _avActive       = 0;
-    const _AV_MAX         = 1;
-    const _AV_START_GAP   = 900;
+    const _AV_MAX         = 3;
+    const _AV_START_GAP   = 300;
     const _avQueue        = [];
 
     function _lsAvSave(key, url) {
@@ -2468,17 +2467,20 @@
         // Pre-scan: find supporter markers and map them to the nearest userlink.
         // theme.js may replace smicon images with span[data-icon], so check both forms.
         const supporterNames = new Set();
-        const supporterPattern = /(get[_-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_-]?supporter|heart_delete|valentine)/i;
+        const supporterPattern = /(get[_-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_-]?supporter|heart_delete|valentine|site[_-]?support|staff)/i;
         const markerSelector = [
             'img.smicon',
             'img[src*="heart" i]',
             'img[src*="support" i]',
             'img[src*="trophy" i]',
+            'img[src*="staff" i]',
             'span[data-icon]',
             '[title*="heart" i]',
             '[title*="support" i]',
+            '[title*="staff" i]',
             '[aria-label*="heart" i]',
-            '[aria-label*="support" i]'
+            '[aria-label*="support" i]',
+            '[aria-label*="staff" i]'
         ].join(',');
         const markerText = node => [
             node.getAttribute?.('src'),
