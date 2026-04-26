@@ -64,9 +64,10 @@
         lastDensitySignature: '',
         syncRetryTimer: null,
     };
-    // Cache: username_lower → image URL string | null ('pending' while fetching)
+    // Cache: username_lower → image URL string | null (final miss)
     // Capped at 200 entries — evict oldest 50 when full to avoid unbounded growth.
     const profileImageCache = new Map();
+    const profileImagePending = new Map();
     function _profileCacheSet(key, value) {
         if (profileImageCache.size >= 200) {
             let evicted = 0;
@@ -101,13 +102,14 @@
     }
 
     // ── Avatar fetch rate limiter ─────────────────────────────────────────────────
-    // Keep avatar lookup gentle for big rooms but fast enough to be useful.
-    const _AV_LS          = 'ichc_av3_';        // localStorage key prefix (v3: invalidates stale CDN-direct misses)
+    // Keep avatar lookup very gentle for big rooms: one profile page at a time,
+    // spaced out so we don't hammer ICHC or its image CDN.
+    const _AV_LS          = 'ichc_av4_';        // localStorage key prefix (v4: clears poisoned misses/load errors)
     const _AV_HIT_TTL     = 7 * 24 * 3600e3;   // 7 days: successful avatar URL
-    const _AV_MISS_TTL    = 2  * 3600e3;        // 2 hours: "no avatar found" — shorter so broken fetches self-heal
+    const _AV_MISS_TTL    = 30 * 60e3;          // 30 minutes: transient profile scrape misses self-heal quickly
     let   _avActive       = 0;
-    const _AV_MAX         = 3;
-    const _AV_START_GAP   = 300;
+    const _AV_MAX         = 1;
+    const _AV_START_GAP   = 900;
     const _avQueue        = [];
 
     function _lsAvSave(key, url) {
@@ -118,13 +120,20 @@
         return new Promise(resolve => {
             const run = () => {
                 _avActive++;
-                fn().then(result => {
-                    resolve(result);
-                    _avActive--;
-                    if (_avQueue.length > 0) {
-                        window.setTimeout(() => (_avQueue.shift())?.(), _AV_START_GAP);
-                    }
-                });
+                Promise.resolve()
+                    .then(fn)
+                    .then(result => {
+                        resolve(result);
+                    })
+                    .catch(() => {
+                        resolve(null);
+                    })
+                    .finally(() => {
+                        _avActive--;
+                        if (_avQueue.length > 0) {
+                            window.setTimeout(() => (_avQueue.shift())?.(), _AV_START_GAP);
+                        }
+                    });
             };
             if (_avActive < _AV_MAX) { run(); }
             else { _avQueue.push(run); }
@@ -282,18 +291,32 @@
         initDynamicLayout();
         transformCommandBar();
         installCamDiagnostics();
-        // Throttle refreshCams in page context — the site calls it on its own timer
-        // which was causing the "random refresh" disruptions.  Pass true as first arg
-        // to bypass the throttle for deliberate extension-triggered reloads.
+        // Coalesce refreshCams in page context. The site can call it in quick bursts;
+        // keep deliberate extension reloads immediate, but queue one skipped site call
+        // instead of swallowing refreshes that may keep cams/chat state alive.
         const _wrapRefreshCams = () => {
             runInPageContext(`
                 if (typeof refreshCams === 'function' && !refreshCams._ichcThrottled) {
                     const _orig = refreshCams;
                     window._ichcLastRefresh = window._ichcLastRefresh || 0;
+                    window._ichcQueuedRefreshTimer = window._ichcQueuedRefreshTimer || 0;
                     window.refreshCams = function(force) {
                         const now = Date.now();
-                        if (!force && now - window._ichcLastRefresh < 10000) {
+                        const minGap = 2000;
+                        const elapsed = now - window._ichcLastRefresh;
+                        if (!force && elapsed < minGap) {
+                            if (!window._ichcQueuedRefreshTimer) {
+                                window._ichcQueuedRefreshTimer = window.setTimeout(function() {
+                                    window._ichcQueuedRefreshTimer = 0;
+                                    window._ichcLastRefresh = Date.now();
+                                    _orig.call(window);
+                                }, Math.max(250, minGap - elapsed));
+                            }
                             return;
+                        }
+                        if (window._ichcQueuedRefreshTimer) {
+                            window.clearTimeout(window._ichcQueuedRefreshTimer);
+                            window._ichcQueuedRefreshTimer = 0;
                         }
                         window._ichcLastRefresh = now;
                         return _orig.apply(this, arguments);
@@ -1240,15 +1263,14 @@
         document.addEventListener('pointercancel', finish, true);
     }
 
-    // Public entry point: checks in-memory cache → localStorage → throttled HTTP fetch.
-    // Never re-fetches within a session once a result (url or null) is stored.
+    // Public entry point: checks in-memory cache -> localStorage -> throttled HTTP fetch.
+    // Pending fetches are de-duped so repeated userlist rebuilds don't turn into
+    // duplicate profile requests or false null misses.
     function fetchProfileImage(username) {
         const key = (username || '').toLowerCase().trim();
         if (!key) { return Promise.resolve(null); }
         if (profileImageCache.has(key)) { return Promise.resolve(profileImageCache.get(key)); }
-
-        // Mark pending immediately so concurrent renders don't queue duplicate fetches
-        _profileCacheSet(key, null);
+        if (profileImagePending.has(key)) { return profileImagePending.get(key); }
 
         // Check localStorage — avoids any HTTP request for recently-seen users
         try {
@@ -1263,16 +1285,32 @@
             }
         } catch (_) {}
 
-        // Queue the actual HTTP fetch (max 2 concurrent, 350 ms between starts)
-        return _scheduleAvatarFetch(() => _doFetchProfileImage(key));
+        const pending = _scheduleAvatarFetch(() => _doFetchProfileImage(key))
+            .finally(() => profileImagePending.delete(key));
+        profileImagePending.set(key, pending);
+        return pending;
     }
 
     function _isUserAvatarUrl(url) {
         if (!url || typeof url !== 'string') { return false; }
-        if (/smicon|trophy|supporter|heart|control_|logo|favicon|18_and_up|roomrating|assets\//i.test(url)) { return false; }
-        const fname = url.split('/').pop().split('?')[0];
-        if (fname.startsWith('badge_')) { return false; }
-        return /\/cache\/|\/user\/|profile|avatar|thumb|_sqr|_med|vidble\.com|images\.icanhazchat\.com\/users\//i.test(url);
+        if (/^data:/i.test(url)) { return false; }
+        let host;
+        try { host = new URL(url).hostname.toLowerCase(); } catch (_) { return false; }
+        // Exclude obvious site-asset filenames regardless of host
+        if (/\b(smicon|badge_|trophy|favicon|sprite|logo[_.\-]|control_|18_and_up|roomrating|loading\.|default_avatar|placeholder)\b/i.test(url)) { return false; }
+        // icanhazchat official image CDN — anything not in a known asset subfolder
+        if (host === 'images.icanhazchat.com') {
+            return !/\/(smicons|icons|badges|sprites|assets)\//i.test(url);
+        }
+        // Explicit external image hosts commonly used for chat avatars
+        if (/^(i\.)?imgur\.com$/.test(host) || host === 'vidble.com') { return true; }
+        // Any external domain (not icanhazchat.com) with a direct image extension
+        if (!host.includes('icanhazchat.com') &&
+            /\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(url) &&
+            !/jquery|bootstrap|jsdelivr|cloudflare|googleapis|gstatic/i.test(host)) {
+            return true;
+        }
+        return false;
     }
 
     function _extractAvatarFromDoc(doc, baseUrl) {
@@ -1280,27 +1318,42 @@
             if (!raw) { return ''; }
             try { return new URL(raw, baseUrl).href; } catch (_) { return raw; }
         };
-        // Prioritised selectors — most specific first
-        const selectors = [
+        // 1. OG / meta canonical image — most reliable if the site sets it
+        for (const sel of [
             'meta[property="og:image"]',
             'meta[name="twitter:image"]',
             'link[rel~="image_src"]',
-            '.profile img', '#profile img', '#userProfile img',
-            'img[src*="/cache/" i]', 'img[src*="profile" i]',
-            'img[src*="avatar" i]', 'img[src*="vidble.com" i]',
-            'img[src*="images.icanhazchat.com/users/" i]',
-        ];
-        for (const sel of selectors) {
+        ]) {
             const el = doc.querySelector(sel);
-            if (!el) { continue; }
-            const raw = el.getAttribute('content') || el.getAttribute('src') || el.getAttribute('href');
+            const raw = el?.getAttribute('content') || el?.getAttribute('href') || '';
             const url = resolve(raw);
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
-        // Full image scan as last resort
-        for (const img of doc.querySelectorAll('img')) {
-            const url = resolve(img.getAttribute('src'));
+        // 2. Common profile picture containers — by element ID/class, not src content
+        for (const sel of [
+            '#profile img', '.profile > img', '.profile-image img', '.profile-photo img',
+            '#userProfile img', '#profile_image', '#profileImage', '#profile_pic',
+            'img[id*="profile" i]', 'img[class*="profile" i]',
+            'img[id*="avatar" i]',  'img[class*="avatar" i]',
+            'img[id*="photo" i]',   'img[class*="user-photo" i]',
+        ]) {
+            const el = doc.querySelector(sel);
+            if (!el) { continue; }
+            const url = resolve(el.getAttribute('src') || el.getAttribute('content') || '');
             if (url && _isUserAvatarUrl(url)) { return url; }
+        }
+        // 3. CDN / known-host scan — only returns images from trusted avatar domains
+        for (const img of doc.querySelectorAll('img[src]')) {
+            const url = resolve(img.getAttribute('src') || '');
+            if (url && _isUserAvatarUrl(url)) { return url; }
+        }
+        // 4. CSS background-image in style attributes (some sites set avatar this way)
+        for (const el of doc.querySelectorAll('[style*="url("]')) {
+            const m = (el.getAttribute('style') || '').match(/url\(['"]?([^'"()]+)/i);
+            if (m) {
+                const url = resolve(m[1]);
+                if (url && _isUserAvatarUrl(url)) { return url; }
+            }
         }
         return '';
     }
@@ -1322,8 +1375,9 @@
             }
         } catch (_) {}
 
-        // No avatar found — record the miss so we don't retry for 24 h
+        // No avatar found — record the miss so we don't retry for the miss TTL.
         _lsAvSave(key, null);
+        _profileCacheSet(key, null);
         return null;
     }
 
@@ -1441,15 +1495,17 @@
         _sidebarPulseT = 0;
         _sidebarPulseTimer = setInterval(() => {
             const strip = document.getElementById('ichc-ul-toggle-btn');
-            if (!strip || !document.querySelector('#ichc-pm-avatars .ichc-pm-avatar-unread')) {
+            if (!strip || !document.querySelector('#ichc-pm-avatars .ichc-pm-avatar-unread, #ichc-pm-toggle-btn.ichc-pm-toggle-alert')) {
                 _stopSidebarPulse();
                 return;
             }
             _sidebarPulseT = (_sidebarPulseT + 1) % 28;
             const t = Math.sin((_sidebarPulseT / 28) * Math.PI); // smooth 0→1→0
-            strip.style.setProperty('background', `rgba(160,10,10,${(t * 0.22).toFixed(3)})`, 'important');
-            strip.style.setProperty('box-shadow', `inset -6px 0 20px rgba(239,68,68,${(t * 0.28).toFixed(3)})`, 'important');
-            strip.style.setProperty('border-left-color', `rgba(239,68,68,${(0.06 + t * 0.35).toFixed(3)})`, 'important');
+            strip.classList.add('ichc-has-pm-unread');
+            strip.style.setProperty('background', `rgba(190,18,60,${(0.18 + t * 0.24).toFixed(3)})`, 'important');
+            strip.style.setProperty('box-shadow', `inset -8px 0 24px rgba(239,68,68,${(0.26 + t * 0.36).toFixed(3)}), 0 0 18px rgba(239,68,68,${(t * 0.34).toFixed(3)})`, 'important');
+            strip.style.setProperty('border-left-color', `rgba(248,113,113,${(0.35 + t * 0.55).toFixed(3)})`, 'important');
+            strip.style.setProperty('transform', `translateX(-${(1.5 + t * 4.5).toFixed(1)}px)`, 'important');
         }, 50);
     }
 
@@ -1461,6 +1517,8 @@
             strip.style.removeProperty('box-shadow');
             strip.style.removeProperty('border-left-color');
             strip.style.removeProperty('animation');
+            strip.style.removeProperty('transform');
+            strip.classList.remove('ichc-has-pm-unread');
         }
     }
 
@@ -1717,7 +1775,7 @@
     }
 
     // New-cam detection is intentionally disabled — the auto-reload caused random
-    // stream disruptions.  The site's own refreshCams() polling (throttled to 15s
+    // stream disruptions.  The site's own refreshCams() polling (coalesced to 2s
     // via _wrapRefreshCams) handles picking up new cams within a reasonable delay.
     // The manual reload button in the header is available for on-demand refresh.
 
@@ -1747,7 +1805,7 @@
             renderCamDiagnostics();
         });
 
-        installCamWebSocketWatcher();
+        // Keep the WebSocket watcher opt-in; replacing window.WebSocket during normal browsing can interfere with live chat/cam updates.
     }
 
     function installCamWebSocketWatcher() {
@@ -2142,7 +2200,7 @@
         };
         _resetFirstSeen();
 
-        // Pass true to bypass the 15s throttle wrapper — this is a deliberate reload.
+        // Pass true to bypass the 2s coalescing wrapper — this is a deliberate reload.
         runInPageContext(`if (typeof refreshCams === 'function') { window._ichcLastRefresh = 0; refreshCams(true); }`);
 
         // Reset once more after 200ms for cards created/kept by refreshCams(),
@@ -2348,6 +2406,8 @@
         const clearPmButtonAlert = () => {
             pmBtn.dataset.pmUnread = '0';
             pmBtn.classList.remove('ichc-pm-toggle-alert');
+            document.getElementById('ichc-ul-toggle-btn')?.classList.remove('ichc-has-pm-unread');
+            _stopSidebarPulse();
             pmBadge.textContent = '';
             pmBadge.hidden = true;
             pmBtn.title = 'Toggle PM window';
@@ -2357,6 +2417,8 @@
             const nick = typeof detail?.nick === 'string' ? detail.nick.trim() : '';
             pmBtn.dataset.pmUnread = String(count);
             pmBtn.classList.add('ichc-pm-toggle-alert');
+            document.getElementById('ichc-ul-toggle-btn')?.classList.add('ichc-has-pm-unread');
+            _startSidebarPulse();
             pmBadge.hidden = false;
             pmBadge.textContent = count > 9 ? '9+' : String(count);
             pmBtn.title = nick ? `New PM from ${nick}` : `${count} unread PM${count === 1 ? '' : 's'}`;
@@ -2859,19 +2921,17 @@
         // Browsers may push <p> elements that appear inside <ul> in source HTML
         // OUTSIDE the <ul> in the parsed DOM — so we scan both #activeUserList
         // and its direct parent children (siblings of the <ul>).
-        const supporterPattern = /(get[_-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_-]?supporter|heart_delete|valentine|site[_-]?support|\bsupport\b|staff)/i;
+        const supporterSectionPattern = /^(get\s*hearted(?:\s+users)?|hearted(?:\s+users)?|site\s+supports?|site\s+supporters?|supporters?|contributors?|site\s+contributors?|donors?|patrons?)$/i;
+        const supporterMarkerPattern = /(get[_\s-]?hearted|hearted|heart|supporter|trophysupporter|trophy[_\s-]?supporter|heart_delete|valentine|site[_\s-]?supporter?|contrib|contributor|site[_\s-]?contributor?|donor|patron)/i;
         const supporterNames = new Set();
 
         const _addSectionUsers = (header) => {
-            const text = header.textContent || '';
+            const text = normalizeText(header.textContent || '');
+            const headerLinks = header.querySelectorAll('a.userlink');
+            if (headerLinks.length || text.length > 80) { return; }
             const isModSection       = /\bmod(erator)?s?\b/i.test(text);
-            const isSupporterSection = supporterPattern.test(text);
+            const isSupporterSection = supporterSectionPattern.test(text);
             if (!isModSection && !isSupporterSection) { return; }
-            header.querySelectorAll('a.userlink').forEach(a => {
-                const key = a.textContent.trim().toLowerCase();
-                if (isModSection)       { modSet.add(key); }
-                if (isSupporterSection) { supporterNames.add(key); }
-            });
             let sib = header.nextElementSibling;
             while (sib && !/^(P|H[1-6])$/.test(sib.tagName)) {
                 sib.querySelectorAll('a.userlink').forEach(a => {
@@ -2906,14 +2966,23 @@
             'img.smicon',
             'img[src*="heart" i]',
             'img[src*="support" i]',
+            'img[src*="contrib" i]',
+            'img[src*="donor" i]',
+            'img[src*="patron" i]',
             'img[src*="trophy" i]',
             'img[src*="staff" i]',
             'span[data-icon]',
             '[title*="heart" i]',
             '[title*="support" i]',
+            '[title*="contrib" i]',
+            '[title*="donor" i]',
+            '[title*="patron" i]',
             '[title*="staff" i]',
             '[aria-label*="heart" i]',
             '[aria-label*="support" i]',
+            '[aria-label*="contrib" i]',
+            '[aria-label*="donor" i]',
+            '[aria-label*="patron" i]',
             '[aria-label*="staff" i]'
         ].join(',');
         const markerText = node => [
@@ -2924,7 +2993,7 @@
             node.getAttribute?.('aria-label'),
             node.className,
         ].filter(Boolean).join(' ');
-        const isSupporterMarker = node => !!node && supporterPattern.test(markerText(node));
+        const isSupporterMarker = node => !!node && supporterMarkerPattern.test(markerText(node));
         const nearestUserlink = node => {
             let el = node.previousElementSibling;
             while (el && !el.matches?.('a.userlink')) { el = el.previousElementSibling; }
@@ -2950,12 +3019,18 @@
                 parentLi?.className,
                 a.previousElementSibling?.className,
                 a.previousElementSibling?.getAttribute?.('title'),
+                a.previousElementSibling?.getAttribute?.('alt'),
+                a.previousElementSibling?.getAttribute?.('aria-label'),
+                a.previousElementSibling?.getAttribute?.('data-icon'),
                 a.previousElementSibling?.getAttribute?.('src'),
                 a.nextElementSibling?.className,
                 a.nextElementSibling?.getAttribute?.('title'),
+                a.nextElementSibling?.getAttribute?.('alt'),
+                a.nextElementSibling?.getAttribute?.('aria-label'),
+                a.nextElementSibling?.getAttribute?.('data-icon'),
                 a.nextElementSibling?.getAttribute?.('src'),
             ].filter(Boolean).join(' ');
-            return supporterPattern.test(parts);
+            return supporterMarkerPattern.test(parts);
         };
 
         src.querySelectorAll('a.userlink').forEach(a => {
@@ -3232,8 +3307,8 @@
                     avatarImg.onerror = () => {
                         avatarImg.removeAttribute('src');
                         avatarImg.classList.remove('ichc-ul-avatar-loaded');
-                        // Keep null in profileImageCache — don't delete or we'll retry every rebuild
-                        _lsAvSave(imgKey, null);
+                        _profileCacheSet(imgKey, null);
+                        try { localStorage.removeItem(_AV_LS + imgKey); } catch (_) {}
                     };
                     _avatarImgCacheSet(imgKey, avatarImg);
                 }
