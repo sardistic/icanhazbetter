@@ -38,6 +38,7 @@
     const ORDER_KEY = 'ichc_cam_order';
     const FEATURED_KEY = 'ichc_featured_cam';
     const SIDE_WIDTH_KEY = 'ichc_stage_side_width';
+    const CAM_SPAN_KEY = 'ichc_cam_spans_v1';
     const DEFAULT_PREFS = { camMin: 360, chatWidth: 430, chatSide: 'right' };
     const dragState = { handleArmed: null, activeCard: null };
     const userListState = {
@@ -1298,12 +1299,14 @@
         try { host = new URL(url).hostname.toLowerCase(); } catch (_) { return false; }
         // Exclude obvious site-asset filenames regardless of host
         if (/\b(smicon|badge_|trophy|favicon|sprite|logo[_.\-]|control_|18_and_up|roomrating|loading\.|default_avatar|placeholder)\b/i.test(url)) { return false; }
-        // icanhazchat official image CDN — anything not in a known asset subfolder
+        // icanhazchat official image CDN — accept anything not in a known asset subfolder
         if (host === 'images.icanhazchat.com') {
             return !/\/(smicons|icons|badges|sprites|assets)\//i.test(url);
         }
         // Explicit external image hosts commonly used for chat avatars
         if (/^(i\.)?imgur\.com$/.test(host) || host === 'vidble.com') { return true; }
+        // icanhazchat resized image suffixes (_sqr = square thumb, _med = medium)
+        if (host.includes('icanhazchat.com') && /(_sqr|_med)\./i.test(url)) { return true; }
         // Any external domain (not icanhazchat.com) with a direct image extension
         if (!host.includes('icanhazchat.com') &&
             /\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(url) &&
@@ -1318,7 +1321,7 @@
             if (!raw) { return ''; }
             try { return new URL(raw, baseUrl).href; } catch (_) { return raw; }
         };
-        // 1. OG / meta canonical image — most reliable if the site sets it
+        // 1. OG / meta image — icanhazchat sets this to the broadcast/profile thumbnail
         for (const sel of [
             'meta[property="og:image"]',
             'meta[name="twitter:image"]',
@@ -1329,7 +1332,18 @@
             const url = resolve(raw);
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
-        // 2. Common profile picture containers — by element ID/class, not src content
+        // 2. icanhazchat CDN cache — broadcast thumbnails and resized profile pics live here
+        for (const sel of [
+            'img[src*="images.icanhazchat.com"]',
+            'img[src*="/cache/"]',
+            'img[src*="_sqr."]', 'img[src*="_med."]',
+        ]) {
+            const el = doc.querySelector(sel);
+            if (!el) { continue; }
+            const url = resolve(el.getAttribute('src') || '');
+            if (url && _isUserAvatarUrl(url)) { return url; }
+        }
+        // 3. Common profile picture containers — by element ID/class
         for (const sel of [
             '#profile img', '.profile > img', '.profile-image img', '.profile-photo img',
             '#userProfile img', '#profile_image', '#profileImage', '#profile_pic',
@@ -1342,12 +1356,12 @@
             const url = resolve(el.getAttribute('src') || el.getAttribute('content') || '');
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
-        // 3. CDN / known-host scan — only returns images from trusted avatar domains
+        // 4. Full img scan — catches vidble.com and other external avatar hosts
         for (const img of doc.querySelectorAll('img[src]')) {
             const url = resolve(img.getAttribute('src') || '');
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
-        // 4. CSS background-image in style attributes (some sites set avatar this way)
+        // 5. CSS background-image in style attributes
         for (const el of doc.querySelectorAll('[style*="url("]')) {
             const m = (el.getAttribute('style') || '').match(/url\(['"]?([^'"()]+)/i);
             if (m) {
@@ -3879,6 +3893,53 @@
         });
     }
 
+    function _loadCamSpans() {
+        try { return JSON.parse(localStorage.getItem(CAM_SPAN_KEY) || '{}') || {}; } catch (_) { return {}; }
+    }
+    function _saveCamSpans(spans) {
+        try { localStorage.setItem(CAM_SPAN_KEY, JSON.stringify(spans)); } catch (_) {}
+    }
+    function _getCamColumns() {
+        return Math.max(1, Number.parseInt(
+            getComputedStyle(document.documentElement).getPropertyValue('--ichc-cam-columns'), 10
+        ) || 1);
+    }
+    function _syncCardSpanBtns(card, span, columns) {
+        const shrink = card.querySelector('.ichc-cam-shrink-btn');
+        const grow = card.querySelector('.ichc-cam-grow-btn');
+        if (shrink) { shrink.disabled = span <= 1; }
+        if (grow) { grow.disabled = columns <= 1 || span >= columns; }
+    }
+    function _applyCardSpans() {
+        const spans = _loadCamSpans();
+        const columns = _getCamColumns();
+        getCamCards().forEach(card => {
+            if (card.classList.contains('ichc-featured')) {
+                _syncCardSpanBtns(card, 1, columns);
+                return;
+            }
+            const key = getCardKey(card);
+            const span = key ? Math.min(columns, Math.max(1, spans[key] || 1)) : 1;
+            if (span > 1) {
+                card.style.setProperty('grid-column', `span ${span}`, 'important');
+            } else {
+                card.style.removeProperty('grid-column');
+            }
+            _syncCardSpanBtns(card, span, columns);
+        });
+    }
+    function _adjustCardSpan(card, delta) {
+        const key = getCardKey(card);
+        if (!key) { return; }
+        const spans = _loadCamSpans();
+        const columns = _getCamColumns();
+        const current = spans[key] || 1;
+        const next = Math.min(columns, Math.max(1, current + delta));
+        if (next === 1) { delete spans[key]; } else { spans[key] = next; }
+        _saveCamSpans(spans);
+        _applyCardSpans();
+    }
+
     function ensureCardTools(card) {
         if (card.querySelector('.ichc-card-tools') || card.querySelector('.ichc-cam-toggle-btn')) { return; }
 
@@ -3891,9 +3952,13 @@
         const tools = document.createElement('div');
         tools.className = 'ichc-card-tools';
         tools.innerHTML = `
+            <button type="button" class="ichc-overlay-btn ichc-cam-shrink-btn" aria-label="Shrink cam" title="Shrink cam">−</button>
             <button type="button" class="ichc-overlay-btn ichc-spotlight-btn" aria-label="Focus cam" title="Focus cam"></button>
+            <button type="button" class="ichc-overlay-btn ichc-cam-grow-btn" aria-label="Grow cam" title="Grow cam">+</button>
         `;
         const spotlightButton = tools.querySelector('.ichc-spotlight-btn');
+        const shrinkButton = tools.querySelector('.ichc-cam-shrink-btn');
+        const growButton = tools.querySelector('.ichc-cam-grow-btn');
 
         // Broadcast duration timer — appended directly to card (not inside .ichc-card-tools)
         // so it's always visible independent of the tools-overlay opacity animation.
@@ -3951,6 +4016,15 @@
                 event.stopPropagation();
                 toggleFeatured(card);
             });
+        }
+
+        if (shrinkButton) {
+            shrinkButton.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+            shrinkButton.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); _adjustCardSpan(card, -1); });
+        }
+        if (growButton) {
+            growButton.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+            growButton.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); _adjustCardSpan(card, +1); });
         }
 
         card.appendChild(toggleButton);
@@ -4307,6 +4381,7 @@
         const cams = document.getElementById('cams');
         if (cams) {
             cams.style.setProperty('grid-template-columns', `repeat(${columns}, minmax(0, 1fr))`, 'important');
+            _applyCardSpans();
         }
     }
 
@@ -4412,6 +4487,8 @@
             localStorage.removeItem(FEATURED_KEY);
             _featuredWasFound = false;
         }
+
+        _applyCardSpans();
     }
 
     function toggleFeatured(card) {
@@ -4452,11 +4529,33 @@
         buildHiddenCamManager();
     }
 
+    function _reconcileBcastTimers(cams) {
+        // When #cams is replaced wholesale the child-removal MutationObserver never
+        // fires, leaving stale _BCAST_LS entries for users who stopped broadcasting.
+        // Build the current live set and evict anything not in it.
+        const liveNames = new Set(
+            [...cams.querySelectorAll('.rounded_square')]
+                .map(card => getCardName(card)?.trim().toLowerCase())
+                .filter(Boolean)
+        );
+        const stale = [];
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key?.startsWith(_BCAST_LS) && !liveNames.has(key.slice(_BCAST_LS.length))) {
+                    stale.push(key);
+                }
+            }
+            stale.forEach(k => localStorage.removeItem(k));
+        } catch (_) {}
+    }
+
     function initCamLayout() {
         const cams = document.getElementById('cams');
         if (!cams || cams.dataset.ichcCamLayout === '1') { return; }
         cams.dataset.ichcCamLayout = '1';
 
+        _reconcileBcastTimers(cams);
         syncCamCards();
 
         const syncSoon = debounce(() => {

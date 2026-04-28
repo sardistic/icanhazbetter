@@ -2,6 +2,7 @@
     'use strict';
 
     const PM_STATE_KEY = 'ichc_pm_state_v1';
+    const PM_VIS_KEY   = 'ichc_pm_vis_v1';
 
     // Set localStorage.ichcPmLog = '1' in the browser console to enable debug logging.
     const _D = (localStorage.getItem('ichcPmLog') === '1')
@@ -335,9 +336,10 @@
                 scrollTop: convo?.scrollTop || 0,
             };
         }).filter(item => item.key);
+        const geo = getPmGeometry(root);
         return {
             active,
-            geometry: getPmGeometry(root),
+            geometry: (geo.width > 0 && geo.height > 0) ? geo : null,
             conversations,
         };
     }
@@ -846,17 +848,46 @@
     // to show/hide the PM window calls this (or schedulePmSync which debounces it).
 
     // User-requested hide state.  When true, syncPmVisibility won't re-show #tabs
-    // even if the MutationObserver fires.  Toggled via 'ichc-pm-user-toggle' event.
-    let _userHiddenPm = false;
+    // even if the MutationObserver fires.  Persisted to localStorage so refresh
+    // doesn't resurrect a window the user explicitly closed.
+    // Storage format: JSON { hidden: bool, geo: {left,top,width,height}|null }
+    function _loadVisState() {
+        try {
+            const raw = localStorage.getItem(PM_VIS_KEY);
+            if (!raw) { return { hidden: false, geo: null }; }
+            const parsed = JSON.parse(raw);
+            return { hidden: parsed?.hidden === true, geo: parsed?.geo ?? null };
+        } catch (_) { return { hidden: false, geo: null }; }
+    }
+    function _saveVisState(hidden, root) {
+        try {
+            let geo = null;
+            if (root) {
+                const g = getPmGeometry(root);
+                if (g.width > 0 && g.height > 0) { geo = g; }
+            }
+            localStorage.setItem(PM_VIS_KEY, JSON.stringify({ hidden, geo }));
+        } catch (_) {}
+    }
+
+    let _userHiddenPm = _loadVisState().hidden;
 
     // modernize.js PM toggle button dispatches this event.
     window.addEventListener('ichc-pm-user-toggle', () => {
         _userHiddenPm = !_userHiddenPm;
         const root = getPmRoot();
-        if (!root) { return; }
         if (_userHiddenPm) {
+            // Snapshot geometry while the window is still visible, then hide.
+            _saveVisState(true, root);
+            if (!root) { return; }
             hidePmRoot(root);
         } else {
+            // Just flip the hidden flag — preserve the geo captured on last hide.
+            try {
+                const prev = _loadVisState();
+                localStorage.setItem(PM_VIS_KEY, JSON.stringify({ hidden: false, geo: prev.geo }));
+            } catch (_) {}
+            if (!root) { return; }
             syncPmVisibility(root);
         }
     });
@@ -880,7 +911,8 @@
 
         // Ensure window is visible with correct geometry.
         if (root.dataset.ichcPmGeometryApplied !== '1') {
-            applyPmGeometry(root, loadPmState().geometry);
+            const geo = loadPmState().geometry ?? _loadVisState().geo;
+            applyPmGeometry(root, geo);
         } else {
             showPmRoot(root);
         }

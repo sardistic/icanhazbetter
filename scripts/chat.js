@@ -496,7 +496,7 @@
         if (/\.(jpe?g|gif|png|webp|mp4|webm)(\?[^#]*)?$/i.test(url)) { return false; }
         try {
             const parsed = new URL(url);
-            if (/^(www\.)?icanhazchat\.com$/i.test(parsed.hostname)) { return false; }
+            if (/^(www\.)?icanhazchat\.com$/i.test(parsed.hostname) || parsed.hostname === 'internet.wtf') { return false; }
         } catch (_) {
             return false;
         }
@@ -729,6 +729,7 @@
         programmaticUntil: 0,
         boundTargets: new WeakSet(),
         pauseCheckTimer: null,
+        lastMessageAt: 0,
     };
 
     function getChatLog() {
@@ -808,15 +809,22 @@
 
     function clearNativeChatPause() {
         if (!chatScrollState.auto) { return; }
-        const notice = getChatPauseNotice();
-        if (!notice) {
-            hideChatPauseNotice();
-            return;
-        }
         // Don't call cR() (which may focus txtMsg) if a non-chat input has focus
         const active = document.activeElement;
         if (active && active.tagName === 'INPUT' && active.id !== 'txtMsg') { return; }
-        resumeNativeChat();
+        const notice = getChatPauseNotice();
+        if (notice) {
+            resumeNativeChat();
+            return;
+        }
+        // If the div has any text we didn't recognise (e.g. a timeout/disconnect
+        // message), still call cR() — hiding it silently leaves chat broken.
+        const errDiv = document.getElementById('errorMessageDiv');
+        if (errDiv instanceof HTMLElement && normalizeText(errDiv.textContent || '')) {
+            resumeNativeChat();
+            return;
+        }
+        hideChatPauseNotice();
     }
 
     function scrollChatToBottom(force = false) {
@@ -928,6 +936,8 @@
         const log = getChatLog();
         if (!log) { return; }
 
+        chatScrollState.lastMessageAt = Date.now();
+
         if (log.dataset.ichcThemeReady !== '1') {
             applyChatTheme(log);
             log.dataset.ichcThemeReady = '1';
@@ -981,6 +991,7 @@
                 });
 
                 if (!sawNewRows) { return; }
+                chatScrollState.lastMessageAt = Date.now();
                 bindChatScrollTargets();
                 if (!chatScrollState.auto) { return; }
                 clearNativeChatPause();
@@ -1015,6 +1026,13 @@
             if (active && active.closest?.('#tabs')) { return; }
             if (active && active.tagName === 'INPUT' && active.id !== 'txtMsg') { return; }
             clearNativeChatPause();
+            // Heartbeat: if no new messages for 90s the site's long-poll has
+            // likely timed out silently — nudge cR() to restart it.
+            if (chatScrollState.lastMessageAt > 0 &&
+                    Date.now() - chatScrollState.lastMessageAt > 90_000) {
+                chatScrollState.lastMessageAt = Date.now();
+                resumeNativeChat();
+            }
         }, 2000);
 
         if (!chatScrollState.initialized) {
