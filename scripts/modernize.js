@@ -3904,28 +3904,55 @@
             getComputedStyle(document.documentElement).getPropertyValue('--ichc-cam-columns'), 10
         ) || 1);
     }
-    function _syncCardSpanBtns(card, span, columns) {
+    function _syncCardSpanBtns(card, level) {
         const shrink = card.querySelector('.ichc-cam-shrink-btn');
         const grow = card.querySelector('.ichc-cam-grow-btn');
-        if (shrink) { shrink.disabled = span <= 1; }
-        if (grow) { grow.disabled = columns <= 1 || span >= columns; }
+        if (shrink) { shrink.disabled = level <= 1; }
+        if (grow) { grow.disabled = level >= 3; }
+    }
+    // Size levels:
+    //   1 = default (1 grid column, natural aspect)
+    //   2 = double-wide (span 2 columns, natural aspect — 4× area in a 3-col grid)
+    //   3 = full-row cinema (1/-1, 16:9, clamped height)
+    // When a featured cam is active, only grid-column is adjusted; aspect/height are left
+    // to applyFeaturedCam's thumbnail styling so the row stays compact.
+    function _applySpanLevel(card, level, columns) {
+        const hasFeatured = !!document.querySelector('#cams .ichc-featured');
+        if (level === 3) {
+            card.style.setProperty('grid-column', '1 / -1', 'important');
+            if (!hasFeatured) {
+                card.style.setProperty('aspect-ratio', '16 / 9', 'important');
+                card.style.setProperty('min-height', 'clamp(180px, 36vh, 480px)', 'important');
+                card.style.setProperty('max-height', 'clamp(180px, 50vh, 560px)', 'important');
+            }
+        } else if (level === 2 && columns >= 2) {
+            card.style.setProperty('grid-column', 'span 2', 'important');
+            if (!hasFeatured) {
+                card.style.removeProperty('aspect-ratio');
+                card.style.removeProperty('min-height');
+                card.style.removeProperty('max-height');
+            }
+        } else {
+            card.style.removeProperty('grid-column');
+            if (!hasFeatured) {
+                card.style.removeProperty('aspect-ratio');
+                card.style.removeProperty('min-height');
+                card.style.removeProperty('max-height');
+            }
+        }
     }
     function _applyCardSpans() {
         const spans = _loadCamSpans();
         const columns = _getCamColumns();
         getCamCards().forEach(card => {
             if (card.classList.contains('ichc-featured')) {
-                _syncCardSpanBtns(card, 1, columns);
+                _syncCardSpanBtns(card, 1);
                 return;
             }
             const key = getCardKey(card);
-            const span = key ? Math.min(columns, Math.max(1, spans[key] || 1)) : 1;
-            if (span > 1) {
-                card.style.setProperty('grid-column', `span ${span}`, 'important');
-            } else {
-                card.style.removeProperty('grid-column');
-            }
-            _syncCardSpanBtns(card, span, columns);
+            const level = key ? Math.max(1, Math.min(3, spans[key] || 1)) : 1;
+            _applySpanLevel(card, level, columns);
+            _syncCardSpanBtns(card, level);
         });
     }
     function _adjustCardSpan(card, delta) {
@@ -3934,10 +3961,14 @@
         const spans = _loadCamSpans();
         const columns = _getCamColumns();
         const current = spans[key] || 1;
-        const next = Math.min(columns, Math.max(1, current + delta));
+        let next = current + delta;
+        // Skip level 2 when single-column — span 2 would equal span 1
+        if (columns <= 1 && next === 2) { next += delta; }
+        next = Math.min(3, Math.max(1, next));
         if (next === 1) { delete spans[key]; } else { spans[key] = next; }
         _saveCamSpans(spans);
         _applyCardSpans();
+        requestCamRelayout(40);
     }
 
     function ensureCardTools(card) {
@@ -3952,9 +3983,9 @@
         const tools = document.createElement('div');
         tools.className = 'ichc-card-tools';
         tools.innerHTML = `
-            <button type="button" class="ichc-overlay-btn ichc-cam-shrink-btn" aria-label="Shrink cam" title="Shrink cam">−</button>
+            <button type="button" class="ichc-overlay-btn ichc-cam-shrink-btn" aria-label="Smaller" title="Smaller">−</button>
             <button type="button" class="ichc-overlay-btn ichc-spotlight-btn" aria-label="Focus cam" title="Focus cam"></button>
-            <button type="button" class="ichc-overlay-btn ichc-cam-grow-btn" aria-label="Grow cam" title="Grow cam">+</button>
+            <button type="button" class="ichc-overlay-btn ichc-cam-grow-btn" aria-label="Larger" title="Larger">+</button>
         `;
         const spotlightButton = tools.querySelector('.ichc-spotlight-btn');
         const shrinkButton = tools.querySelector('.ichc-cam-shrink-btn');
