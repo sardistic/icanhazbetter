@@ -1299,17 +1299,19 @@
         try { host = new URL(url).hostname.toLowerCase(); } catch (_) { return false; }
         // Exclude obvious site-asset filenames regardless of host
         if (/\b(smicon|badge_|trophy|favicon|sprite|logo[_.\-]|control_|18_and_up|roomrating|loading\.|default_avatar|placeholder)\b/i.test(url)) { return false; }
-        // icanhazchat official image CDN — accept anything not in a known asset subfolder
+        // icanhazchat CDN — accept anything not in a known asset subfolder
         if (host === 'images.icanhazchat.com') {
             return !/\/(smicons|icons|badges|sprites|assets)\//i.test(url);
         }
+        // Other *.icanhazchat.com hosts (www, etc.) — accept image files not in asset/system paths
+        if (host.includes('icanhazchat.com')) {
+            return /\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(url) &&
+                !/\/(smicons|icons|badges|sprites|assets|js|css|fonts|sounds?)\//i.test(url);
+        }
         // Explicit external image hosts commonly used for chat avatars
         if (/^(i\.)?imgur\.com$/.test(host) || host === 'vidble.com') { return true; }
-        // icanhazchat resized image suffixes (_sqr = square thumb, _med = medium)
-        if (host.includes('icanhazchat.com') && /(_sqr|_med)\./i.test(url)) { return true; }
-        // Any external domain (not icanhazchat.com) with a direct image extension
-        if (!host.includes('icanhazchat.com') &&
-            /\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(url) &&
+        // Any external domain with a direct image extension
+        if (/\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(url) &&
             !/jquery|bootstrap|jsdelivr|cloudflare|googleapis|gstatic/i.test(host)) {
             return true;
         }
@@ -1332,10 +1334,11 @@
             const url = resolve(raw);
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
-        // 2. icanhazchat CDN cache — broadcast thumbnails and resized profile pics live here
+        // 2. icanhazchat CDN and main-domain profile images
         for (const sel of [
             'img[src*="images.icanhazchat.com"]',
             'img[src*="/cache/"]',
+            'img[src*="/uploads/"]',
             'img[src*="_sqr."]', 'img[src*="_med."]',
         ]) {
             const el = doc.querySelector(sel);
@@ -1504,6 +1507,14 @@
     let _sidebarPulseTimer = null;
     let _sidebarPulseT = 0;
 
+    function _isPmTabFocused(nick) {
+        if (!nick || typeof nick !== 'string') { return false; }
+        const pmRoot = document.getElementById('tabs');
+        if (!pmRoot || getComputedStyle(pmRoot).display === 'none') { return false; }
+        const tabEl = pmRoot.querySelector(`#pm_${CSS.escape(nick.trim())}`);
+        return !!(tabEl && (tabEl.classList.contains('ui-tabs-active') || tabEl.classList.contains('ui-state-active')));
+    }
+
     function _startSidebarPulse() {
         if (_sidebarPulseTimer) { return; }
         _sidebarPulseT = 0;
@@ -1549,6 +1560,7 @@
             const nick = e.detail?.nick;
             if (!nick) { return; }
             ensurePmAvatarItem(nick, null);
+            if (_isPmTabFocused(nick)) { return; }
             const item = _pmAvNode(nick);
             if (!item) { return; }
             const b = item.querySelector('.ichc-pm-avatar-badge');
@@ -2445,7 +2457,10 @@
             pmBtn.classList.toggle('ichc-pm-toggle-hidden', !_pmVisible);
             clearPmButtonAlert();
         });
-        window.addEventListener('ichc-pm-alert', e => markPmButtonAlert(e.detail));
+        window.addEventListener('ichc-pm-alert', e => {
+            if (_isPmTabFocused(e.detail?.nick)) { return; }
+            markPmButtonAlert(e.detail);
+        });
         // GIF/emote picker button
         let gifWrapper = document.getElementById('ichc-gif-wrapper');
         if (!gifWrapper) {
@@ -3302,10 +3317,7 @@
                         span.setAttribute(attr, u.trigger.getAttribute(attr) || '');
                     });
                 }
-                span.innerHTML = `
-                    <span class="ichc-ul-user-state" aria-hidden="true"></span>
-                    <span class="ichc-ul-user-name"></span>
-                `;
+                span.innerHTML = `<span class="ichc-ul-user-name"></span>`;
                 span.querySelector('.ichc-ul-user-name').textContent = u.name;
 
                 // Profile avatar — reuse <img> element across rebuilds; src is only set
