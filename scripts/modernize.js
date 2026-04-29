@@ -3971,19 +3971,15 @@
             }
         } else if (level === 0) {
             card.style.setProperty('grid-column', 'span 1', 'important');
-            if (!hasFeatured) {
-                card.style.removeProperty('aspect-ratio');
-                card.style.removeProperty('min-height');
-                card.style.removeProperty('max-height');
-            }
+            card.style.removeProperty('aspect-ratio');
+            card.style.removeProperty('min-height');
+            card.style.removeProperty('max-height');
         } else {
             // level 1 default: span 2 in the doubled grid = natural 1/N width
             card.style.setProperty('grid-column', 'span 2', 'important');
-            if (!hasFeatured) {
-                card.style.removeProperty('aspect-ratio');
-                card.style.removeProperty('min-height');
-                card.style.removeProperty('max-height');
-            }
+            card.style.removeProperty('aspect-ratio');
+            card.style.removeProperty('min-height');
+            card.style.removeProperty('max-height');
         }
     }
     function _applyCardSpans() {
