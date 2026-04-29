@@ -1,8 +1,11 @@
 (function () {
     'use strict';
 
-    const PM_STATE_KEY = 'ichc_pm_state_v1';
-    const PM_VIS_KEY   = 'ichc_pm_vis_v1';
+    const PM_STATE_KEY   = 'ichc_pm_state_v1';
+    const PM_VIS_KEY     = 'ichc_pm_vis_v1';
+    const PM_HISTORY_KEY = 'ichc_pm_hist_v1';
+    const _PM_HIST_TTL   = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const _PM_HIST_MAX   = 30;
 
     // Set localStorage.ichcPmLog = '1' in the browser console to enable debug logging.
     const _D = (localStorage.getItem('ichcPmLog') === '1')
@@ -475,6 +478,9 @@
         if (msgs && convo.html && (!msgs.innerHTML.trim() || options.forceContent)) {
             msgs.innerHTML = convo.html;
             msgs.dataset.ichcPmRestored = '1';
+        } else if (msgs && !msgs.innerHTML.trim() && !convo.html) {
+            const hist = _loadPmHistory(key);
+            if (hist) { msgs.innerHTML = hist; msgs.dataset.ichcPmRestored = '1'; }
         }
         if (input && !input.value && convo.inputValue) {
             input.value = convo.inputValue;
@@ -511,10 +517,38 @@
         schedulePmSave(80);
     }
 
+    function _savePmHistory(key, html) {
+        if (!key || !html) { return; }
+        try {
+            let map = JSON.parse(localStorage.getItem(PM_HISTORY_KEY) || '{}') || {};
+            map[key.toLowerCase()] = { html, t: Date.now() };
+            const now = Date.now();
+            const pruned = Object.entries(map)
+                .filter(([, v]) => now - v.t < _PM_HIST_TTL)
+                .sort(([, a], [, b]) => b.t - a.t)
+                .slice(0, _PM_HIST_MAX);
+            localStorage.setItem(PM_HISTORY_KEY, JSON.stringify(Object.fromEntries(pruned)));
+        } catch (_) {}
+    }
+    function _loadPmHistory(key) {
+        if (!key) { return ''; }
+        try {
+            const map = JSON.parse(localStorage.getItem(PM_HISTORY_KEY) || '{}') || {};
+            const entry = map[key.toLowerCase()];
+            if (!entry || Date.now() - entry.t > _PM_HIST_TTL) { return ''; }
+            return entry.html || '';
+        } catch (_) { return ''; }
+    }
+
     function removePmConversation(root, key) {
         if (!root || !key) { return; }
+        // Snapshot history before DOM removal so it survives tab close
+        const convo = root.querySelector(`#msgs_${CSS.escape(key)}`);
+        if (convo) { _savePmHistory(key, snapshotPmHtml(convo)); }
         root.querySelector(`#pm_${CSS.escape(key)}`)?.remove();
         root.querySelector(`#from_${CSS.escape(key)}`)?.remove();
+        // Tell modernize.js to clear sidebar notifications for this nick
+        window.dispatchEvent(new CustomEvent('ichc-pm-tab-closed', { detail: { nick: key } }));
         const next = getPmTabItems(root)[0];
         if (next) {
             activatePmTab(root, getPmKeyFromId(next.id, 'pm_'));

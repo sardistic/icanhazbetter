@@ -1568,6 +1568,32 @@
             setPmAvatarBadge(nick, prev + 1);
         });
 
+        // PM tab closed via X — remove avatar and recompute sidebar unread count.
+        window.addEventListener('ichc-pm-tab-closed', e => {
+            const nick = e.detail?.nick;
+            if (!nick) { return; }
+            _pmAvNode(nick)?.remove();
+            const remaining = [...document.querySelectorAll('#ichc-pm-avatars [data-nick]')]
+                .reduce((sum, item) => {
+                    const b = item.querySelector('.ichc-pm-avatar-badge');
+                    return sum + (b && !b.hidden ? (parseInt(b.textContent) || 0) : 0);
+                }, 0);
+            const pmBtn = document.getElementById('ichc-pm-toggle-btn');
+            const pmBadge = pmBtn?.querySelector('.ichc-pm-toggle-badge');
+            if (remaining === 0) {
+                if (pmBtn) {
+                    pmBtn.dataset.pmUnread = '0';
+                    pmBtn.classList.remove('ichc-pm-toggle-alert');
+                    document.getElementById('ichc-ul-toggle-btn')?.classList.remove('ichc-has-pm-unread');
+                }
+                if (pmBadge) { pmBadge.hidden = true; pmBadge.textContent = ''; }
+                _stopSidebarPulse();
+            } else if (pmBtn && pmBadge) {
+                pmBtn.dataset.pmUnread = String(remaining);
+                pmBadge.textContent = remaining > 9 ? '9+' : String(remaining);
+            }
+        });
+
         // Ensure avatar exists when a PM window opens.
         // Only clear the badge if the user explicitly opened the PM (forceShow = true).
         window.addEventListener('ichc-pm-open', e => {
