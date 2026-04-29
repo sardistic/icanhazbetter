@@ -2062,10 +2062,10 @@
         color: #36383d !important;
     }
     #ichc-userlist .ichc-ul-user {
-        display: grid !important;
-        grid-template-columns: 24px minmax(0, 1fr) !important;
+        display: flex !important;
+        flex-direction: row !important;
         align-items: center !important;
-        column-gap: 6px !important;
+        gap: 6px !important;
         width: 100% !important;
         box-sizing: border-box !important;
         border-radius: 4px !important;
@@ -2205,12 +2205,13 @@
     }
     #ichc-userlist .ichc-ul-user-name {
         display: inline-flex !important;
+        flex: 1 1 0 !important;
         align-items: center !important;
         gap: 4px !important;
         min-width: 0 !important;
-        overflow: visible !important;
-        white-space: normal !important;
-        word-break: break-word !important;
+        overflow: hidden !important;
+        white-space: nowrap !important;
+        text-overflow: ellipsis !important;
         color: inherit !important;
         font: 600 11px/1.15 "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
         text-align: left !important;
@@ -2526,9 +2527,6 @@
 
     /* ── User list hidden cam entries ── */
     #ichc-userlist .ichc-ul-hidden-live {
-        /* Match regular row grid + auto column for enable button: avatar | dot | name | btn */
-        grid-template-columns: 24px 8px minmax(0, 1fr) auto !important;
-        align-items: center !important;
         background: rgba(80,30,30,0.18) !important;
         border-color: rgba(180,80,80,0.12) !important;
         border-left-color: rgba(180,80,80,0.45) !important;

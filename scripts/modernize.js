@@ -3945,33 +3945,40 @@
     function _syncCardSpanBtns(card, level) {
         const shrink = card.querySelector('.ichc-cam-shrink-btn');
         const grow = card.querySelector('.ichc-cam-grow-btn');
-        if (shrink) { shrink.disabled = level <= 1; }
+        if (shrink) { shrink.disabled = level <= 0; }
         if (grow) { grow.disabled = level >= 3; }
     }
-    // Size levels:
-    //   1 = default (1 grid column, natural aspect)
-    //   2 = double-wide (span 2 columns, natural aspect — 4× area in a 3-col grid)
-    //   3 = full-row cinema (1/-1, 16:9, clamped height)
-    // When a featured cam is active, only grid-column is adjusted; aspect/height are left
-    // to applyFeaturedCam's thumbnail styling so the row stays compact.
+    // Size levels (grid is doubled to 2*N tracks so mini fits cleanly):
+    //   0 = mini    — span 1, half a default slot; dense packing pairs two minis side-by-side
+    //   1 = default — span 2, standard 1/N width
+    //   2 = wide    — 1/-1, full row, moderate 16:9 height (~25 vh)
+    //   3 = cinema  — 1/-1, full row, tall   16:9 height (~45 vh)
+    // Levels 2 and 3 always use 1/-1 so they never get pushed behind neighbours by
+    // the auto-placement algorithm (the old span-4 approach caused the "crops under" bug).
     function _applySpanLevel(card, level, columns) {
         const hasFeatured = !!document.querySelector('#cams .ichc-featured');
-        if (level === 3) {
+        if (level >= 2) {
             card.style.setProperty('grid-column', '1 / -1', 'important');
             if (!hasFeatured) {
                 card.style.setProperty('aspect-ratio', '16 / 9', 'important');
-                card.style.setProperty('min-height', 'clamp(180px, 36vh, 480px)', 'important');
-                card.style.setProperty('max-height', 'clamp(180px, 50vh, 560px)', 'important');
+                if (level === 3) {
+                    card.style.setProperty('min-height', 'clamp(180px, 36vh, 480px)', 'important');
+                    card.style.setProperty('max-height', 'clamp(180px, 50vh, 560px)', 'important');
+                } else {
+                    card.style.setProperty('min-height', 'clamp(120px, 22vh, 280px)', 'important');
+                    card.style.setProperty('max-height', 'clamp(120px, 28vh, 340px)', 'important');
+                }
             }
-        } else if (level === 2 && columns >= 2) {
-            card.style.setProperty('grid-column', 'span 2', 'important');
+        } else if (level === 0) {
+            card.style.setProperty('grid-column', 'span 1', 'important');
             if (!hasFeatured) {
                 card.style.removeProperty('aspect-ratio');
                 card.style.removeProperty('min-height');
                 card.style.removeProperty('max-height');
             }
         } else {
-            card.style.removeProperty('grid-column');
+            // level 1 default: span 2 in the doubled grid = natural 1/N width
+            card.style.setProperty('grid-column', 'span 2', 'important');
             if (!hasFeatured) {
                 card.style.removeProperty('aspect-ratio');
                 card.style.removeProperty('min-height');
@@ -3984,11 +3991,14 @@
         const columns = _getCamColumns();
         getCamCards().forEach(card => {
             if (card.classList.contains('ichc-featured')) {
-                _syncCardSpanBtns(card, 1);
+                const s = card.querySelector('.ichc-cam-shrink-btn');
+                const g = card.querySelector('.ichc-cam-grow-btn');
+                if (s) { s.disabled = true; }
+                if (g) { g.disabled = true; }
                 return;
             }
             const key = getCardKey(card);
-            const level = key ? Math.max(1, Math.min(3, spans[key] || 1)) : 1;
+            const level = key ? Math.max(0, Math.min(3, (key in spans) ? spans[key] : 1)) : 1;
             _applySpanLevel(card, level, columns);
             _syncCardSpanBtns(card, level);
         });
@@ -3997,12 +4007,8 @@
         const key = getCardKey(card);
         if (!key) { return; }
         const spans = _loadCamSpans();
-        const columns = _getCamColumns();
-        const current = spans[key] || 1;
-        let next = current + delta;
-        // Skip level 2 when single-column — span 2 would equal span 1
-        if (columns <= 1 && next === 2) { next += delta; }
-        next = Math.min(3, Math.max(1, next));
+        const current = (key in spans) ? spans[key] : 1;
+        const next = Math.min(3, Math.max(0, current + delta));
         if (next === 1) { delete spans[key]; } else { spans[key] = next; }
         _saveCamSpans(spans);
         _applyCardSpans();
@@ -4449,7 +4455,7 @@
         document.documentElement.style.setProperty('--ichc-cam-columns', String(columns));
         const cams = document.getElementById('cams');
         if (cams) {
-            cams.style.setProperty('grid-template-columns', `repeat(${columns}, minmax(0, 1fr))`, 'important');
+            cams.style.setProperty('grid-template-columns', `repeat(${columns * 2}, minmax(0, 1fr))`, 'important');
             _applyCardSpans();
         }
     }
