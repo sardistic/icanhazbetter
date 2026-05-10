@@ -47,11 +47,13 @@
         camsObserver: null,
         srcObservedEl: null,
         camsObservedEl: null,
-        avatarObserver: null,  // IntersectionObserver — only fetches avatars for visible rows
+        avatarObserver: null,      // IntersectionObserver — only fetches avatars for visible rows
+        avatarObserverRoot: null,  // the panel element the observer was created with
         searchFocused: false,  // true while filter input has focus — suppresses frequent rebuilds
         _suppressBlur: false,  // true during panel.innerHTML='' so the sync blur doesn't clear searchFocused
         rebuildPendingAfterSearch: false,
         moreMenuDismissBound: false,
+        sortMode: localStorage.getItem('ichc_ul_sort') || 'alpha',  // 'alpha' | 'karma' | 'age'
     };
     const lurkState = {
         pollTimer: null,
@@ -69,6 +71,9 @@
     // Capped at 200 entries — evict oldest 50 when full to avoid unbounded growth.
     const profileImageCache = new Map();
     const profileImagePending = new Map();
+    const profileKarmaCache = new Map();   // username_lower → karma number | null
+    const profileYearCache  = new Map();   // username_lower → highest trophy year | null
+    const profileGuestCache = new Map();   // username_lower → true (nick/guest) | false | null (unknown)
     function _profileCacheSet(key, value) {
         if (profileImageCache.size >= 200) {
             let evicted = 0;
@@ -82,18 +87,24 @@
     // Cache: username_lower → <img> element (reused across userlist rebuilds to prevent abort loops)
     // Capped separately from URL cache because these are real DOM nodes.
     const avatarImgCache = new Map();
+    function _evictImgNode(img) {
+        if (!img) { return; }
+        const src = img.src || '';
+        if (src.startsWith('blob:')) { try { URL.revokeObjectURL(src); } catch (_) {} }
+        img.removeAttribute('src');
+    }
     function _avatarImgCacheSet(key, img) {
         if (avatarImgCache.size >= 200 && !avatarImgCache.has(key)) {
             let evicted = 0;
             for (const [oldKey, oldImg] of avatarImgCache.entries()) {
                 if (oldImg?.isConnected) { continue; }
-                oldImg?.removeAttribute?.('src');
+                _evictImgNode(oldImg);
                 avatarImgCache.delete(oldKey);
                 if (++evicted >= 50) { break; }
             }
             if (avatarImgCache.size >= 220) {
                 for (const [oldKey, oldImg] of avatarImgCache.entries()) {
-                    oldImg?.removeAttribute?.('src');
+                    _evictImgNode(oldImg);
                     avatarImgCache.delete(oldKey);
                     if (++evicted >= 50) { break; }
                 }
@@ -102,12 +113,28 @@
         avatarImgCache.set(key, img);
     }
 
+    // Generic LRU-style trim: drop the oldest (maxDrop) entries when over maxSize.
+    function _trimMap(map, maxSize, maxDrop = 50) {
+        if (map.size <= maxSize) { return; }
+        let n = 0;
+        for (const k of map.keys()) {
+            map.delete(k);
+            if (++n >= maxDrop) { break; }
+        }
+    }
+
     // ── Avatar fetch rate limiter ─────────────────────────────────────────────────
     // Keep avatar lookup very gentle for big rooms: one profile page at a time,
     // spaced out so we don't hammer ICHC or its image CDN.
-    const _AV_LS          = 'ichc_av4_';        // localStorage key prefix (v4: clears poisoned misses/load errors)
+    const _AV_LS          = 'ichc_av7_';        // localStorage key prefix (v7: fixed badge_ exclusion blocking real avatars)
     const _AV_HIT_TTL     = 7 * 24 * 3600e3;   // 7 days: successful avatar URL
     const _AV_MISS_TTL    = 30 * 60e3;          // 30 minutes: transient profile scrape misses self-heal quickly
+    const _KM_LS          = 'ichc_km1_';        // karma localStorage key prefix
+    const _KM_TTL         = 7 * 24 * 3600e3;   // 7 days
+    const _YB_LS          = 'ichc_yb3_';        // year badge localStorage key prefix (v3: added join-date text parsing)
+    const _YB_TTL         = 3 * 24 * 3600e3;    // 3-day TTL so corrections pick up sooner
+    const _GS_LS          = 'ichc_gs1_';        // guest/nick status localStorage key prefix
+    const _GS_TTL         = 24 * 3600e3;        // 1 day — guests may register
     let   _avActive       = 0;
     const _AV_MAX         = 1;
     const _AV_START_GAP   = 900;
@@ -115,6 +142,60 @@
 
     function _lsAvSave(key, url) {
         try { localStorage.setItem(_AV_LS + key, JSON.stringify({ url: url || null, ts: Date.now() })); } catch (_) {}
+    }
+
+    // ── Karma / year tier helpers ─────────────────────────────────────────────
+    const _KARMA_TIERS = [100, 500, 1000, 5000, 10000, 20000, 50000, 100000];
+    function _karmaToTier(karma) {
+        if (karma == null) { return -1; }
+        for (let i = _KARMA_TIERS.length - 1; i >= 0; i--) {
+            if (karma >= _KARMA_TIERS[i]) { return i + 1; }
+        }
+        return 0;
+    }
+    const _YEAR_TIERS  = [1, 4, 8, 12, 16];
+    function _yearToTier(year) {
+        if (year == null) { return -1; }
+        for (let i = _YEAR_TIERS.length - 1; i >= 0; i--) {
+            if (year >= _YEAR_TIERS[i]) { return i + 1; }
+        }
+        return 0; // <1 yr
+    }
+    function _setKarmaTierClass(el, karma) {
+        if (!el) { return; }
+        for (let i = 0; i <= 8; i++) { el.classList.remove(`ichc-kt${i}`); }
+        const t = _karmaToTier(karma);
+        if (t >= 0) { el.classList.add(`ichc-kt${t}`); }
+    }
+    function _setYearTierClass(el, year) {
+        if (!el) { return; }
+        for (let i = 0; i <= 5; i++) { el.classList.remove(`ichc-yt${i}`); }
+        const t = _yearToTier(year);
+        if (t >= 0) { el.classList.add(`ichc-yt${t}`); }
+    }
+
+    function _setBadgeYear(badgeEl, year) {
+        if (!badgeEl) { return; }
+        if (year == null) { return; }
+        if (year >= 1 && year <= 20) {
+            let img = badgeEl.querySelector('.ichc-year-badge-img');
+            if (!img) {
+                img = document.createElement('img');
+                img.className = 'ichc-year-badge-img';
+                img.loading = 'eager';
+                badgeEl.textContent = '';
+                badgeEl.classList.add('ichc-year-badge-has-img');
+                badgeEl.appendChild(img);
+            }
+            img.src = chrome.runtime.getURL(`images/year-badges/${year}yr.svg`);
+            img.alt = `${year}yr`;
+            img.title = `${year}yr`;
+        } else {
+            badgeEl.classList.remove('ichc-year-badge-has-img');
+            const img = badgeEl.querySelector('.ichc-year-badge-img');
+            if (img) { img.remove(); }
+            badgeEl.textContent = `${year}yr`;
+        }
     }
 
     function _scheduleAvatarFetch(fn) {
@@ -288,6 +369,7 @@
         installUnifiedHeader();
         initUserList();
         initCamLayout();
+        initChatCamBadges();
         initLurkBanner();
         initDynamicLayout();
         transformCommandBar();
@@ -1286,6 +1368,35 @@
             }
         } catch (_) {}
 
+        // Warm secondary caches from localStorage so rows can show data before the fetch completes
+        if (!profileKarmaCache.has(key)) {
+            try {
+                const ks = localStorage.getItem(_KM_LS + key);
+                if (ks) {
+                    const { karma, ts } = JSON.parse(ks);
+                    if ((Date.now() - ts) < _KM_TTL && karma != null) { profileKarmaCache.set(key, karma); }
+                }
+            } catch (_) {}
+        }
+        if (!profileYearCache.has(key)) {
+            try {
+                const ys = localStorage.getItem(_YB_LS + key);
+                if (ys) {
+                    const { year, ts } = JSON.parse(ys);
+                    if ((Date.now() - ts) < _YB_TTL) { profileYearCache.set(key, year); }
+                }
+            } catch (_) {}
+        }
+        if (!profileGuestCache.has(key)) {
+            try {
+                const gs = localStorage.getItem(_GS_LS + key);
+                if (gs) {
+                    const { isGuest, ts } = JSON.parse(gs);
+                    if ((Date.now() - ts) < _GS_TTL) { profileGuestCache.set(key, isGuest); }
+                }
+            } catch (_) {}
+        }
+
         const pending = _scheduleAvatarFetch(() => _doFetchProfileImage(key))
             .finally(() => profileImagePending.delete(key));
         profileImagePending.set(key, pending);
@@ -1297,16 +1408,22 @@
         if (/^data:/i.test(url)) { return false; }
         let host;
         try { host = new URL(url).hostname.toLowerCase(); } catch (_) { return false; }
-        // Exclude obvious site-asset filenames regardless of host
-        if (/\b(smicon|badge_|trophy|favicon|sprite|logo[_.\-]|control_|18_and_up|roomrating|loading\.|default_avatar|placeholder)\b/i.test(url)) { return false; }
+        // Exclude obvious site-asset filenames regardless of host.
+        // Note: logo[_.-] is checked separately because the \b word-boundary after _ fails
+        // when the filename continues (e.g. logo_header — _ and h are both \w, no boundary).
+        // badge_ is intentionally NOT excluded here — ICHC names profile pictures badge_{hash}.jpg under /users/
+        // Path-based exclusions below (/badges/, /icons/, etc.) handle non-avatar badge files.
+        if (/\b(smicon|trophy|favicon|sprite|control_|18_and_up|roomrating|loading\.|default_avatar|placeholder)\b/i.test(url)) { return false; }
+        if (/logo[-_.]/i.test(url)) { return false; }
         // icanhazchat CDN — accept anything not in a known asset subfolder
         if (host === 'images.icanhazchat.com') {
             return !/\/(smicons|icons|badges|sprites|assets)\//i.test(url);
         }
-        // Other *.icanhazchat.com hosts (www, etc.) — accept image files not in asset/system paths
+        // Other *.icanhazchat.com hosts (www, etc.) — accept image files not in asset/system paths.
+        // Get_Hearted/ contains the site logo and other non-avatar graphics.
         if (host.includes('icanhazchat.com')) {
             return /\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(url) &&
-                !/\/(smicons|icons|badges|sprites|assets|js|css|fonts|sounds?)\//i.test(url);
+                !/\/(smicons|icons|badges|sprites|assets|js|css|fonts|sounds?|Get_Hearted)\//i.test(url);
         }
         // Explicit external image hosts commonly used for chat avatars
         if (/^(i\.)?imgur\.com$/.test(host) || host === 'vidble.com') { return true; }
@@ -1323,6 +1440,15 @@
             if (!raw) { return ''; }
             try { return new URL(raw, baseUrl).href; } catch (_) { return raw; }
         };
+        // Read src from an img, falling back through lazy-load data attributes.
+        // Sites using Rocket Loader or native lazy-load may store the real URL in
+        // data-src / data-original / data-lazy-src instead of src.
+        const lazyAttrs = ['src', 'data-src', 'data-original', 'data-lazy-src', 'data-original-src'];
+        const getSrc = el => {
+            for (const a of lazyAttrs) { const v = el.getAttribute(a); if (v) { return v; } }
+            return '';
+        };
+
         // 1. OG / meta image — icanhazchat sets this to the broadcast/profile thumbnail
         for (const sel of [
             'meta[property="og:image"]',
@@ -1334,16 +1460,17 @@
             const url = resolve(raw);
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
-        // 2. icanhazchat CDN and main-domain profile images
-        for (const sel of [
-            'img[src*="images.icanhazchat.com"]',
-            'img[src*="/cache/"]',
-            'img[src*="/uploads/"]',
-            'img[src*="_sqr."]', 'img[src*="_med."]',
-        ]) {
-            const el = doc.querySelector(sel);
+        // 2. icanhazchat CDN and main-domain profile images (src or lazy-load data attrs).
+        // Patterns cover both old (_med. / _sqr.) and new (-d suffix: _med- / _sqr-) formats.
+        const step2Patterns = [
+            'images.icanhazchat.com', '/cache/', '/uploads/',
+            '_sqr.', '_sqr-', '_med.', '_med-',
+        ];
+        for (const pattern of step2Patterns) {
+            const combined = lazyAttrs.map(a => `img[${a}*="${pattern}"]`).join(', ');
+            const el = doc.querySelector(combined);
             if (!el) { continue; }
-            const url = resolve(el.getAttribute('src') || '');
+            const url = resolve(getSrc(el));
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
         // 3. Common profile picture containers — by element ID/class
@@ -1356,12 +1483,12 @@
         ]) {
             const el = doc.querySelector(sel);
             if (!el) { continue; }
-            const url = resolve(el.getAttribute('src') || el.getAttribute('content') || '');
+            const url = resolve(getSrc(el) || el.getAttribute('content') || '');
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
-        // 4. Full img scan — catches vidble.com and other external avatar hosts
-        for (const img of doc.querySelectorAll('img[src]')) {
-            const url = resolve(img.getAttribute('src') || '');
+        // 4. Full img scan — covers any remaining lazy-load or external avatar hosts
+        for (const img of doc.querySelectorAll('img')) {
+            const url = resolve(getSrc(img));
             if (url && _isUserAvatarUrl(url)) { return url; }
         }
         // 5. CSS background-image in style attributes
@@ -1375,7 +1502,87 @@
         return '';
     }
 
-    // Fetches the profile page and extracts the avatar URL.
+    function _extractKarmaFromDoc(doc) {
+        // Clone and strip the site header/nav — it contains the viewer's own karma span,
+        // which would otherwise be found first by querySelector on any profile page.
+        const body = doc.body?.cloneNode(true);
+        if (!body) { return null; }
+        body.querySelector('.page_header_userlinks')?.remove();
+        body.querySelector('header, nav, #header, .header, .page_header')?.remove();
+
+        const el = body.querySelector('span[title="karma" i], span[data-karma]');
+        if (el) {
+            const n = parseInt((el.textContent || el.getAttribute('data-karma') || '').replace(/,/g, '').trim(), 10);
+            if (!isNaN(n)) { return n; }
+        }
+        // Fallback: scan text for "karma" followed by a number
+        const m = (body.textContent || '').match(/karma\D{0,10}?([\d,]{1,10})/i);
+        if (m) {
+            const n = parseInt(m[1].replace(/,/g, ''), 10);
+            if (!isNaN(n)) { return n; }
+        }
+        return null;
+    }
+
+    // Matches Trophy_7year, Trophy_15Year, Trophy_7yr, etc.
+    const _TROPHY_RE = /Trophy_(\d+)ye?a?r/gi;
+
+    function _extractYearBadgeFromDoc(doc) {
+        let maxYear = 0;
+        const _try = str => {
+            for (const m of (str || '').matchAll(_TROPHY_RE)) {
+                const y = parseInt(m[1], 10);
+                if (y > maxYear) { maxYear = y; }
+            }
+        };
+        // img src / data-src / title
+        doc.querySelectorAll('img, a[href], a[title]').forEach(el => {
+            _try(el.getAttribute('src'));
+            _try(el.getAttribute('data-src'));
+            _try(el.getAttribute('href'));
+            _try(el.getAttribute('title'));
+            _try(el.getAttribute('alt'));
+        });
+        // Catch remaining references in raw HTML (srcset, background-image, etc.)
+        _try(doc.body?.innerHTML);
+
+        // Fallback: parse join/registration year from profile page text.
+        // Covers cases where trophies were only issued up to a certain year.
+        // Handles formats like: "since:\n  January 2012", "Member since: April 2010"
+        const bodyText = doc.body?.textContent || '';
+        const currentYear = new Date().getFullYear();
+        const _MONTHS = 'january|february|march|april|may|june|july|august|september|october|november|december';
+        const datePatterns = [
+            // "since: January 2012" — explicit month name between keyword and year
+            new RegExp(`since[^0-9]{0,60}(?:${_MONTHS})\\.?\\s+(20\\d{2}|199\\d)`, 'i'),
+            // "joined / registered / member since" with year anywhere within 60 chars
+            /member\s+since[^0-9]{0,60}(20\d{2}|199\d)/i,
+            /joined[^0-9]{0,60}(20\d{2}|199\d)/i,
+            /registered[^0-9]{0,60}(20\d{2}|199\d)/i,
+            /since[^0-9]{0,60}(20\d{2}|199\d)/i,
+        ];
+        for (const re of datePatterns) {
+            const m = bodyText.match(re);
+            if (m) {
+                // last capture group is always the year
+                const joinYear = parseInt(m[m.length - 1], 10);
+                if (joinYear >= 2005 && joinYear <= currentYear) {
+                    const computed = currentYear - joinYear;
+                    if (computed > maxYear) { maxYear = computed; }
+                }
+                break;
+            }
+        }
+
+        return maxYear > 0 ? maxYear : null;
+    }
+
+    function _extractIsGuestFromDoc(doc) {
+        const t = doc.body?.textContent || '';
+        return /using a nick|finger command|active chatter.*nick|using a nick\. You can use/i.test(t);
+    }
+
+    // Fetches the profile page, extracts avatar URL and karma, caches both.
     async function _doFetchProfileImage(key) {
         const pageUrl = `https://www.icanhazchat.com/user/${encodeURIComponent(key)}`;
         try {
@@ -1383,6 +1590,22 @@
             if (resp.ok) {
                 const html = await resp.text();
                 const doc = new DOMParser().parseFromString(html, 'text/html');
+                const karma = _extractKarmaFromDoc(doc);
+                if (karma != null) {
+                    profileKarmaCache.set(key, karma);
+                    _trimMap(profileKarmaCache, 300);
+                    try { localStorage.setItem(_KM_LS + key, JSON.stringify({ karma, ts: Date.now() })); } catch (_) {}
+                }
+                const year = _extractYearBadgeFromDoc(doc);
+                profileYearCache.set(key, year);
+                _trimMap(profileYearCache, 300);
+                try { localStorage.setItem(_YB_LS + key, JSON.stringify({ year, ts: Date.now() })); } catch (_) {}
+
+                const isGuest = _extractIsGuestFromDoc(doc);
+                profileGuestCache.set(key, isGuest);
+                _trimMap(profileGuestCache, 300);
+                try { localStorage.setItem(_GS_LS + key, JSON.stringify({ isGuest, ts: Date.now() })); } catch (_) {}
+
                 const url = _extractAvatarFromDoc(doc, pageUrl);
                 if (url) {
                     _profileCacheSet(key, url);
@@ -1392,10 +1615,381 @@
             }
         } catch (_) {}
 
-        // No avatar found — record the miss so we don't retry for the miss TTL.
         _lsAvSave(key, null);
         _profileCacheSet(key, null);
         return null;
+    }
+
+    // Load an avatar image, using fetch+blob for CDN /users/ paths to include
+    // session cookies and bypass Firefox OpaqueResponseBlocking.
+    function _loadAvatarSrc(img, url, key) {
+        if (!img || !url) { return; }
+        if (/\/users\//i.test(url) && url.includes('images.icanhazchat.com')) {
+            fetch(url, { credentials: 'include', cache: 'default' })
+                .then(r => {
+                    if (!r.ok || !(r.headers.get('content-type') || '').startsWith('image/')) { throw new Error('bad'); }
+                    return r.blob();
+                })
+                .then(blob => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    img.addEventListener('load',  () => { URL.revokeObjectURL(blobUrl); img.classList.add('ichc-ul-avatar-loaded'); }, { once: true });
+                    img.addEventListener('error', () => { URL.revokeObjectURL(blobUrl); }, { once: true });
+                    img.src = blobUrl;
+                })
+                .catch(() => {
+                    if (key) { _profileCacheSet(key, null); _lsAvSave(key, null); }
+                });
+            return;
+        }
+        img.src = url;
+        img.classList.add('ichc-ul-avatar-loaded');
+    }
+
+    // ── Chat & cam year-badge / guest injection ───────────────────────────────
+    // (fetch deduplication is handled by fetchProfileImage's profileImagePending map)
+
+    let _chatCamStatusTimer = null;
+
+    function _chatRowFromAnchor(anchor) {
+        const log = document.getElementById('txt');
+        if (!log || !anchor) { return null; }
+        let node = anchor;
+        while (node.parentElement && node.parentElement !== log) {
+            node = node.parentElement;
+        }
+        return node.parentElement === log ? node : null;
+    }
+
+    function _getCamStatusSets() {
+        const active = new Set();
+        const disabled = new Set();
+        document.querySelectorAll('#cams .rounded_square').forEach(card => {
+            const name = getCardName(card).trim().toLowerCase();
+            if (!name || looksLikePlaceholderName(name)) { return; }
+            if (card.classList.contains('ichc-ghost-slot')) {
+                disabled.add(name);
+            } else {
+                active.add(name);
+            }
+        });
+        return { active, disabled };
+    }
+
+    function _applyChatRowDecor(row, nick) {
+        if (!row || !nick) { return; }
+        const karma = profileKarmaCache.get(nick);
+        const tier = _karmaToTier(karma ?? null);
+        if (tier > 0) { row.dataset.ichcKt = String(tier); }
+        else { delete row.dataset.ichcKt; }
+        const { active, disabled } = _getCamStatusSets();
+        row.classList.toggle('ichc-chat-oncam', active.has(nick));
+        row.classList.toggle('ichc-chat-camoff', !active.has(nick) && disabled.has(nick));
+    }
+
+    function _refreshAllChatCamStatus() {
+        const { active, disabled } = _getCamStatusSets();
+        document.querySelectorAll('#txt a.userlink[data-ichc-nick]').forEach(a => {
+            const nick = a.dataset.ichcNick;
+            const row = _chatRowFromAnchor(a);
+            if (!row) { return; }
+            row.classList.toggle('ichc-chat-oncam', active.has(nick));
+            row.classList.toggle('ichc-chat-camoff', !active.has(nick) && disabled.has(nick));
+        });
+    }
+
+    function _scheduleRefreshChatCamStatus() {
+        if (_chatCamStatusTimer) { return; }
+        _chatCamStatusTimer = window.setTimeout(() => {
+            _chatCamStatusTimer = null;
+            _refreshAllChatCamStatus();
+        }, 500);
+    }
+
+    function _applyChatGrouping(row, nick) {
+        if (!row || !nick) { return; }
+        // Walk backwards past event/collector rows to find the previous real message row
+        let prev = row.previousElementSibling;
+        while (prev && (
+            prev.classList.contains('ichc-chat-event') ||
+            prev.classList.contains('ichc-event-collector')
+        )) { prev = prev.previousElementSibling; }
+        if (!prev) { return; }
+        const prevNick = prev.querySelector('a.userlink[data-ichc-nick]')?.dataset.ichcNick;
+        if (prevNick === nick) {
+            row.classList.add('ichc-chat-same-above');
+            prev.classList.add('ichc-chat-same-below');
+        }
+    }
+
+    function _applyChatBadge(anchor) {
+        if (!anchor || 'ichcNick' in anchor.dataset) { return; }
+        const nick = anchor.textContent.trim().toLowerCase();
+        if (!nick) { return; }
+        anchor.dataset.ichcNick = nick;
+
+        // Chat messages have "nick: message" — the text node after the anchor starts with ':'.
+        // Event rows (join/leave/broadcast) don't have that separator; skip them entirely.
+        const nextRaw = anchor.nextSibling;
+        const isMessage = nextRaw?.nodeType === Node.TEXT_NODE && /^\s*:/.test(nextRaw.textContent);
+        if (!isMessage) { return; }
+
+        const year    = profileYearCache.get(nick);
+        const isGuest = profileGuestCache.get(nick);
+        if (isGuest) { anchor.classList.add('ichc-chat-guest'); }
+
+        const badge = document.createElement('span');
+        badge.className = 'ichc-chat-year-badge';
+        badge.dataset.ichcYearBadge = nick;
+        _setBadgeYear(badge, year ?? null);
+        _setYearTierClass(badge, year ?? null);
+        anchor.before(badge);
+
+        // Wrap badge + anchor + trailing colon into one block so CSS can hide
+        // the whole nick prefix (including separator) for continuation rows.
+        const nickBlock = document.createElement('span');
+        nickBlock.className = 'ichc-nick-block';
+        badge.replaceWith(nickBlock);
+        nickBlock.appendChild(badge);
+        nickBlock.appendChild(anchor);
+        const nextNode = nickBlock.nextSibling;
+        if (nextNode?.nodeType === Node.TEXT_NODE) {
+            const cm = nextNode.textContent.match(/^(\s*:\s*)([\s\S]*)$/);
+            if (cm) {
+                const sep = document.createElement('span');
+                sep.className = 'ichc-nick-sep';
+                sep.textContent = cm[1];
+                nickBlock.appendChild(sep);
+                if (cm[2]) { nextNode.textContent = cm[2]; }
+                else { nextNode.remove(); }
+            }
+        }
+
+        const row = _chatRowFromAnchor(anchor);
+        _applyChatRowDecor(row, nick);
+
+        if (row) {
+            const m = (anchor.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (m) {
+                const tier = _karmaToTier(profileKarmaCache.get(nick) ?? null);
+                const yt   = _yearToTier(profileYearCache.get(nick) ?? null);
+                const alpha = (tier <= 0 ? 0 : tier * 0.013) + (yt <= 0 ? 0 : yt * 0.008);
+                row.style.setProperty('--ichc-nick-color', `rgba(${m[1]},${m[2]},${m[3]},${alpha})`);
+            }
+            _applyChatGrouping(row, nick);
+        }
+
+        if (!profileYearCache.has(nick)) {
+            fetchProfileImage(nick).then(() => {
+                _updateChatBadgesForUser(nick);
+                _updateCamBadgesForUser(nick);
+            });
+        }
+    }
+
+    function _applyChatBadgesScope(root) {
+        if (!root) { return; }
+        const anchors = root.matches?.('a.userlink') ? [root] : [...root.querySelectorAll('a.userlink')];
+        anchors.forEach(_applyChatBadge);
+    }
+
+    function _updateChatBadgesForUser(key) {
+        const karma   = profileKarmaCache.get(key);
+        const year    = profileYearCache.get(key);
+        const isGuest = profileGuestCache.get(key);
+        const { active, disabled } = _getCamStatusSets();
+        const tier = _karmaToTier(karma ?? null);
+        const yt   = _yearToTier(year ?? null);
+        const alpha = (tier <= 0 ? 0 : tier * 0.013) + (yt <= 0 ? 0 : yt * 0.008);
+        document.querySelectorAll(`#txt a.userlink[data-ichc-nick="${CSS.escape(key)}"]`).forEach(a => {
+            if (isGuest) { a.classList.add('ichc-chat-guest'); }
+            const row = _chatRowFromAnchor(a);
+            if (row) {
+                if (tier > 0) { row.dataset.ichcKt = String(tier); }
+                else { delete row.dataset.ichcKt; }
+                row.classList.toggle('ichc-chat-oncam', active.has(key));
+                row.classList.toggle('ichc-chat-camoff', !active.has(key) && disabled.has(key));
+                const mc = (a.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (mc) { row.style.setProperty('--ichc-nick-color', `rgba(${mc[1]},${mc[2]},${mc[3]},${alpha})`); }
+            }
+        });
+        document.querySelectorAll(`#txt span[data-ichc-year-badge="${CSS.escape(key)}"]`).forEach(span => {
+            _setBadgeYear(span, year ?? null);
+            _setYearTierClass(span, year ?? null);
+        });
+    }
+
+    // ── Cam decoration via dynamic stylesheet ────────────────────────────────
+    // Never touches .rounded_square attributes or its subtree — uses :has() in
+    // a <style> element so the site's MutationObserver is never triggered.
+    const _camDecorMap = new Map(); // camId → { tier, year }
+    let _camDecorStyleEl = null;
+    let _camDecorLastCSS = '';
+    const _CAM_TIER_CSS = [
+        'outline:1px solid rgba(37,72,76,.35)',
+        'outline:1px solid rgba(46,91,97,.45)',
+        'outline:1px solid rgba(54,117,125,.55)',
+        'outline:1px solid rgba(56,136,144,.65)',
+        'outline:2px solid rgba(60,153,163,.78);box-shadow:0 0 7px rgba(56,142,155,.28)',
+        'outline:2px solid rgba(62,167,175,.88);box-shadow:0 0 10px rgba(59,156,168,.35)',
+        'outline:2px solid #3aa6ae;box-shadow:0 0 13px rgba(60,169,179,.45),0 0 30px rgba(54,146,161,.18)',
+        'outline:2px solid #40b7c0;animation:ichc-cam-aura 2.2s ease-in-out infinite',
+        'outline:3px solid #a6e1e1;animation:ichc-cam-legend 1.5s ease-in-out infinite',
+    ];
+    function _getCamDecorStyle() {
+        if (!_camDecorStyleEl?.isConnected) {
+            _camDecorStyleEl = document.getElementById('ichc-cam-decor');
+            if (!_camDecorStyleEl) {
+                _camDecorStyleEl = document.createElement('style');
+                _camDecorStyleEl.id = 'ichc-cam-decor';
+                document.head.appendChild(_camDecorStyleEl);
+            }
+        }
+        return _camDecorStyleEl;
+    }
+    function _updateCamDecorStyles() {
+        const rules = [];
+        for (const [camId, { tier, year }] of _camDecorMap) {
+            const eid = CSS.escape('id-' + camId);
+            const cardSel = `#cams .rounded_square:has(#${eid})`;
+            if (tier >= 0 && tier < _CAM_TIER_CSS.length) {
+                rules.push(`${cardSel}{${_CAM_TIER_CSS[tier]}!important}`);
+            }
+            if (year != null) {
+                const nameSel = `${cardSel} .name-on-cam`;
+                if (year >= 1 && year <= 20) {
+                    const url = chrome.runtime.getURL(`images/year-badges/${year}yr.svg`);
+                    // Transition + hover handled by static theme.css — not here, so style
+                    // regeneration never resets an in-progress hover animation.
+                    rules.push(`${nameSel}::after{content:'';display:inline-block;width:14px;height:14px;max-width:0;overflow:hidden;background:url("${url}") no-repeat center/contain;vertical-align:middle;margin-left:0;opacity:0}`);
+                } else {
+                    rules.push(`${nameSel}::after{content:"${year}yr";display:inline-block;white-space:nowrap;max-width:0;overflow:hidden;font-size:8px;opacity:0;margin-left:0;vertical-align:middle}`);
+                }
+            }
+        }
+        const css = rules.join('\n');
+        if (css === _camDecorLastCSS) { return; }
+        _camDecorLastCSS = css;
+        _getCamDecorStyle().textContent = css;
+    }
+    function _applyCamDecor(camId, karma, year) {
+        if (!camId) { return; }
+        const tier = _karmaToTier(karma ?? null);
+        if (tier < 0 && year == null) { _camDecorMap.delete(camId); }
+        else { _camDecorMap.set(camId, { tier, year: year ?? null }); }
+        _updateCamDecorStyles();
+    }
+
+    function _applyCamBadge(nameEl) {
+        if (!nameEl) { return; }
+        const nick = nameEl.textContent.trim().toLowerCase();
+        if (!nick) { return; }
+        const card = nameEl.closest('.rounded_square');
+        if (!card) { return; }
+        const camId = getCamId(card);
+        if (!camId) { return; }
+        _applyCamDecor(camId, profileKarmaCache.get(nick) ?? null, profileYearCache.get(nick) ?? null);
+        if (!profileYearCache.has(nick)) {
+            fetchProfileImage(nick).then(() => {
+                _updateChatBadgesForUser(nick);
+                _updateCamBadgesForUser(nick);
+            });
+        }
+    }
+
+    function _updateCamBadgesForUser(key) {
+        const karma = profileKarmaCache.get(key);
+        const year  = profileYearCache.get(key);
+        document.querySelectorAll('#cams .name-on-cam').forEach(nameEl => {
+            if (nameEl.textContent.trim().toLowerCase() !== key) { return; }
+            const card = nameEl.closest('.rounded_square');
+            const camId = card ? getCamId(card) : null;
+            if (camId) { _applyCamDecor(camId, karma ?? null, year ?? null); }
+        });
+    }
+
+    // Stored at module level so we can disconnect/reconnect when #txt is replaced.
+    let _chatBadgeObs = null;
+    let _chatBadgeRoot = null;
+    let _camBadgeObs  = null;
+    let _camBadgeRoot = null;
+
+    // Batch pending nodes and process them in the next animation frame to avoid
+    // synchronous cascades when bursts of messages arrive.
+    let _chatBadgePending = new Set();
+    let _chatBadgeRAF = null;
+    function _scheduleChatBadgeFlush() {
+        if (_chatBadgeRAF !== null) { return; }
+        _chatBadgeRAF = requestAnimationFrame(() => {
+            _chatBadgeRAF = null;
+            const nodes = [..._chatBadgePending];
+            _chatBadgePending.clear();
+            nodes.forEach(_applyChatBadgesScope);
+        });
+    }
+
+    function _attachChatBadgeObserver() {
+        const log = document.getElementById('txt');
+        if (!log || log === _chatBadgeRoot) { return; }
+        _chatBadgeObs?.disconnect();
+        _chatBadgeRoot = log;
+        _applyChatBadgesScope(log);
+        _chatBadgeObs = new MutationObserver(mutations => {
+            let changed = false;
+            for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                    if (node.nodeType !== 1) { continue; }
+                    const cl = node.classList;
+                    if (cl.contains('ichc-chat-year-badge') ||
+                        cl.contains('ichc-nick-block') ||
+                        cl.contains('ichc-nick-sep') ||
+                        node.closest('.ichc-nick-block')) { continue; }
+                    _chatBadgePending.add(node);
+                    changed = true;
+                }
+            }
+            if (changed) { _scheduleChatBadgeFlush(); }
+        });
+        _chatBadgeObs.observe(log, { childList: true, subtree: true });
+    }
+
+    function _attachCamBadgeObserver() {
+        const cams = document.getElementById('cams');
+        if (!cams || cams === _camBadgeRoot) { return; }
+        _camBadgeObs?.disconnect();
+        _camBadgeRoot = cams;
+        cams.querySelectorAll('.name-on-cam').forEach(_applyCamBadge);
+        _camBadgeObs = new MutationObserver(mutations => {
+            mutations.forEach(m => {
+                m.addedNodes.forEach(node => {
+                    // Text node added to .name-on-cam: the name was just populated, try again
+                    if (node.nodeType === 3) {
+                        const p = node.parentElement;
+                        if (p?.matches?.('.name-on-cam')) {
+                            _applyCamBadge(p);
+                            _scheduleRefreshChatCamStatus();
+                        }
+                        return;
+                    }
+                    if (node.nodeType !== 1 || node.classList?.contains('ichc-cam-year-badge')) { return; }
+                    if (node.matches?.('.name-on-cam')) { _applyCamBadge(node); }
+                    node.querySelectorAll?.('.name-on-cam').forEach(_applyCamBadge);
+                    _scheduleRefreshChatCamStatus();
+                });
+            });
+        });
+        _camBadgeObs.observe(cams, { childList: true, subtree: true });
+    }
+
+    function initChatCamBadges() {
+        _attachChatBadgeObserver();
+        _attachCamBadgeObserver();
+        _refreshAllChatCamStatus();
+        // Reconnect if the site replaces #txt or #cams (same approach chat.js uses)
+        window.setInterval(() => {
+            _attachChatBadgeObserver();
+            _attachCamBadgeObserver();
+            _refreshAllChatCamStatus();
+        }, 3000);
     }
 
     // ── PM avatar strip helpers ────────────────────────────────────────────────
@@ -3095,6 +3689,10 @@
             seen.add(key);
             const parentLi = a.closest('li');
             const smicon = a.querySelector('img.smicon') || parentLi?.querySelector('img.smicon');
+            if (smicon?.src && !profileYearCache.has(key)) {
+                const ym = smicon.src.match(/Trophy_(\d+)ye?a?r/i);
+                if (ym) { profileYearCache.set(key, parseInt(ym[1], 10)); }
+            }
             // Detect broadcasting via cam-logo icon in userlist row (site inserts
             // img.cam-logo next to the userlink for broadcasting users). theme.js
             // replaces those with span[data-icon="cam-logo"] by DOMContentLoaded,
@@ -3143,7 +3741,19 @@
         users.sort((a, b) => {
             // hidden-but-cammed: sort with cammed users (0); hidden-offline: bottom (4)
             const rank = u => (u.hidden && !u.cammed ? 4 : u.idle ? 3 : u.cammed ? 0 : u.mod ? 1 : 2);
-            return rank(a) - rank(b);
+            const rd = rank(a) - rank(b);
+            if (rd !== 0) { return rd; }
+            // secondary sort within rank group
+            const sm = userListState.sortMode;
+            if (sm === 'karma') {
+                const ka = a.karma ?? -Infinity, kb = b.karma ?? -Infinity;
+                if (ka !== kb) { return kb - ka; }
+            } else if (sm === 'age') {
+                const ya = profileYearCache.get(a.name.trim().toLowerCase()) ?? -1;
+                const yb = profileYearCache.get(b.name.trim().toLowerCase()) ?? -1;
+                if (ya !== yb) { return yb - ya; }
+            }
+            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
         });
 
         let panel = document.getElementById('ichc-userlist');
@@ -3162,12 +3772,19 @@
         // Preserve search state across rebuilds
         const prevQuery = panel.querySelector('.ichc-ul-search-input')?.value || '';
         const prevSearchOpen = panel.classList.contains('ichc-ul-search-open');
-        const prevMoreOpen = panel.querySelector('.ichc-ul-more-menu')?.hidden === false;
         const prevOfflineOpen = panel.querySelector('.ichc-ul-offline-hidden.is-open') !== null;
+        // Detach the more-btn before innerHTML='' so its DOM (listeners + open state) survives the clear
+        const savedMoreBtn = panel.querySelector('.ichc-ul-more-btn');
+        savedMoreBtn?.remove();
 
         userListState.avatarObserver?.disconnect();
+        // Remove only non-user-row children (header, offline section, etc.) so that
+        // .ichc-ul-user rows stay connected to the document. Detaching them would reset
+        // any in-progress CSS transitions (e.g. the year-badge hover slide-out).
         userListState._suppressBlur = true;
-        panel.innerHTML = '';
+        [...panel.children].forEach(el => {
+            if (!el.classList.contains('ichc-ul-user')) { el.remove(); }
+        });
         userListState._suppressBlur = false;
         if (prevSearchOpen) { panel.classList.add('ichc-ul-search-open'); }
 
@@ -3309,12 +3926,128 @@
         header.appendChild(titleRow);
         header.appendChild(badge);
         header.appendChild(searchRow);
-        panel.appendChild(header);
+        // Insert header before existing user rows (which were kept in the DOM).
+        panel.insertBefore(header, panel.firstChild || null);
+
+        // Reattach the saved more-btn (preserves open/closed state and all listeners).
+        // Refresh sort-active class in case sortMode changed since last build.
+        if (savedMoreBtn) {
+            savedMoreBtn.querySelectorAll('[data-sort]').forEach(btn => {
+                btn.classList.toggle('ichc-ul-sort-active', btn.dataset.sort === userListState.sortMode);
+            });
+            titleRow.appendChild(savedMoreBtn);
+        }
 
         // ── User rows ──
-        const renderUsers = (query) => {
-            panel.querySelectorAll('.ichc-ul-user').forEach(el => el.remove());
+        const _buildNewRow = (u, imgKey) => {
+            const span = document.createElement('a');
+            span.className = 'ichc-ul-user userlink' +
+                (u.hidden ? ' ichc-ul-hidden-live' : '') +
+                (u.cammed && !u.hidden ? ' cammed' : '') +
+                (u.mod    ? ' mod'    : '') +
+                (u.idle   ? ' idle'   : '') +
+                (u.supporter ? ' ichc-ul-supporter-row' : '');
+            span.href = u.trigger?.getAttribute('href') || '#';
+            span.setAttribute('draggable', 'false');
+            span.setAttribute('tabindex', '0');
+            span.setAttribute('role', 'button');
+            if (u.trigger) {
+                [...u.trigger.getAttributeNames()].forEach(attr => {
+                    if (attr === 'class' || attr === 'style' || attr === 'id' || attr === 'href') { return; }
+                    span.setAttribute(attr, u.trigger.getAttribute(attr) || '');
+                });
+            }
+            if (profileGuestCache.get(imgKey) === true) { span.classList.add('ichc-ul-guest'); }
+            span.innerHTML = `<span class="ichc-ul-year-badge" data-year-key=""></span><span class="ichc-ul-user-name"></span><span class="ichc-ul-karma" data-karma-key=""></span>`;
+            span.querySelector('.ichc-ul-user-name').textContent = u.name;
 
+            const yearEl = span.querySelector('.ichc-ul-year-badge');
+            yearEl.dataset.yearKey = imgKey;
+            const initYear = profileYearCache.get(imgKey);
+            _setBadgeYear(yearEl, initYear ?? null);
+            _setYearTierClass(yearEl, initYear ?? null);
+
+            const karmaEl = span.querySelector('.ichc-ul-karma');
+            karmaEl.dataset.karmaKey = imgKey;
+            const initKarma = profileKarmaCache.get(imgKey) ?? u.karma;
+            if (initKarma != null) { karmaEl.textContent = initKarma.toLocaleString(); }
+            _setKarmaTierClass(span, initKarma ?? null);
+
+            // Profile avatar — reuse <img> element across rebuilds; src is only set
+            // after the row enters the viewport (IntersectionObserver below) to avoid
+            // aborting in-progress loads and to limit CDN requests to visible users.
+            let avatarImg = avatarImgCache.get(imgKey);
+            if (!avatarImg) {
+                avatarImg = document.createElement('img');
+                avatarImg.className = 'ichc-ul-avatar';
+                avatarImg.alt = '';
+                avatarImg.draggable = false;
+                avatarImg.onerror = () => {
+                    avatarImg.removeAttribute('src');
+                    avatarImg.classList.remove('ichc-ul-avatar-loaded');
+                    _profileCacheSet(imgKey, null);
+                    _lsAvSave(imgKey, null);
+                };
+                _avatarImgCacheSet(imgKey, avatarImg);
+            }
+            // If URL is already resolved (localStorage hit on this session), show immediately
+            const cachedUrl = profileImageCache.get(imgKey); // undefined = not yet fetched
+            if (cachedUrl) { _loadAvatarSrc(avatarImg, cachedUrl, imgKey); }
+            // Tag the row so the observer can trigger the fetch when it scrolls into view
+            span.dataset.ichcAvKey = imgKey;
+            const avatarWrap = document.createElement('span');
+            avatarWrap.className = 'ichc-ul-avatar-wrap' + (u.supporter ? ' ichc-ul-supporter' : '');
+            avatarWrap.dataset.initial = (u.name[0] || '?').toUpperCase();
+            avatarWrap.style.setProperty('--ichc-av-bg', userAvatarColor(u.name));
+            avatarWrap.appendChild(avatarImg);
+            span.insertBefore(avatarWrap, span.firstElementChild);
+            if (u.icon) {
+                const img = document.createElement('img');
+                img.src = u.icon.src;
+                img.title = u.icon.title;
+                img.alt = u.icon.title;
+                img.className = 'ichc-ul-smicon';
+                span.querySelector('.ichc-ul-user-name').appendChild(img);
+            }
+            span.title = [
+                u.hidden && 'hidden',
+                u.mod && 'mod',
+                u.cammed && 'on cam',
+                u.supporter && 'Get Hearted',
+                u.idle && 'idle',
+                u.karma != null && `${u.karma} karma`,
+            ].filter(Boolean).join(' · ') || u.name;
+
+            if (u.hidden) {
+                const enableBtn = document.createElement('button');
+                enableBtn.type = 'button';
+                enableBtn.className = 'ichc-ul-enable-btn';
+                enableBtn.title = 'Enable cam';
+                enableBtn.innerHTML = ICONS.eye;
+                enableBtn.addEventListener('click', e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    revealBlockedUser(u.name.toLowerCase());
+                });
+                span.appendChild(enableBtn);
+            } else {
+                span.addEventListener('click', event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    triggerUserModal(u.trigger, u.name);
+                });
+                span.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        triggerUserModal(u.trigger, u.name);
+                    }
+                });
+            }
+            return span;
+        };
+
+        const renderUsers = (query) => {
             let filtered = users;
             if (query) {
                 const q = query.toLowerCase();
@@ -3325,111 +4058,117 @@
                     .map(({ u }) => u);
             }
 
-            filtered.forEach(u => {
-                const span = document.createElement('a');
-                span.className = 'ichc-ul-user userlink' +
-                    (u.hidden ? ' ichc-ul-hidden-live' : '') +
-                    (u.cammed && !u.hidden ? ' cammed' : '') +
-                    (u.mod    ? ' mod'    : '') +
-                    (u.idle   ? ' idle'   : '') +
-                    (u.supporter ? ' ichc-ul-supporter-row' : '');
-                span.href = u.trigger?.getAttribute('href') || '#';
-                span.setAttribute('draggable', 'false');
-                span.setAttribute('tabindex', '0');
-                span.setAttribute('role', 'button');
-                if (u.trigger) {
-                    [...u.trigger.getAttributeNames()].forEach(attr => {
-                        if (attr === 'class' || attr === 'style' || attr === 'id' || attr === 'href') { return; }
-                        span.setAttribute(attr, u.trigger.getAttribute(attr) || '');
-                    });
-                }
-                span.innerHTML = `<span class="ichc-ul-user-name"></span>`;
-                span.querySelector('.ichc-ul-user-name').textContent = u.name;
-
-                // Profile avatar — reuse <img> element across rebuilds; src is only set
-                // after the row enters the viewport (IntersectionObserver below) to avoid
-                // aborting in-progress loads and to limit CDN requests to visible users.
-                const imgKey = u.name.toLowerCase();
-                let avatarImg = avatarImgCache.get(imgKey);
-                if (!avatarImg) {
-                    avatarImg = document.createElement('img');
-                    avatarImg.className = 'ichc-ul-avatar';
-                    avatarImg.alt = '';
-                    avatarImg.draggable = false;
-                    avatarImg.onerror = () => {
-                        avatarImg.removeAttribute('src');
-                        avatarImg.classList.remove('ichc-ul-avatar-loaded');
-                        _profileCacheSet(imgKey, null);
-                        try { localStorage.removeItem(_AV_LS + imgKey); } catch (_) {}
-                    };
-                    _avatarImgCacheSet(imgKey, avatarImg);
-                }
-                // If URL is already resolved (localStorage hit on this session), show immediately
-                const cachedUrl = profileImageCache.get(imgKey); // undefined = not yet fetched
-                if (cachedUrl) {
-                    avatarImg.src = cachedUrl;
-                    avatarImg.classList.add('ichc-ul-avatar-loaded');
-                }
-                // Tag the row so the observer can trigger the fetch when it scrolls into view
-                span.dataset.ichcAvKey = imgKey;
-                const avatarWrap = document.createElement('span');
-                avatarWrap.className = 'ichc-ul-avatar-wrap' + (u.supporter ? ' ichc-ul-supporter' : '');
-                avatarWrap.dataset.initial = (u.name[0] || '?').toUpperCase();
-                avatarWrap.style.setProperty('--ichc-av-bg', userAvatarColor(u.name));
-                avatarWrap.appendChild(avatarImg);
-                span.insertBefore(avatarWrap, span.firstElementChild);
-                if (u.icon) {
-                    const img = document.createElement('img');
-                    img.src = u.icon.src;
-                    img.title = u.icon.title;
-                    img.alt = u.icon.title;
-                    img.className = 'ichc-ul-smicon';
-                    span.querySelector('.ichc-ul-user-name').appendChild(img);
-                }
-                span.title = [
-                    u.hidden && 'hidden',
-                    u.mod && 'mod',
-                    u.cammed && 'on cam',
-                    u.supporter && 'Get Hearted',
-                    u.idle && 'idle',
-                    u.karma != null && `${u.karma} karma`,
-                ].filter(Boolean).join(' · ') || u.name;
-
-                if (u.hidden) {
-                    const enableBtn = document.createElement('button');
-                    enableBtn.type = 'button';
-                    enableBtn.className = 'ichc-ul-enable-btn';
-                    enableBtn.title = 'Enable cam';
-                    enableBtn.innerHTML = ICONS.eye;
-                    enableBtn.addEventListener('click', e => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        revealBlockedUser(u.name.toLowerCase());
-                    });
-                    span.appendChild(enableBtn);
-                } else {
-                    span.addEventListener('click', event => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        triggerUserModal(u.trigger, u.name);
-                    });
-                    span.addEventListener('keydown', event => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            triggerUserModal(u.trigger, u.name);
-                        }
-                    });
-                }
-                panel.appendChild(span);
+            // Build map of existing rows so we can reuse them in-place instead of
+            // destroying them. Keeping rows in the DOM preserves in-progress hover
+            // transitions (removing an element always resets its transitions).
+            const existingRows = new Map();
+            panel.querySelectorAll('.ichc-ul-user[data-ichc-av-key]').forEach(el => {
+                existingRows.set(el.dataset.ichcAvKey, el);
             });
+
+            // Remove rows for users not in this render pass
+            const newKeys = new Set(filtered.map(u => u.name.toLowerCase()));
+            existingRows.forEach((el, key) => {
+                if (!newKeys.has(key)) {
+                    userListState.avatarObserver?.unobserve(el);
+                    el.remove();
+                }
+            });
+
+            // Pass 1: update or create each span (no DOM reordering yet)
+            const spans = filtered.map(u => {
+                const imgKey = u.name.toLowerCase();
+                let span = existingRows.get(imgKey);
+                const hiddenChanged = span && (span.classList.contains('ichc-ul-hidden-live') !== !!u.hidden);
+
+                if (span && !hiddenChanged) {
+                    // Update dynamic attributes on the existing row without detaching it.
+                    span.className = 'ichc-ul-user userlink' +
+                        (u.hidden ? ' ichc-ul-hidden-live' : '') +
+                        (u.cammed && !u.hidden ? ' cammed' : '') +
+                        (u.mod    ? ' mod'    : '') +
+                        (u.idle   ? ' idle'   : '') +
+                        (u.supporter ? ' ichc-ul-supporter-row' : '');
+                    if (profileGuestCache.get(imgKey) === true) { span.classList.add('ichc-ul-guest'); }
+                    const karmaEl = span.querySelector('.ichc-ul-karma');
+                    const initKarma = profileKarmaCache.get(imgKey) ?? u.karma;
+                    if (karmaEl && initKarma != null) { karmaEl.textContent = initKarma.toLocaleString(); }
+                    _setKarmaTierClass(span, initKarma ?? null);
+                    const yearEl = span.querySelector('.ichc-ul-year-badge');
+                    if (yearEl) {
+                        const initYear = profileYearCache.get(imgKey);
+                        _setBadgeYear(yearEl, initYear ?? null);
+                        _setYearTierClass(yearEl, initYear ?? null);
+                    }
+                    const avatarWrap = span.querySelector('.ichc-ul-avatar-wrap');
+                    if (avatarWrap) {
+                        avatarWrap.className = 'ichc-ul-avatar-wrap' + (u.supporter ? ' ichc-ul-supporter' : '');
+                    }
+                    span.title = [
+                        u.hidden && 'hidden',
+                        u.mod && 'mod',
+                        u.cammed && 'on cam',
+                        u.supporter && 'Get Hearted',
+                        u.idle && 'idle',
+                        u.karma != null && `${u.karma} karma`,
+                    ].filter(Boolean).join(' · ') || u.name;
+                } else {
+                    // Create a fresh row (new user or hidden-status flip that changes click handlers).
+                    if (span) { userListState.avatarObserver?.unobserve(span); span.remove(); }
+                    span = _buildNewRow(u, imgKey);
+                }
+                return span;
+            });
+
+            // Pass 2: position rows in correct order with minimal DOM moves.
+            // Walk from the first row slot (right after .ichc-ul-header) and only
+            // move a span when it isn't already sitting at the cursor position.
+            // Rows already in order are never touched, so their CSS transitions survive.
+            let cursor = panel.querySelector('.ichc-ul-header')?.nextElementSibling ?? null;
+            for (const span of spans) {
+                if (span === cursor) {
+                    cursor = cursor.nextElementSibling;
+                } else {
+                    panel.insertBefore(span, cursor);
+                }
+            }
+        };
+
+        // Update karma, year badge, and guest class on a row after a profile fetch resolves.
+        const _applyProfileData = key => {
+            const k  = profileKarmaCache.get(key);
+            const yr = profileYearCache.get(key);
+            const isGuest = profileGuestCache.get(key);
+
+            if (k != null) {
+                const el = panel.querySelector(`.ichc-ul-karma[data-karma-key="${CSS.escape(key)}"]`);
+                if (el) { el.textContent = k.toLocaleString(); }
+            }
+            const yearEl = panel.querySelector(`.ichc-ul-year-badge[data-year-key="${CSS.escape(key)}"]`);
+            if (yearEl) {
+                _setBadgeYear(yearEl, yr ?? null);
+                _setYearTierClass(yearEl, yr ?? null);
+            }
+            const row = panel.querySelector(`[data-ichc-av-key="${CSS.escape(key)}"]`);
+            if (row) {
+                if (isGuest != null) { row.classList.toggle('ichc-ul-guest', isGuest); }
+                _setKarmaTierClass(row, k ?? null);
+            }
+            _updateChatBadgesForUser(key);
+            _updateCamBadgesForUser(key);
         };
 
         // ── IntersectionObserver: only fetch avatars when a row is visible ──────
         // One observer per session, rooted on the #ichc-userlist scroll container.
         // When a tagged row enters the viewport the observer triggers the (throttled,
         // localStorage-cached) fetch and then stops watching that row.
+        // Reset if panel was recreated so the observer's root isn't a detached element.
+        if (userListState.avatarObserver && userListState.avatarObserverRoot !== panel) {
+            userListState.avatarObserver.disconnect();
+            userListState.avatarObserver = null;
+        }
         if (!userListState.avatarObserver) {
+            userListState.avatarObserverRoot = panel;
             userListState.avatarObserver = new IntersectionObserver(entries => {
                 entries.forEach(entry => {
                     if (!entry.isIntersecting) { return; }
@@ -3440,10 +4179,8 @@
                     const avatarImg = avatarImgCache.get(key);
                     if (!avatarImg || avatarImg.src) { return; } // already have a src
                     fetchProfileImage(key).then(url => {
-                        if (url && avatarImg) {
-                            avatarImg.src = url;
-                            avatarImg.classList.add('ichc-ul-avatar-loaded');
-                        }
+                        if (url && avatarImg) { _loadAvatarSrc(avatarImg, url, key); }
+                        _applyProfileData(key);
                     });
                 });
             }, { root: panel, rootMargin: '120px 0px' });
@@ -3468,12 +4205,9 @@
             .forEach(u => {
                 const key = u.name.toLowerCase();
                 fetchProfileImage(key).then(url => {
-                    if (!url) { return; }
                     const avatarImg = avatarImgCache.get(key);
-                    if (avatarImg && !avatarImg.src) {
-                        avatarImg.src = url;
-                        avatarImg.classList.add('ichc-ul-avatar-loaded');
-                    }
+                    if (url && avatarImg && !avatarImg.src) { _loadAvatarSrc(avatarImg, url, key); }
+                    _applyProfileData(key);
                 });
             });
 
@@ -3555,7 +4289,7 @@
                 panel.appendChild(section);
             }
 
-            // ⋮ export/import menu in title row
+            // ⋮ export/import + sort menu in title row
             const titleRow = panel.querySelector('.ichc-ul-title-row');
             if (titleRow && !titleRow.querySelector('.ichc-ul-more-btn')) {
                 const moreBtn = document.createElement('button');
@@ -3568,11 +4302,61 @@
                 moreMenu.className = 'ichc-ul-more-menu';
                 moreMenu.hidden = true;
 
+                // ── Sort section ──
+                const sortLabel = document.createElement('div');
+                sortLabel.className = 'ichc-ul-more-section-label';
+                sortLabel.textContent = 'Sort by';
+                moreMenu.appendChild(sortLabel);
+
+                const sortOptions = [
+                    { id: 'alpha', label: 'Alphabetical' },
+                    { id: 'karma', label: 'Karma' },
+                    { id: 'age',   label: 'Account age' },
+                ];
+                sortOptions.forEach(({ id, label }) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'ichc-ul-more-item ichc-ul-sort-item';
+                    if (userListState.sortMode === id) { btn.classList.add('ichc-ul-sort-active'); }
+                    btn.dataset.sort = id;
+
+                    const check = document.createElement('span');
+                    check.className = 'ichc-ul-sort-check';
+                    check.textContent = '✓';
+                    btn.appendChild(check);
+
+                    const text = document.createElement('span');
+                    text.textContent = label;
+                    btn.appendChild(text);
+
+                    btn.addEventListener('click', e => {
+                        e.stopPropagation();
+                        userListState.sortMode = id;
+                        localStorage.setItem('ichc_ul_sort', id);
+                        moreMenu.hidden = true;
+                        buildUserList();
+                    });
+                    moreMenu.appendChild(btn);
+                });
+
+                // ── Divider ──
+                const divider = document.createElement('div');
+                divider.className = 'ichc-ul-more-divider';
+                moreMenu.appendChild(divider);
+
+                // ── Data section label ──
+                const dataLabel = document.createElement('div');
+                dataLabel.className = 'ichc-ul-more-section-label';
+                dataLabel.textContent = 'Hidden list';
+                moreMenu.appendChild(dataLabel);
+
+                // ── Export / Import ──
                 const exportItem = document.createElement('button');
                 exportItem.type = 'button';
                 exportItem.className = 'ichc-ul-more-item';
-                exportItem.textContent = 'Export hidden list';
-                exportItem.addEventListener('click', () => {
+                exportItem.textContent = 'Export';
+                exportItem.addEventListener('click', e => {
+                    e.stopPropagation();
                     moreMenu.hidden = true;
                     const names = [...loadBlockedUsers()];
                     const blob = new Blob([JSON.stringify(names, null, 2)], { type: 'application/json' });
@@ -3584,6 +4368,7 @@
 
                 const importLabel = document.createElement('label');
                 importLabel.className = 'ichc-ul-more-item';
+                importLabel.addEventListener('click', e => { e.stopPropagation(); });
                 const importInput = document.createElement('input');
                 importInput.type = 'file';
                 importInput.accept = '.json';
@@ -3607,14 +4392,12 @@
                     };
                     reader.readAsText(file);
                 });
-                importLabel.textContent = 'Import hidden list';
+                importLabel.textContent = 'Import';
                 importLabel.appendChild(importInput);
 
                 moreMenu.appendChild(exportItem);
                 moreMenu.appendChild(importLabel);
                 moreBtn.appendChild(moreMenu);
-
-                if (prevMoreOpen) { moreMenu.hidden = false; }
 
                 moreBtn.addEventListener('click', e => {
                     e.stopPropagation();
@@ -3946,29 +4729,37 @@
         const shrink = card.querySelector('.ichc-cam-shrink-btn');
         const grow = card.querySelector('.ichc-cam-grow-btn');
         if (shrink) { shrink.disabled = level <= 0; }
-        if (grow) { grow.disabled = level >= 3; }
+        if (grow) { grow.disabled = level >= 4; }
     }
     // Size levels (grid is doubled to 2*N tracks so mini fits cleanly):
-    //   0 = mini    — span 1, half a default slot; dense packing pairs two minis side-by-side
+    //   0 = mini    — span 1, half a default slot
     //   1 = default — span 2, standard 1/N width
-    //   2 = wide    — 1/-1, full row, moderate 16:9 height (~25 vh)
-    //   3 = cinema  — 1/-1, full row, tall   16:9 height (~45 vh)
-    // Levels 2 and 3 always use 1/-1 so they never get pushed behind neighbours by
-    // the auto-placement algorithm (the old span-4 approach caused the "crops under" bug).
-    function _applySpanLevel(card, level, columns) {
+    //   2 = wide    — span 4, double-wide (2/N); caps to full row when N≤2
+    //   3 = wider   — span 6, triple-wide (3/N); full row for N=3, 3/4 row for N=4
+    //   4 = cinema  — 1/-1, full row, 16:9 with height cap
+    function _applySpanLevel(card, level) {
         const hasFeatured = !!document.querySelector('#cams .ichc-featured');
-        if (level >= 2) {
+        if (level === 4) {
             card.style.setProperty('grid-column', '1 / -1', 'important');
             if (!hasFeatured) {
                 card.style.setProperty('aspect-ratio', '16 / 9', 'important');
-                if (level === 3) {
-                    card.style.setProperty('min-height', 'clamp(180px, 36vh, 480px)', 'important');
-                    card.style.setProperty('max-height', 'clamp(180px, 50vh, 560px)', 'important');
-                } else {
-                    card.style.setProperty('min-height', 'clamp(120px, 22vh, 280px)', 'important');
-                    card.style.setProperty('max-height', 'clamp(120px, 28vh, 340px)', 'important');
-                }
+                card.style.setProperty('min-height', 'clamp(180px, 28vh, 380px)', 'important');
+                card.style.setProperty('max-height', 'clamp(180px, 46vh, 520px)', 'important');
             }
+        } else if (level === 3) {
+            // Triple-wide: 3 standard-slot widths, natural aspect ratio.
+            // span 6 in a 2N-track grid = 3/N of row; full row for N=3, 3/4 for N=4.
+            card.style.setProperty('grid-column', 'span 6', 'important');
+            card.style.removeProperty('aspect-ratio');
+            card.style.removeProperty('min-height');
+            card.style.removeProperty('max-height');
+        } else if (level === 2) {
+            // Double-wide: 2 standard-slot widths, natural aspect ratio.
+            // span 4 in a 2N-track grid = 2/N of row; caps to full row when N≤2.
+            card.style.setProperty('grid-column', 'span 4', 'important');
+            card.style.removeProperty('aspect-ratio');
+            card.style.removeProperty('min-height');
+            card.style.removeProperty('max-height');
         } else if (level === 0) {
             card.style.setProperty('grid-column', 'span 1', 'important');
             card.style.removeProperty('aspect-ratio');
@@ -3994,7 +4785,7 @@
                 return;
             }
             const key = getCardKey(card);
-            const level = key ? Math.max(0, Math.min(3, (key in spans) ? spans[key] : 1)) : 1;
+            const level = key ? Math.max(0, Math.min(4, (key in spans) ? spans[key] : 1)) : 1;
             _applySpanLevel(card, level, columns);
             _syncCardSpanBtns(card, level);
         });
@@ -4004,7 +4795,7 @@
         if (!key) { return; }
         const spans = _loadCamSpans();
         const current = (key in spans) ? spans[key] : 1;
-        const next = Math.min(3, Math.max(0, current + delta));
+        const next = Math.min(4, Math.max(0, current + delta));
         if (next === 1) { delete spans[key]; } else { spans[key] = next; }
         _saveCamSpans(spans);
         _applyCardSpans();
@@ -4142,9 +4933,16 @@
             if (node.dataset.ichcMediaBound === '1') { return; }
             node.dataset.ichcMediaBound = '1';
 
-            ['load', 'loadeddata', 'loadedmetadata', 'canplay'].forEach(type => {
+            ['load', 'loadeddata', 'canplay'].forEach(type => {
                 node.addEventListener(type, () => requestCamRelayout(140), { capture: true, passive: true });
             });
+            // On loadedmetadata we know the real video dimensions — update the card's
+            // per-card aspect immediately so the card snaps to the right ratio before
+            // the debounced full relayout fires.
+            node.addEventListener('loadedmetadata', () => {
+                if (typeof prepareCamCard === 'function') { prepareCamCard(card); }
+                requestCamRelayout(140);
+            }, { capture: true, passive: true });
             // Rate-limit error events: idle/failed cams fire them continuously,
             // causing a relayout storm that saturates the event loop.
             node.addEventListener('error', () => {
@@ -4340,13 +5138,13 @@
             if (densityCount <= 1) {
                 targetMin = Math.min(980, Math.max(availableWidth - 4, 460));
                 maxColumns = 1;
-                aspect = '16 / 10';
-                aspectValue = 16 / 10;
+                aspect = '4 / 3';
+                aspectValue = 4 / 3;
             } else if (densityCount <= 2) {
                 targetMin = Math.max(300, Math.floor((availableWidth - gap) / 2));
                 maxColumns = 2;
-                aspect = '16 / 10';
-                aspectValue = 16 / 10;
+                aspect = '4 / 3';
+                aspectValue = 4 / 3;
             } else if (densityCount <= 4) {
                 targetMin = Math.max(260, Math.floor((availableWidth - gap) / 2));
                 maxColumns = 3;
@@ -4360,13 +5158,13 @@
             } else if (densityCount <= 9) {
                 targetMin = Math.max(185, Math.floor((availableWidth - gap * 2) / 3));
                 maxColumns = 4;
-                aspect = '1 / 1';
-                aspectValue = 1;
+                aspect = '4 / 3';
+                aspectValue = 4 / 3;
             } else {
-                targetMin = Math.max(165, Math.floor((availableWidth - gap * 3) / 4));
+                targetMin = Math.max(160, Math.floor((availableWidth - gap * 3) / 4));
                 maxColumns = 5;
-                aspect = '1 / 1';
-                aspectValue = 1;
+                aspect = '4 / 3';
+                aspectValue = 4 / 3;
             }
 
             const maxByWidth = Math.max(1, Math.floor((availableWidth + gap) / (targetMin + gap)));
@@ -4640,19 +5438,11 @@
             }
             requestCamRelayout(70);
         }, 100);
-        new MutationObserver(muts => {
-            // Clear broadcast timers for cam cards that leave #cams (user stopped broadcasting)
-            muts.forEach(mut => {
-                mut.removedNodes.forEach(node => {
-                    if (node instanceof Element && node.classList.contains('rounded_square')) {
-                        const removedName = getCardName(node)?.trim().toLowerCase();
-                        if (removedName) {
-                            try { localStorage.removeItem(_BCAST_LS + removedName); } catch (_) {}
-                        }
-                    }
-                });
-            });
+        new MutationObserver(() => {
             // Always schedule syncSoon — never skip mutations outright.
+            // Timer cleanup is handled by prepareCamCard (ghost detection) and
+            // _reconcileBcastTimers (wholesale #cams replacement) — not here,
+            // because refreshCams() transiently removes cards that are still live.
             syncSoon();
         }).observe(cams, {
             childList: true,

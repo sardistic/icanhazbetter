@@ -732,6 +732,59 @@
         lastMessageAt: 0,
     };
 
+    const chatEventCollector = {
+        joinRow:   null,
+        leaveRow:  null,
+        joinNames: [],
+        leaveNames: [],
+    };
+
+    function _sealChatEvents() {
+        chatEventCollector.joinRow   = null;
+        chatEventCollector.leaveRow  = null;
+        chatEventCollector.joinNames  = [];
+        chatEventCollector.leaveNames = [];
+    }
+
+    function _classifyEventRow(row) {
+        if (!row) { return null; }
+        const text = normalizeText(row.textContent || '');
+        if (/has joined(?: the room)?|joined the room/.test(text)) { return 'join'; }
+        if (/has left(?: the room)?|left the room/.test(text)) { return 'leave'; }
+        return null;
+    }
+
+    function _extractEventNick(row) {
+        const anchor = row.querySelector('a.userlink');
+        if (anchor) { return anchor.textContent.trim(); }
+        const text = (row.textContent || '').trim();
+        const m = text.match(/^(.+?)\s+(?:has joined|has left|joined the room|left the room)/i);
+        return m ? m[1].trim() : '';
+    }
+
+    function _addToEventCollector(type, nick, refRow) {
+        refRow.style.setProperty('display', 'none', 'important');
+        if (type === 'join') {
+            chatEventCollector.joinNames.push(nick);
+            if (!chatEventCollector.joinRow?.isConnected) {
+                chatEventCollector.joinRow = document.createElement('div');
+                chatEventCollector.joinRow.className = 'ichc-event-collector ichc-event-join';
+                refRow.after(chatEventCollector.joinRow);
+            }
+            chatEventCollector.joinRow.textContent = 'Joined: ' + chatEventCollector.joinNames.join(', ');
+        } else {
+            chatEventCollector.leaveNames.push(nick);
+            if (!chatEventCollector.leaveRow?.isConnected) {
+                chatEventCollector.leaveRow = document.createElement('div');
+                chatEventCollector.leaveRow.className = 'ichc-event-collector ichc-event-leave';
+                (chatEventCollector.joinRow?.isConnected ? chatEventCollector.joinRow : refRow).after(chatEventCollector.leaveRow);
+            }
+            chatEventCollector.leaveRow.textContent = 'Left: ' + chatEventCollector.leaveNames.join(', ');
+        }
+        chatScrollState.lastMessageAt = Date.now();
+        if (chatScrollState.auto) { scheduleChatFollow(false); }
+    }
+
     function getChatLog() {
         return document.getElementById('txt');
     }
@@ -977,13 +1030,37 @@
                 mutations.forEach(mutation => {
                     mutation.addedNodes.forEach(node => {
                         if (node.nodeType === 1) {
-                            applyChatTheme(node);
                             const isInserted = node.classList &&
                                 (node.classList.contains('ichc-chat-inline-img') ||
                                  node.classList.contains('ichc-og-card') ||
-                                 node.classList.contains('ichc-ts'));
-                            if (!isInserted) { sawNewRows = true; }
+                                 node.classList.contains('ichc-ts') ||
+                                 node.classList.contains('ichc-chat-year-badge') ||
+                                 node.classList.contains('ichc-event-collector') ||
+                                 node.classList.contains('ichc-year-badge-img') ||
+                                 node.classList.contains('ichc-nick-block') ||
+                                 node.classList.contains('ichc-nick-sep') ||
+                                 !!node.closest?.('.ichc-nick-block'));
+                            if (!isInserted) {
+                                const evType = _classifyEventRow(node);
+                                if (evType === 'join' || evType === 'leave') {
+                                    const nick = _extractEventNick(node);
+                                    if (nick) {
+                                        _addToEventCollector(evType, nick, node);
+                                    } else {
+                                        _sealChatEvents();
+                                        applyChatTheme(node);
+                                        sawNewRows = true;
+                                    }
+                                } else {
+                                    _sealChatEvents();
+                                    applyChatTheme(node);
+                                    sawNewRows = true;
+                                }
+                            }
                         } else if (node.nodeType === 3 && mutation.target instanceof Element) {
+                            // Skip text updates inside our own badge spans or event collector rows
+                            if (mutation.target.classList.contains('ichc-chat-year-badge') ||
+                                mutation.target.classList.contains('ichc-event-collector')) { return; }
                             applyChatTheme(mutation.target);
                             sawNewRows = true;
                         }
@@ -1019,6 +1096,14 @@
             if (currentLog && currentLog !== chatScrollState.observedRoot) {
                 initChatScrollSync();
             }
+            // Heartbeat: nudge cR() if no new messages for 45s regardless of scroll
+            // state — the long-poll can silently time out even when auto=false (user
+            // scrolled up), which previously blocked this check entirely.
+            if (chatScrollState.lastMessageAt > 0 &&
+                    Date.now() - chatScrollState.lastMessageAt > 45_000) {
+                chatScrollState.lastMessageAt = Date.now();
+                runInPageContext(`if (typeof window.cR === 'function') { window.cR(); }`);
+            }
             if (!chatScrollState.auto) { return; }
             // Skip if focus is inside the PM window or on any non-chat input
             // — resumeNativeChat invokes the site's cR() which focuses txtMsg.
@@ -1026,13 +1111,6 @@
             if (active && active.closest?.('#tabs')) { return; }
             if (active && active.tagName === 'INPUT' && active.id !== 'txtMsg') { return; }
             clearNativeChatPause();
-            // Heartbeat: if no new messages for 90s the site's long-poll has
-            // likely timed out silently — nudge cR() to restart it.
-            if (chatScrollState.lastMessageAt > 0 &&
-                    Date.now() - chatScrollState.lastMessageAt > 90_000) {
-                chatScrollState.lastMessageAt = Date.now();
-                resumeNativeChat();
-            }
         }, 2000);
 
         if (!chatScrollState.initialized) {

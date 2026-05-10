@@ -566,8 +566,45 @@
         return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + (h < 12 ? 'am' : 'pm');
     }
 
+    function _todayDateStr() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function _formatDateLabel(isoDate) {
+        try {
+            const [y, m, d] = isoDate.split('-').map(Number);
+            const date = new Date(y, m - 1, d);
+            const today = _todayDateStr();
+            const yest = new Date(); yest.setDate(yest.getDate() - 1);
+            const yesterdayStr = `${yest.getFullYear()}-${String(yest.getMonth() + 1).padStart(2, '0')}-${String(yest.getDate()).padStart(2, '0')}`;
+            if (isoDate === today) { return 'Today'; }
+            if (isoDate === yesterdayStr) { return 'Yesterday'; }
+            return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        } catch (_) { return isoDate; }
+    }
+
+    function _injectDateSeparators(convo) {
+        if (!convo) { return; }
+        convo.querySelectorAll('.ichc-pm-date-sep').forEach(el => el.remove());
+        let lastDate = null;
+        [...convo.children].forEach(row => {
+            const d = row.dataset?.ichcDate;
+            if (!d) { return; }
+            if (d !== lastDate) {
+                const sep = document.createElement('div');
+                sep.className = 'ichc-pm-date-sep';
+                sep.textContent = _formatDateLabel(d);
+                convo.insertBefore(sep, row);
+                lastDate = d;
+            }
+        });
+    }
+
     function stampPmRow(row) {
         if (!(row instanceof HTMLElement)) { return; }
+        if (row.classList.contains('ichc-pm-date-sep')) { return; }
+        if (!row.dataset.ichcDate) { row.dataset.ichcDate = _todayDateStr(); }
         if (row.querySelector('.ichc-pm-ts')) { return; }
         const ts = document.createElement('span');
         ts.className = 'ichc-pm-ts';
@@ -580,8 +617,16 @@
         if (_watchedConvos.has(convo)) { return; }
         _watchedConvos.add(convo);
         [...convo.children].forEach(stampPmRow);
+        _injectDateSeparators(convo);
         new MutationObserver(mutations => {
-            mutations.forEach(m => m.addedNodes.forEach(n => stampPmRow(n)));
+            let needsSep = false;
+            mutations.forEach(m => m.addedNodes.forEach(n => {
+                if (n instanceof HTMLElement && !n.classList.contains('ichc-pm-date-sep')) {
+                    stampPmRow(n);
+                    needsSep = true;
+                }
+            }));
+            if (needsSep) { _injectDateSeparators(convo); }
         }).observe(convo, { childList: true });
     }
 
