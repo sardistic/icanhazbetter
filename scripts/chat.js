@@ -71,6 +71,38 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         initChatScrollSync();
+
+        // Emote ban/unban via event delegation
+        document.addEventListener('click', e => {
+            const banBtn = e.target.closest('.ichc-emote-ban-btn');
+            if (banBtn) {
+                e.stopPropagation();
+                const wrap = banBtn.closest('.ichc-emote-wrap');
+                if (!wrap) { return; }
+                const { ichcEmoteUrl: url, ichcEmoteCode: code, ichcEmoteType: type } = wrap.dataset;
+                _toggleEmoteDisabled(url, true);
+                document.querySelectorAll(`#txt .ichc-emote-wrap[data-ichc-emote-url="${CSS.escape(url)}"]`).forEach(w => {
+                    w.replaceWith(_makeEmoteLabel(url, code, type));
+                });
+                return;
+            }
+            const label = e.target.closest('.ichc-emote-disabled-label');
+            if (label) {
+                e.stopPropagation();
+                const { ichcEmoteUrl: url, ichcEmoteCode: code, ichcEmoteType: type } = label.dataset;
+                _toggleEmoteDisabled(url, false);
+                document.querySelectorAll(`#txt .ichc-emote-disabled-label[data-ichc-emote-url="${CSS.escape(url)}"]`).forEach(lbl => {
+                    lbl.replaceWith(_makeEmoteWrap(url, code, type, _buildMediaEl(url, type)));
+                });
+            }
+        }, true);
+
+        setInterval(() => {
+            document.querySelectorAll('#txt .ichc-ts[data-ichc-ts-epoch]').forEach(el => {
+                const epoch = parseInt(el.dataset.ichcTsEpoch, 10);
+                if (!isNaN(epoch)) { el.textContent = _relativeTime(epoch); }
+            });
+        }, 60000);
     });
 
     // ── Chat ──────────────────────────────────────────────────────────────────────
@@ -247,7 +279,7 @@
         const value = normalizeText(text);
         if (!value) { return false; }
 
-        return /has joined(?: the room)?|joined the room|has left(?: the room)?|left the room|is now broadcasting|stopped broadcasting|is no longer broadcasting|rebroadcasting|has gone idle|went idle|is idle|is active again/.test(value);
+        return /has joined(?: the room)?|joined the room|has left(?: the room)?|left the room|is now broadcasting|stopped broadcasting|is no longer broadcasting|rebroadcasting|has gone idle|went idle|is idle|is active again|cammed down for/.test(value);
     }
 
     function getChatRowNodes(log) {
@@ -347,6 +379,14 @@
         getChatRowsInScope(root).forEach(row => {
             const isEvent = isCompactChatEventText(row.textContent || '');
             row.classList.toggle('ichc-chat-event', isEvent);
+            const rowNorm = normalizeText(row.textContent || '');
+            const isLive = /\bis now broadcasting\b|\brebroadcasting\b/.test(rowNorm);
+            const isStop = /\bstopped broadcasting\b|\bis no longer broadcasting\b/.test(rowNorm);
+            row.classList.toggle('ichc-bcast-event', isLive || isStop);
+            row.classList.toggle('ichc-bcast-live', isLive);
+            row.classList.toggle('ichc-bcast-stop', isStop);
+            const isSacrifice = /\bcammed down for\b/.test(rowNorm);
+            row.classList.toggle('ichc-cam-sacrifice', isSacrifice);
             if (!row.dataset.ichcTsHidden) {
                 row.dataset.ichcTsHidden = '1';
                 const tsPattern = /^\s*[\[(]?\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?[\])]?\s*$/i;
@@ -356,15 +396,36 @@
                 while ((tnode = walker.nextNode())) {
                     if (tsPattern.test(tnode.textContent)) {
                         const parent = tnode.parentElement;
-                        if (parent && parent !== row) { parent.classList.add('ichc-ts'); }
+                        if (parent && parent !== row) {
+                            parent.classList.add('ichc-ts');
+                            const epoch = _parseTimestamp(tnode.textContent);
+                            if (epoch !== null) {
+                                parent.dataset.ichcTsEpoch = String(epoch);
+                                parent.textContent = _relativeTime(epoch);
+                            }
+                        }
                     }
                 }
                 // 2. <small> tags are a common timestamp wrapper in icanhazchat
-                row.querySelectorAll('small').forEach(el => el.classList.add('ichc-ts'));
+                row.querySelectorAll('small').forEach(el => {
+                    el.classList.add('ichc-ts');
+                    if (tsPattern.test(el.textContent)) {
+                        const epoch = _parseTimestamp(el.textContent);
+                        if (epoch !== null) {
+                            el.dataset.ichcTsEpoch = String(epoch);
+                            el.textContent = _relativeTime(epoch);
+                        }
+                    }
+                });
                 // 3. Table cells whose entire text looks like a clock time; move to end of row so it sits on the right
                 row.querySelectorAll('td').forEach(td => {
                     if (!td.querySelector('a') && tsPattern.test(td.textContent)) {
                         td.classList.add('ichc-ts');
+                        const epoch = _parseTimestamp(td.textContent);
+                        if (epoch !== null) {
+                            td.dataset.ichcTsEpoch = String(epoch);
+                            td.textContent = _relativeTime(epoch);
+                        }
                         const tr = td.parentElement;
                         if (tr && tr.tagName === 'TR' && tr.lastElementChild !== td) {
                             tr.appendChild(td);
@@ -372,6 +433,16 @@
                     }
                 });
             }
+        });
+
+        // Strip inline colors stamped by the font-color loop above so CSS hues on
+        // .ichc-bcast-live / .ichc-bcast-stop are not blocked by !important inline styles.
+        getChatRowsInScope(root).forEach(row => {
+            if (!row.classList.contains('ichc-bcast-live') && !row.classList.contains('ichc-bcast-stop')) { return; }
+            row.querySelectorAll('font[color], [style*="color"]').forEach(el => {
+                el.style.removeProperty('color');
+                el.removeAttribute('color');
+            });
         });
 
         // Embed image links as inline images, otherwise attach a compact OG preview.
@@ -393,26 +464,13 @@
             }
 
             anchor.dataset.ichcImgEmbed = '1';
-            let el;
-            if (media.type === 'video') {
-                el = document.createElement('video');
-                el.src = media.url;
-                el.className = 'ichc-chat-inline-img';
-                el.autoplay = true;
-                el.loop = true;
-                el.muted = true;
-                el.playsInline = true;
-                el.controls = true;
-                el.addEventListener('click', () => { window.open(media.url, '_blank', 'noopener,noreferrer'); });
-            } else {
-                el = document.createElement('img');
-                el.src = media.url;
-                el.className = 'ichc-chat-inline-img';
-                el.alt = '';
-                el.referrerPolicy = 'no-referrer';
-                el.onerror = () => el.remove();
-                el.addEventListener('click', () => { window.open(media.url, '_blank', 'noopener,noreferrer'); });
-            }
+            const emoteUrl = media.url;
+            const emoteCode = _emoteCodeFromAnchorOrUrl(anchor, emoteUrl);
+            const emoteType = media.type;
+            const emoteDisabled = _getDisabledEmotes().has(emoteUrl);
+            const insertEl = emoteDisabled
+                ? _makeEmoteLabel(emoteUrl, emoteCode, emoteType)
+                : _makeEmoteWrap(emoteUrl, emoteCode, emoteType, _buildMediaEl(emoteUrl, emoteType));
 
             // Insert after the full chat row (direct #txt child) so the image
             // appears cleanly below the message rather than crammed inside a <td>.
@@ -429,11 +487,47 @@
                     insertBefore = node.nextSibling;
                 }
             }
-            if (insertParent) { insertParent.insertBefore(el, insertBefore || null); }
+            if (insertParent) { insertParent.insertBefore(insertEl, insertBefore || null); }
         });
 
         // Also embed image URLs that weren't wrapped in <a> tags by the site
         _embedPlainImageUrls(root);
+
+        reGroupChatRows(log);
+    }
+
+    function reGroupChatRows(log) {
+        if (!log) { return; }
+        const allRows = getChatRowNodes(log);
+
+        let lastNick = null;
+        const nickOf = new Map();
+        allRows.forEach(row => {
+            if (row.classList.contains('ichc-chat-event') || row.classList.contains('ichc-bcast-event')) {
+                lastNick = null;
+                nickOf.set(row, null);
+                return;
+            }
+            const nickEl = row.querySelector('a.userlink, a[data-ichc-chat-nick]');
+            if (nickEl) { lastNick = nickEl.textContent.trim().toLowerCase(); }
+            nickOf.set(row, lastNick);
+        });
+
+        allRows.forEach(row => {
+            row.classList.remove('ichc-chat-group-first', 'ichc-chat-group-mid', 'ichc-chat-group-last');
+        });
+
+        allRows.forEach((row, i) => {
+            const nick = nickOf.get(row);
+            if (!nick) { return; }
+            const prevNick = i > 0 ? nickOf.get(allRows[i - 1]) : null;
+            const nextNick = i < allRows.length - 1 ? nickOf.get(allRows[i + 1]) : null;
+            const sameAsPrev = prevNick === nick;
+            const sameAsNext = nextNick === nick;
+            if (sameAsPrev && sameAsNext) { row.classList.add('ichc-chat-group-mid'); }
+            else if (sameAsPrev) { row.classList.add('ichc-chat-group-last'); }
+            else if (sameAsNext) { row.classList.add('ichc-chat-group-first'); }
+        });
     }
 
     const _PLAIN_IMG_RE = /https?:\/\/[^\s<>"']+\.(?:jpe?g|gif|png|webp)(?:\?[^\s<>"']*)?/gi;
@@ -697,15 +791,18 @@
             let last = 0, m;
             while ((m = _PLAIN_IMG_RE.exec(text)) !== null) {
                 if (m.index > last) { frag.appendChild(document.createTextNode(text.slice(last, m.index))); }
-                const img = document.createElement('img');
-                img.src = m[0];
-                img.className = 'ichc-chat-inline-img';
-                img.alt = '';
-                img.loading = 'lazy';
-                img.dataset.ichcImgEmbed = '1';
                 const url = m[0];
-                img.addEventListener('click', () => window.open(url, '_blank', 'noopener,noreferrer'));
-                frag.appendChild(img);
+                const code = _emoteCodeFromAnchorOrUrl(null, url);
+                if (_getDisabledEmotes().has(url)) {
+                    frag.appendChild(_makeEmoteLabel(url, code, 'img'));
+                } else {
+                    const img = document.createElement('img');
+                    img.src = url; img.className = 'ichc-chat-inline-img';
+                    img.alt = ''; img.loading = 'lazy'; img.dataset.ichcImgEmbed = '1';
+                    img.addEventListener('click', () => window.open(url, '_blank', 'noopener,noreferrer'));
+                    img.onerror = () => (img.closest('.ichc-emote-wrap') || img).remove();
+                    frag.appendChild(_makeEmoteWrap(url, code, 'img', img));
+                }
                 last = m.index + url.length;
             }
             if (last < text.length) { frag.appendChild(document.createTextNode(text.slice(last))); }
@@ -832,6 +929,102 @@
 
     function normalizeText(value = '') {
         return value.replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+
+    function _parseTimestamp(rawText) {
+        const clean = (rawText || '').replace(/[\[()\]]/g, '').trim();
+        const m = clean.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([ap]m))?$/i);
+        if (!m) { return null; }
+        let h = parseInt(m[1], 10);
+        const min = parseInt(m[2], 10);
+        const ampm = (m[4] || '').toLowerCase();
+        if (ampm === 'pm' && h < 12) { h += 12; }
+        if (ampm === 'am' && h === 12) { h = 0; }
+        const now = new Date();
+        const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, min, 0, 0);
+        if (ts.getTime() > now.getTime() + 60000) { ts.setDate(ts.getDate() - 1); }
+        return ts.getTime();
+    }
+
+    function _fmt12h(epochMs) {
+        const d = new Date(epochMs);
+        const ampm = d.getHours() < 12 ? 'am' : 'pm';
+        const h12 = d.getHours() % 12 || 12;
+        return `${h12}:${String(d.getMinutes()).padStart(2, '0')} ${ampm}`;
+    }
+
+    function _relativeTime(epochMs) {
+        const diff = Date.now() - epochMs;
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) { return _fmt12h(epochMs); }
+        if (mins < 60) { return `${mins}m ago`; }
+        const hrs = Math.floor(diff / 3600000);
+        if (hrs < 12) { return `${hrs}h ago`; }
+        return _fmt12h(epochMs);
+    }
+
+    // ── Emote / inline-image disable (persistent) ─────────────────────────────
+    function _getDisabledEmotes() {
+        try { return new Set(JSON.parse(localStorage.getItem('ichc_disabled_emotes') || '[]')); }
+        catch { return new Set(); }
+    }
+    function _saveDisabledEmotes(set) {
+        localStorage.setItem('ichc_disabled_emotes', JSON.stringify([...set]));
+    }
+    function _toggleEmoteDisabled(url, disabled) {
+        const s = _getDisabledEmotes();
+        if (disabled) { s.add(url); } else { s.delete(url); }
+        _saveDisabledEmotes(s);
+    }
+    function _emoteCodeFromAnchorOrUrl(anchor, url) {
+        const text = (anchor?.textContent || '').trim();
+        if (text && text !== url) { return text; }
+        try {
+            const file = new URL(url).pathname.split('/').pop() || '';
+            return file.replace(/\.[^.]+$/, '') || url;
+        } catch { return url; }
+    }
+    function _buildMediaEl(url, type) {
+        let el;
+        if (type === 'video') {
+            el = document.createElement('video');
+            el.src = url;
+            el.className = 'ichc-chat-inline-img';
+            el.autoplay = true; el.loop = true; el.muted = true;
+            el.playsInline = true; el.controls = true;
+        } else {
+            el = document.createElement('img');
+            el.src = url;
+            el.className = 'ichc-chat-inline-img';
+            el.alt = ''; el.referrerPolicy = 'no-referrer';
+            el.onerror = () => (el.closest('.ichc-emote-wrap') || el).remove();
+        }
+        el.addEventListener('click', () => window.open(url, '_blank', 'noopener,noreferrer'));
+        return el;
+    }
+    function _makeEmoteWrap(url, code, type, mediaEl) {
+        const wrap = document.createElement('span');
+        wrap.className = 'ichc-emote-wrap';
+        wrap.dataset.ichcEmoteUrl = url;
+        wrap.dataset.ichcEmoteCode = code;
+        wrap.dataset.ichcEmoteType = type;
+        const btn = document.createElement('button');
+        btn.className = 'ichc-emote-ban-btn';
+        btn.title = 'Hide this emote';
+        btn.textContent = '×';
+        wrap.appendChild(mediaEl);
+        wrap.appendChild(btn);
+        return wrap;
+    }
+    function _makeEmoteLabel(url, code, type) {
+        const span = document.createElement('span');
+        span.className = 'ichc-emote-disabled-label';
+        span.dataset.ichcEmoteUrl = url;
+        span.dataset.ichcEmoteCode = code;
+        span.dataset.ichcEmoteType = type;
+        span.title = 'Click to re-enable';
+        span.textContent = code;
+        return span;
     }
 
     function getChatPauseNotice() {
@@ -1039,6 +1232,8 @@
                                  node.classList.contains('ichc-year-badge-img') ||
                                  node.classList.contains('ichc-nick-block') ||
                                  node.classList.contains('ichc-nick-sep') ||
+                                 node.classList.contains('ichc-emote-wrap') ||
+                                 node.classList.contains('ichc-emote-disabled-label') ||
                                  !!node.closest?.('.ichc-nick-block'));
                             if (!isInserted) {
                                 const evType = _classifyEventRow(node);
@@ -1058,9 +1253,10 @@
                                 }
                             }
                         } else if (node.nodeType === 3 && mutation.target instanceof Element) {
-                            // Skip text updates inside our own badge spans or event collector rows
+                            // Skip text updates inside our own inserted elements
                             if (mutation.target.classList.contains('ichc-chat-year-badge') ||
-                                mutation.target.classList.contains('ichc-event-collector')) { return; }
+                                mutation.target.classList.contains('ichc-event-collector') ||
+                                mutation.target.classList.contains('ichc-ts')) { return; }
                             applyChatTheme(mutation.target);
                             sawNewRows = true;
                         }

@@ -74,6 +74,7 @@
     const profileKarmaCache = new Map();   // username_lower → karma number | null
     const profileYearCache  = new Map();   // username_lower → highest trophy year | null
     const profileGuestCache = new Map();   // username_lower → true (nick/guest) | false | null (unknown)
+    let _gifDataCache = null;              // shared with tab-complete: { gifs: [{code,src,full}] }
     function _profileCacheSet(key, value) {
         if (profileImageCache.size >= 200) {
             let evicted = 0;
@@ -412,6 +413,182 @@
         window.setTimeout(_wrapRefreshCams, 2000);
         window.setTimeout(_wrapRefreshCams, 5000);
     });
+
+    // ── Dialog center + drag ──────────────────────────────────────────────────────
+
+    function _injectSlotOfferToChat(dialog) {
+        const txt = document.getElementById('txt');
+        if (!txt) { return; }
+        if (txt.querySelector('.ichc-slot-offer-row')) { return; } // already injected
+
+        const contentEl = dialog.querySelector('.ui-dialog-content');
+        const titleEl   = dialog.querySelector('.ui-dialog-title');
+        const bodyText  = (contentEl?.textContent || '').trim();
+        const titleText = (titleEl?.textContent  || '').trim();
+
+        const row = document.createElement('div');
+        row.className = 'ichc-slot-offer-row';
+
+        if (titleText) {
+            const h = document.createElement('div');
+            h.className = 'ichc-slot-offer-title';
+            h.textContent = titleText;
+            row.appendChild(h);
+        }
+        if (bodyText) {
+            const p = document.createElement('div');
+            p.className = 'ichc-slot-offer-msg';
+            p.textContent = bodyText;
+            row.appendChild(p);
+        }
+
+        // Collect action buttons from buttonset and content links
+        const dialogBtns = [
+            ...dialog.querySelectorAll('.ui-dialog-buttonset button, .ui-dialog-buttonpane button'),
+            ...dialog.querySelectorAll('.ui-dialog-content a'),
+        ].filter(b => b.textContent.trim());
+
+        if (dialogBtns.length) {
+            const btnsEl = document.createElement('div');
+            btnsEl.className = 'ichc-slot-offer-btns';
+            dialogBtns.forEach((btn, i) => {
+                const b = document.createElement('button');
+                b.className = 'ichc-slot-offer-btn' + (i === 0 ? ' ichc-slot-offer-btn-primary' : '');
+                b.textContent = btn.textContent.trim();
+                b.addEventListener('click', e => {
+                    e.stopPropagation();
+                    btn.click();
+                    row.remove();
+                });
+                btnsEl.appendChild(b);
+            });
+            row.appendChild(btnsEl);
+        }
+
+        txt.appendChild(row);
+        txt.scrollTop = txt.scrollHeight;
+
+        // Auto-remove when dialog is closed or hidden
+        const cleanup = new MutationObserver(() => {
+            const gone = !dialog.isConnected || dialog.style.display === 'none';
+            if (gone) { row.remove(); cleanup.disconnect(); }
+        });
+        cleanup.observe(dialog, { attributes: true, attributeFilter: ['style', 'class'] });
+        if (dialog.parentNode) { cleanup.observe(dialog.parentNode, { childList: true }); }
+    }
+
+    function _isSlotOfferDialog(dialog) {
+        const text = normalizeText(dialog.textContent || '');
+        const hasTopic  = /\bslot\b|\bspot\b|\bcam\b|\bbroadcast(?:ing)?\b/.test(text);
+        const hasIntent = /\bgive\b|\boffer\b|\brelease\b|\bwould you\b|\bwant(?:s)?\b|\bwaiting\b|\bfree\b|\btaken\b|\bfull\b|\bsomeone\b|\bqueue\b|\bavailable\b/.test(text);
+        return hasTopic && hasIntent;
+    }
+
+    function _initDialog(dialog) {
+        if (dialog._ichcDialog) { return; }
+        dialog._ichcDialog = true;
+
+        // Center on first open
+        requestAnimationFrame(() => {
+            const w = dialog.offsetWidth || 320;
+            const h = dialog.offsetHeight || 400;
+            dialog.style.left = Math.max(8, (window.innerWidth  - w) / 2) + 'px';
+            dialog.style.top  = Math.max(8, (window.innerHeight - h) / 2) + 'px';
+        });
+
+        const titlebar = dialog.querySelector('.ui-dialog-titlebar');
+
+        const _closeDialog = () => {
+            try { if (typeof $ !== 'undefined') { $(dialog).dialog('close'); return; } } catch (_) {}
+            dialog.style.display = 'none';
+        };
+
+        // Close button — replace jQuery UI's sprite icon with a plain ×
+        const closeBtn = dialog.querySelector('.ui-dialog-titlebar-close');
+        if (closeBtn) {
+            closeBtn.replaceChildren();
+            closeBtn.textContent = '×';
+            closeBtn.addEventListener('click', e => { e.stopPropagation(); _closeDialog(); });
+        }
+
+        // "Send Private Message" / "Start Private Message" → open PM tab
+        const nick = dialog.querySelector('.ui-dialog-title')?.textContent?.trim() || '';
+
+        // Seed avatar cache from the dialog's own DOM — the profile pic is in
+        // td.trophy_case img.rounded and is already loaded; no page fetch needed.
+        if (nick) {
+            requestAnimationFrame(() => {
+                const pfpEl = dialog.querySelector('td.trophy_case img.rounded, td.trophy_case img, .trophy_case img');
+                if (!pfpEl) { return; }
+                const raw = pfpEl.getAttribute('src') || '';
+                if (!raw) { return; }
+                try {
+                    const url = new URL(raw, location.href).href;
+                    if (_isUserAvatarUrl(url)) {
+                        _profileCacheSet(nick.toLowerCase(), url);
+                        _lsAvSave(nick.toLowerCase(), url);
+                    }
+                } catch (_) {}
+            });
+        }
+
+        if (nick) {
+            dialog.addEventListener('click', e => {
+                const a = e.target.closest('a');
+                if (!a) { return; }
+                const txt = (a.textContent || '').toLowerCase();
+                if (/private\s*message|send.*pm/.test(txt)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.dispatchEvent(new CustomEvent('ichc-pm-open', { detail: { nick, forceShow: true } }));
+                    _closeDialog();
+                }
+            });
+        }
+
+        // Drag via titlebar
+        if (!titlebar) { return; }
+        titlebar.addEventListener('mousedown', e => {
+            if (e.button !== 0 || e.target.closest('.ui-dialog-titlebar-close')) { return; }
+            e.preventDefault();
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startLeft = parseFloat(dialog.style.left) || 0;
+            const startTop  = parseFloat(dialog.style.top)  || 0;
+            titlebar.style.cursor = 'grabbing';
+            const onMove = e => {
+                dialog.style.left = Math.max(0, startLeft + e.clientX - startX) + 'px';
+                dialog.style.top  = Math.max(0, startTop  + e.clientY - startY) + 'px';
+            };
+            const onUp = () => {
+                titlebar.style.cursor = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup',  onUp);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup',  onUp);
+        });
+
+        // Mirror slot-offer dialogs into the chat log.
+        // Retried at 400 ms and 1000 ms because jQuery UI sometimes populates
+        // dialog content and buttonsets asynchronously after the node is added.
+        const _trySlotOffer = () => {
+            if (_isSlotOfferDialog(dialog)) { _injectSlotOfferToChat(dialog); }
+        };
+        requestAnimationFrame(_trySlotOffer);
+        setTimeout(_trySlotOffer, 400);
+        setTimeout(_trySlotOffer, 1000);
+    }
+
+    new MutationObserver(muts => {
+        for (const mut of muts) {
+            for (const node of mut.addedNodes) {
+                if (!(node instanceof Element)) { continue; }
+                if (node.classList.contains('ui-dialog')) { _initDialog(node); }
+                node.querySelectorAll('.ui-dialog').forEach(_initDialog);
+            }
+        }
+    }).observe(document.documentElement, { childList: true, subtree: true });
 
     // ── Shared utilities ──────────────────────────────────────────────────────────
 
@@ -1026,7 +1203,29 @@
                     const karmaEl = document.createElement('span');
                     karmaEl.id = 'ichc-userinfo-karma';
                     karmaEl.textContent = karmaText;
-                    identEl.appendChild(karmaEl);
+
+                    const karmaNum = parseInt(karmaText.replace(/,/g, ''), 10);
+                    const lsKey = 'ichc_karma_seen_' + username.toLowerCase();
+                    let deltaEl = null;
+                    try {
+                        const stored = localStorage.getItem(lsKey);
+                        if (stored !== null && !isNaN(karmaNum)) {
+                            const delta = karmaNum - parseInt(stored, 10);
+                            if (!isNaN(delta) && delta !== 0) {
+                                deltaEl = document.createElement('span');
+                                deltaEl.id = 'ichc-karma-delta';
+                                deltaEl.className = delta > 0 ? 'ichc-karma-delta-up' : 'ichc-karma-delta-down';
+                                deltaEl.textContent = (delta > 0 ? '+' : '') + delta.toLocaleString();
+                            }
+                        }
+                        if (!isNaN(karmaNum)) { localStorage.setItem(lsKey, String(karmaNum)); }
+                    } catch (_) {}
+
+                    const karmaRow = document.createElement('span');
+                    karmaRow.id = 'ichc-karma-row';
+                    if (deltaEl) { karmaRow.appendChild(deltaEl); }
+                    karmaRow.appendChild(karmaEl);
+                    identEl.appendChild(karmaRow);
                 }
                 userInfoSlot.appendChild(identEl);
                 userInfoSlot.dataset.ichcPopulated = '1';
@@ -1475,6 +1674,9 @@
         }
         // 3. Common profile picture containers — by element ID/class
         for (const sel of [
+            // icanhazchat-specific: the profile pic always lives here
+            'td.trophy_case img.rounded', 'td.trophy_case img', '.trophy_case img',
+            // Generic fallbacks
             '#profile img', '.profile > img', '.profile-image img', '.profile-photo img',
             '#userProfile img', '#profile_image', '#profileImage', '#profile_pic',
             'img[id*="profile" i]', 'img[class*="profile" i]',
@@ -1825,15 +2027,15 @@
     let _camDecorStyleEl = null;
     let _camDecorLastCSS = '';
     const _CAM_TIER_CSS = [
-        'outline:1px solid rgba(37,72,76,.35)',
-        'outline:1px solid rgba(46,91,97,.45)',
-        'outline:1px solid rgba(54,117,125,.55)',
-        'outline:1px solid rgba(56,136,144,.65)',
-        'outline:2px solid rgba(60,153,163,.78);box-shadow:0 0 7px rgba(56,142,155,.28)',
-        'outline:2px solid rgba(62,167,175,.88);box-shadow:0 0 10px rgba(59,156,168,.35)',
-        'outline:2px solid #3aa6ae;box-shadow:0 0 13px rgba(60,169,179,.45),0 0 30px rgba(54,146,161,.18)',
-        'outline:2px solid #40b7c0;animation:ichc-cam-aura 2.2s ease-in-out infinite',
-        'outline:3px solid #a6e1e1;animation:ichc-cam-legend 1.5s ease-in-out infinite',
+        'outline:1px solid rgba(94,96,96,.35)',
+        'outline:1px solid rgba(101,104,104,.45)',
+        'outline:1px solid rgba(111,114,114,.55)',
+        'outline:1px solid rgba(117,121,122,.65)',
+        'outline:2px solid rgba(124,128,129,.78);box-shadow:0 0 7px rgba(120,124,125,.28)',
+        'outline:2px solid rgba(127,133,133,.88);box-shadow:0 0 10px rgba(125,129,130,.35)',
+        'outline:2px solid #7e8484;box-shadow:0 0 13px rgba(128,134,134,.45),0 0 30px rgba(121,125,126,.18)',
+        'outline:2px solid #858b8b;animation:ichc-cam-aura 2.2s ease-in-out infinite',
+        'outline:3px solid #a5a8a8;animation:ichc-cam-legend 1.5s ease-in-out infinite',
     ];
     function _getCamDecorStyle() {
         if (!_camDecorStyleEl?.isConnected) {
@@ -1990,6 +2192,129 @@
             _attachCamBadgeObserver();
             _refreshAllChatCamStatus();
         }, 3000);
+    }
+
+    // ── Emoji / meme tab-complete ─────────────────────────────────────────────
+    function _initEmojiTabComplete() {
+        const input = document.getElementById('txtMsg');
+        if (!input || input._ichcTC) { return; }
+        input._ichcTC = true;
+
+        const popup = document.createElement('div');
+        popup.className = 'ichc-tc-popup';
+        popup.hidden = true;
+        document.body.appendChild(popup);
+
+        let hits = [];
+        let sel = 0;
+
+        function _token() {
+            const v = input.value, p = input.selectionStart ?? input.value.length;
+            const m = v.slice(0, p).match(/:([a-z0-9_-]{1,32})$/i);
+            if (!m) { return null; }
+            return { q: m[1].toLowerCase(), start: p - m[0].length, end: p };
+        }
+
+        function _search(q) {
+            const out = [];
+            // Emojis — prefer first-keyword starts-with matches
+            const exact = [], fuzzy = [];
+            for (const em of ICHC_EMOJIS) {
+                const words = em.n.split(' ');
+                if (words[0].startsWith(q)) { exact.push({ char: em.e, label: words[0], insert: em.e }); }
+                else if (em.n.includes(q)) { fuzzy.push({ char: em.e, label: words[0], insert: em.e }); }
+            }
+            out.push(...exact.slice(0, 8), ...fuzzy.slice(0, Math.max(0, 8 - exact.length)));
+            // Memes
+            const gifs = _gifDataCache?.gifs ?? [];
+            const mExact = [], mFuzzy = [];
+            for (const g of gifs) {
+                const name = g.code.replace(/^:/, '').toLowerCase();
+                if (name.startsWith(q)) { mExact.push({ char: '🎬', label: name, insert: g.code }); }
+                else if (name.includes(q)) { mFuzzy.push({ char: '🎬', label: name, insert: g.code }); }
+            }
+            out.push(...mExact.slice(0, 6), ...mFuzzy.slice(0, Math.max(0, 6 - mExact.length)));
+            return out;
+        }
+
+        function _render() {
+            const r = input.getBoundingClientRect();
+            popup.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+            popup.style.left = r.left + 'px';
+            popup.style.minWidth = Math.min(r.width, 320) + 'px';
+            popup.innerHTML = '';
+            hits.forEach((h, i) => {
+                const item = document.createElement('div');
+                item.className = 'ichc-tc-item' + (i === sel ? ' ichc-tc-sel' : '');
+                const charEl = document.createElement('span');
+                charEl.className = 'ichc-tc-char';
+                charEl.textContent = h.char;
+                const labelEl = document.createElement('span');
+                labelEl.className = 'ichc-tc-label';
+                labelEl.textContent = h.label;
+                item.appendChild(charEl);
+                item.appendChild(labelEl);
+                item.addEventListener('mousedown', e => { e.preventDefault(); _pick(i); });
+                popup.appendChild(item);
+            });
+            popup.hidden = false;
+        }
+
+        function _pick(idx) {
+            const h = hits[idx];
+            if (!h) { return; }
+            const tok = _token();
+            if (!tok) { _dismiss(); return; }
+            const ins = h.insert + ' ';
+            input.value = input.value.slice(0, tok.start) + ins + input.value.slice(tok.end);
+            input.setSelectionRange(tok.start + ins.length, tok.start + ins.length);
+            _dismiss();
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.focus();
+        }
+
+        function _dismiss() {
+            popup.hidden = true;
+            hits = [];
+            sel = 0;
+        }
+
+        input.addEventListener('input', () => {
+            const tok = _token();
+            if (!tok) { _dismiss(); return; }
+            hits = _search(tok.q);
+            if (!hits.length) { _dismiss(); return; }
+            sel = 0;
+            _render();
+        });
+
+        input.addEventListener('keydown', e => {
+            if (popup.hidden) { return; }
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                e.stopPropagation();
+                sel = e.shiftKey ? (sel - 1 + hits.length) % hits.length : (sel + 1) % hits.length;
+                _render();
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                sel = (sel + 1) % hits.length;
+                _render();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                sel = (sel - 1 + hits.length) % hits.length;
+                _render();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                _pick(sel);
+            } else if (e.key === 'Escape') {
+                e.stopPropagation();
+                _dismiss();
+            }
+        });
+
+        input.addEventListener('blur', () => { setTimeout(_dismiss, 150); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') { _dismiss(); } }, true);
     }
 
     // ── PM avatar strip helpers ────────────────────────────────────────────────
@@ -2964,7 +3289,33 @@
                 },
             },
             { label: 'Sounds',          icon: ICONS.volume,    fn: 'toggleChatSound()' },
-            { label: 'Text color',      icon: ICONS.palette,   fn: 'pickColor()' },
+            {
+                label: 'Text color',
+                icon: ICONS.palette,
+                swatch: true,
+                action() {
+                    let picker = document.getElementById('ichc-font-color-picker');
+                    if (!picker) {
+                        picker = document.createElement('input');
+                        picker.type = 'color';
+                        picker.id = 'ichc-font-color-picker';
+                        picker.style.cssText = 'position:fixed;width:0;height:0;opacity:0;pointer-events:none;top:-9999px;left:-9999px;';
+                        document.body.appendChild(picker);
+                        try { const s = localStorage.getItem('ichc_font_color'); if (s) { picker.value = s; } } catch (_) {}
+                        const _apply = color => {
+                            try { localStorage.setItem('ichc_font_color', color); } catch (_) {}
+                            const txtMsg = document.getElementById('txtMsg');
+                            if (txtMsg) { txtMsg.style.setProperty('color', color, 'important'); }
+                            const swatch = document.querySelector('#ichc-cog-menu .ichc-color-swatch');
+                            if (swatch) { swatch.style.setProperty('background', color, 'important'); }
+                            runInPageContext(`(function(c){try{window.chatFontColor=c;}catch(e){}var i=document.querySelector('#colorDiv input[type=color],#colorDiv input[type=text]');if(i)i.value=c;})('${color}');`);
+                        };
+                        picker.addEventListener('input', e => _apply(e.target.value));
+                        picker.addEventListener('change', e => _apply(e.target.value));
+                    }
+                    picker.click();
+                },
+            },
             { label: 'Image viewing',   icon: ICONS.imageIcon, fn: 'toggleImages()' },
             { label: 'PM preferences',  icon: ICONS.phone,     fn: 'togglePMPrefs()' },
             { label: 'Help',            icon: ICONS.question,  href: 'help' },
@@ -2995,7 +3346,11 @@
                     }
                 });
             }
-            el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span class="ichc-cog-item-label">${item.label}</span>`;
+            el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span class="ichc-cog-item-label">${item.label}</span>${item.swatch ? '<span class="ichc-color-swatch" aria-hidden="true"></span>' : ''}`;
+            if (item.swatch) {
+                const sw = el.querySelector('.ichc-color-swatch');
+                try { const s = localStorage.getItem('ichc_font_color'); if (s && sw) { sw.style.background = s; } } catch (_) {}
+            }
             menu.appendChild(el);
         });
 
@@ -3081,6 +3436,9 @@
             if (_isPmTabFocused(e.detail?.nick)) { return; }
             markPmButtonAlert(e.detail);
         });
+        // ── Emoji / meme tab-complete ─────────────────────────────────────────────
+        _initEmojiTabComplete();
+
         // GIF/emote picker button
         let gifWrapper = document.getElementById('ichc-gif-wrapper');
         if (!gifWrapper) {
@@ -3198,6 +3556,7 @@
                         gifs.push({ code, src: m[2], full: 'https://www.vidble.com/' + m[3] + '.' + m[4] });
                     }
                     _gifData = { gifs };
+                    _gifDataCache = _gifData;
                 } catch (err) {
                     grid.textContent = 'Failed to load.';
                     return;
@@ -3356,6 +3715,33 @@
                     }, 400);
                 });
             }
+        }
+
+        // Mirror the action inside the cam area so the button is visible where cams would be.
+        const cams = document.getElementById('cams');
+        const existing = cams?.querySelector('.ichc-cam-resume');
+        if (visible && cams) {
+            if (!existing) {
+                const wrap = document.createElement('div');
+                wrap.className = 'ichc-cam-resume';
+                const label = document.createElement('span');
+                label.className = 'ichc-cam-resume-msg';
+                label.textContent = 'Cams paused due to inactivity';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'ichc-cam-resume-btn';
+                btn.textContent = 'Restart Cams';
+                btn.addEventListener('click', () => {
+                    document.getElementById('lurkMessageDiv')?.querySelector('a')?.click();
+                });
+                wrap.appendChild(label);
+                wrap.appendChild(btn);
+                cams.appendChild(wrap);
+            }
+            cams.classList.add('ichc-lurk-active');
+        } else {
+            existing?.remove();
+            cams?.classList.remove('ichc-lurk-active');
         }
     }
 
@@ -3554,6 +3940,10 @@
         if (!force && isUserListSearchActive()) {
             userListState.rebuildPendingAfterSearch = true;
             window.clearTimeout(userListState.timer);
+            return;
+        }
+        // Don't rebuild while the ⋮ more menu is open — removing the header causes visible flicker
+        if (!force && document.querySelector('#ichc-userlist .ichc-ul-more-menu:not([hidden])')) {
             return;
         }
         userListState.rebuildPendingAfterSearch = false;
@@ -3803,7 +4193,7 @@
 
             const badge = document.createElement('span');
             badge.id = 'ichc-ul-toggle-badge';
-            badge.innerHTML = `${ICONS.users}<span id="ichc-ul-badge-users">0</span>${ICONS.videoCam2}<span id="ichc-ul-badge-cams">0</span>`;
+            badge.innerHTML = `${ICONS.videoCam2}<span id="ichc-ul-badge-cams">0</span>${ICONS.users}<span id="ichc-ul-badge-users">0</span>`;
             sidebarDiv.appendChild(badge);
 
             // Strip appended after userlist (grid-column 3)
@@ -3886,9 +4276,18 @@
         const header = document.createElement('div');
         header.className = 'ichc-ul-header';
 
+        const userMeta = idleCount > 0 ? ` (${idleCount} inactive)` : '';
+        const camMeta  = hiddenCamCount > 0 ? ` (${hiddenCamCount} hidden)` : '';
+
+        // Cams row — sits above users row
+        const badge = document.createElement('div');
+        badge.className = 'ichc-ul-count';
+        badge.innerHTML = `<span class="ichc-ul-count-cams">${cammedCount}</span><span class="ichc-ul-count-cam-label"> LIVE${camMeta}</span>`;
+
+        // Users row — count + search + 3-dot menu
         const titleRow = document.createElement('div');
         titleRow.className = 'ichc-ul-title-row';
-        titleRow.innerHTML = '<span class="ichc-ul-title">People</span>';
+        titleRow.innerHTML = `<span class="ichc-ul-count-users">${activeCount + idleCount}</span><span class="ichc-ul-count-user-label"> VIEWERS${userMeta}</span>`;
 
         const searchBtn = document.createElement('button');
         searchBtn.type = 'button';
@@ -3897,12 +4296,6 @@
         searchBtn.setAttribute('title', 'Search users');
         searchBtn.innerHTML = ICONS.search;
         titleRow.appendChild(searchBtn);
-
-        const badge = document.createElement('span');
-        badge.className = 'ichc-ul-count';
-        const userMeta = idleCount > 0 ? ` (${idleCount} inactive)` : '';
-        const camMeta  = hiddenCamCount > 0 ? ` (${hiddenCamCount} hidden)` : '';
-        badge.innerHTML = `<span class="ichc-ul-count-users">${activeCount + idleCount} users${userMeta}</span><span class="ichc-ul-count-sep"> · </span><span class="ichc-ul-count-cams">${cammedCount} cams${camMeta}</span>`;
 
         const searchRow = document.createElement('div');
         searchRow.className = 'ichc-ul-search-row';
@@ -3923,8 +4316,8 @@
         });
         searchRow.appendChild(searchInput);
 
-        header.appendChild(titleRow);
         header.appendChild(badge);
+        header.appendChild(titleRow);
         header.appendChild(searchRow);
         // Insert header before existing user rows (which were kept in the DOM).
         panel.insertBefore(header, panel.firstChild || null);
@@ -3935,7 +4328,7 @@
             savedMoreBtn.querySelectorAll('[data-sort]').forEach(btn => {
                 btn.classList.toggle('ichc-ul-sort-active', btn.dataset.sort === userListState.sortMode);
             });
-            titleRow.appendChild(savedMoreBtn);
+            badge.appendChild(savedMoreBtn);
         }
 
         // ── User rows ──
@@ -4017,6 +4410,14 @@
                 u.idle && 'idle',
                 u.karma != null && `${u.karma} karma`,
             ].filter(Boolean).join(' · ') || u.name;
+
+            if (u.mod) {
+                const modBadge = document.createElement('span');
+                modBadge.className = 'ichc-ul-mod-badge';
+                modBadge.setAttribute('aria-label', 'Moderator');
+                modBadge.innerHTML = ICONS.shield;
+                span.appendChild(modBadge);
+            }
 
             if (u.hidden) {
                 const enableBtn = document.createElement('button');
@@ -4291,7 +4692,7 @@
 
             // ⋮ export/import + sort menu in title row
             const titleRow = panel.querySelector('.ichc-ul-title-row');
-            if (titleRow && !titleRow.querySelector('.ichc-ul-more-btn')) {
+            if (titleRow && !panel.querySelector('.ichc-ul-more-btn')) {
                 const moreBtn = document.createElement('button');
                 moreBtn.type = 'button';
                 moreBtn.className = 'ichc-ul-more-btn';
@@ -4404,7 +4805,7 @@
                     moreMenu.hidden = !moreMenu.hidden;
                 });
 
-                titleRow.appendChild(moreBtn); // far-right of title row
+                badge.appendChild(moreBtn); // top-right of LIVE row
             }
         }
         // Word cloud — rebuild whenever userlist rebuilds

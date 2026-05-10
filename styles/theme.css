@@ -124,9 +124,12 @@
     #chat_container {
         background: #18191c !important;
         border: none !important;
+        border-right: 1px solid rgba(255,255,255,0.06) !important;
         border-radius: 8px !important;
         display: flex !important;
         flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100% !important;
         overflow: hidden !important;
     }
 
@@ -134,10 +137,12 @@
     #txt {
         flex: 1 1 0 !important;
         min-height: 0 !important;
+        width: 100% !important;
+        align-self: stretch !important;
         background: #18191c !important;
         color: #dbdee1 !important;
         border: none !important;
-        padding: 6px 0 6px 6px !important;
+        padding: 4px 6px 4px 0 !important;
         font-size: 12px !important;
         line-height: 1.4 !important;
         overflow-y: auto !important;
@@ -145,13 +150,19 @@
         scrollbar-width: thin !important;
         scrollbar-color: #2d2f34 transparent !important;
     }
+    #txt::-webkit-scrollbar { width: 5px !important; }
+    #txt::-webkit-scrollbar-track { background: transparent !important; }
+    #txt::-webkit-scrollbar-thumb { background: #2d2f34 !important; border-radius: 3px !important; }
+    #txt::-webkit-scrollbar-thumb:hover { background: #36383d !important; }
     #txt > table,
     #txt > div,
     #txt > p,
     #txt > ul,
     #txt .line {
+        width: 100% !important;
+        box-sizing: border-box !important;
         margin: 0 0 2px !important;
-        padding: 3px 2px 3px 8px !important;
+        padding: 3px 2px 3px 4px !important;
         border-radius: 4px !important;
         border: 1px solid transparent !important;
         background:
@@ -208,16 +219,161 @@
     #txt .ichc-chat-event .ichc-ts,
     #txt .ichc-chat-event small { display: none !important; }
 
-    /* ── Collapsed join/leave event collector rows ── */
+    /* ── Same-user message grouping ── */
+    #txt .ichc-chat-group-first {
+        border-radius: 6px 6px 2px 2px !important;
+        margin-bottom: 1px !important;
+    }
+    #txt .ichc-chat-group-mid {
+        border-radius: 2px !important;
+        margin-bottom: 1px !important;
+    }
+    #txt .ichc-chat-group-last {
+        border-radius: 2px 2px 6px 6px !important;
+    }
+
+    /* ── Broadcasting events — centered, large, bold ── */
+    #txt .ichc-bcast-event {
+        text-align: center !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        padding: 4px 8px !important;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        color: #c8ccd2 !important;
+        opacity: 1 !important;
+    }
+    #txt > table.ichc-bcast-live,
+    #txt > div.ichc-bcast-live,
+    #txt > p.ichc-bcast-live,
+    #txt > ul.ichc-bcast-live,
+    #txt .line.ichc-bcast-live {
+        color: #6fcf87 !important;
+        background: rgba(80,200,100,0.10) !important;
+    }
+    #txt .ichc-bcast-live td,
+    #txt .ichc-bcast-live font,
+    #txt .ichc-bcast-live span,
+    #txt .ichc-bcast-live div,
+    #txt .ichc-bcast-live p,
+    #txt .ichc-bcast-live li {
+        color: #6fcf87 !important;
+    }
+    #txt > table.ichc-bcast-stop,
+    #txt > div.ichc-bcast-stop,
+    #txt > p.ichc-bcast-stop,
+    #txt > ul.ichc-bcast-stop,
+    #txt .line.ichc-bcast-stop {
+        color: #e07070 !important;
+        background: rgba(200,80,80,0.10) !important;
+    }
+    #txt .ichc-bcast-stop td,
+    #txt .ichc-bcast-stop font,
+    #txt .ichc-bcast-stop span,
+    #txt .ichc-bcast-stop div,
+    #txt .ichc-bcast-stop p,
+    #txt .ichc-bcast-stop li {
+        color: #e07070 !important;
+    }
+    /* ── "Cammed down for" golden achievement row ── */
+    /* filter is not !important-locked on these rows, so the animation can drive it */
+    @keyframes ichc-achievement-glow {
+        0%, 100% { filter: drop-shadow(0 0 0px rgba(255,200,0,0)); }
+        50%       { filter: drop-shadow(0 0 7px rgba(255,210,0,0.55)) brightness(1.06); }
+    }
+    #txt > table.ichc-cam-sacrifice,
+    #txt > div.ichc-cam-sacrifice,
+    #txt > p.ichc-cam-sacrifice,
+    #txt .line.ichc-cam-sacrifice {
+        background: linear-gradient(
+            90deg,
+            rgba(120,80,0,0.22) 0%,
+            rgba(200,140,0,0.30) 40%,
+            rgba(220,160,0,0.28) 60%,
+            rgba(120,80,0,0.22) 100%
+        ) !important;
+        border-left: 3px solid #c89320 !important;
+        border-top: 1px solid rgba(200,150,0,0.25) !important;
+        border-bottom: 1px solid rgba(200,150,0,0.25) !important;
+        border-right: 0 !important;
+        box-shadow: inset 3px 0 12px rgba(255,200,0,0.10) !important;
+        animation: ichc-achievement-glow 2.2s ease-in-out infinite !important;
+        color: #fbbf24 !important;
+        font-weight: 700 !important;
+    }
+    #txt .ichc-cam-sacrifice td,
+    #txt .ichc-cam-sacrifice font,
+    #txt .ichc-cam-sacrifice span,
+    #txt .ichc-cam-sacrifice div,
+    #txt .ichc-cam-sacrifice p,
+    #txt .ichc-cam-sacrifice li {
+        color: #fbbf24 !important;
+    }
+
+    /* ── Cam slot-offer inline chat row ── */
+    #txt .ichc-slot-offer-row {
+        margin: 4px 0 !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(255,200,0,0.25) !important;
+        background: linear-gradient(135deg, rgba(184,134,0,0.10), rgba(255,210,0,0.14)) !important;
+        box-shadow: 0 0 12px rgba(255,200,0,0.08) !important;
+    }
+    #txt .ichc-slot-offer-title {
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        color: #c8992a !important;
+        margin-bottom: 4px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+    }
+    #txt .ichc-slot-offer-msg {
+        font-size: 12px !important;
+        color: #dbdee1 !important;
+        margin-bottom: 8px !important;
+        line-height: 1.4 !important;
+    }
+    #txt .ichc-slot-offer-btns {
+        display: flex !important;
+        gap: 6px !important;
+        flex-wrap: wrap !important;
+    }
+    #txt .ichc-slot-offer-btn {
+        padding: 5px 12px !important;
+        border-radius: 6px !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        background: rgba(255,255,255,0.06) !important;
+        color: #c9cdd2 !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+    }
+    #txt .ichc-slot-offer-btn:hover {
+        background: rgba(255,255,255,0.10) !important;
+        color: #fff !important;
+    }
+    #txt .ichc-slot-offer-btn-primary {
+        background: rgba(88,101,242,0.25) !important;
+        border-color: rgba(88,101,242,0.45) !important;
+        color: #c9cdd2 !important;
+    }
+    #txt .ichc-slot-offer-btn-primary:hover {
+        background: rgba(88,101,242,0.45) !important;
+        color: #fff !important;
+    }
+
+    /* ── Collapsed join/leave event collector rows — centered, wrappable ── */
     #txt .ichc-event-collector {
         font-size: 10px !important;
         line-height: 1.4 !important;
-        padding: 1px 4px !important;
+        padding: 2px 4px !important;
         margin: 0 !important;
         opacity: 0.78 !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
+        text-align: center !important;
+        white-space: normal !important;
+        overflow: visible !important;
     }
     #txt .ichc-event-join  { color: rgba(80,210,120,0.85)  !important; }
     #txt .ichc-event-leave { color: rgba(200,100,90,0.80)  !important; }
@@ -233,6 +389,11 @@
         vertical-align: middle !important;
         width: 1% !important;
     }
+    /* Table-based chat rows: top-align cells, clear site cellpadding */
+    #txt > table { width: 100% !important; border-spacing: 0 !important; }
+    #txt > table td:not(.ichc-ts) { vertical-align: top !important; padding: 0 3px 0 0 !important; }
+    /* Nick block: keep badge + name + colon on one line */
+    .ichc-nick-block { display: inline !important; white-space: nowrap !important; }
     /* Non-table timestamp wrappers (span, small, etc.) */
     #txt .ichc-ts:not(td) {
         float: right !important;
@@ -252,16 +413,17 @@
         background: rgba(201, 162, 39, 0.12);
         border: 1px solid rgba(201, 162, 39, 0.35) !important;
         border-radius: 3px !important;
-        padding: 0 3px !important;
         line-height: 1.6 !important;
         vertical-align: middle !important;
         white-space: nowrap !important;
-        /* Collapsed — border+padding folded inside max-width:0 via border-box */
+        /* Collapsed — no space, no border outline, no padding contribution */
         max-width: 0 !important;
+        padding: 0 !important;
+        border-width: 0 !important;
         overflow: hidden !important;
         opacity: 0 !important;
         margin-right: 0 !important;
-        transition: max-width 0.2s ease, opacity 0.15s ease, margin-right 0.15s ease !important;
+        transition: max-width 0.2s ease, padding 0.15s ease, opacity 0.15s ease, margin-right 0.15s ease !important;
     }
     #txt .line:hover .ichc-chat-year-badge,
     #txt > table:hover .ichc-chat-year-badge,
@@ -269,6 +431,8 @@
     #txt > p:hover .ichc-chat-year-badge,
     #txt > ul:hover .ichc-chat-year-badge {
         max-width: 50px !important;
+        padding: 0 3px !important;
+        border-width: 1px !important;
         opacity: 1 !important;
         margin-right: 3px !important;
     }
@@ -285,18 +449,18 @@
     }
 
     /* ── Chat row karma indicator (right border, cyan scale by tier) ── */
-    #txt [data-ichc-kt="1"] { border-right: 2px solid rgba(44,121,131,0.35) !important; }
-    #txt [data-ichc-kt="2"] { border-right: 2px solid rgba(49,136,146,0.50) !important; }
-    #txt [data-ichc-kt="3"] { border-right: 2px solid rgba(54,151,161,0.65) !important; }
-    #txt [data-ichc-kt="4"] { border-right: 3px solid rgba(58,163,173,0.78) !important; }
-    #txt [data-ichc-kt="5"] { border-right: 3px solid rgba(62,176,186,0.90) !important; }
-    #txt [data-ichc-kt="6"] { border-right: 3px solid rgba(64,183,192,1.00) !important; }
-    #txt [data-ichc-kt="7"] { border-right: 4px solid rgba(64,183,192,1.00) !important; box-shadow: inset -4px 0 8px rgba(60,169,179,0.18) !important; }
-    #txt [data-ichc-kt="8"] { border-right: 4px solid rgba(64,183,192,1.00) !important; box-shadow: inset -4px 0 12px rgba(60,169,179,0.28) !important; }
+    #txt [data-ichc-kt="1"] { border-right: 2px solid rgba(86,125,130,0.35) !important; }
+    #txt [data-ichc-kt="2"] { border-right: 2px solid rgba(89,132,137,0.50) !important; }
+    #txt [data-ichc-kt="3"] { border-right: 2px solid rgba(91,140,145,0.65) !important; }
+    #txt [data-ichc-kt="4"] { border-right: 3px solid rgba(93,146,151,0.78) !important; }
+    #txt [data-ichc-kt="5"] { border-right: 3px solid rgba(95,152,157,0.90) !important; }
+    #txt [data-ichc-kt="6"] { border-right: 3px solid rgba(96,156,160,1.00) !important; }
+    #txt [data-ichc-kt="7"] { border-right: 4px solid rgba(96,156,160,1.00) !important; box-shadow: inset -4px 0 8px rgba(94,149,154,0.18) !important; }
+    #txt [data-ichc-kt="8"] { border-right: 4px solid rgba(96,156,160,1.00) !important; box-shadow: inset -4px 0 12px rgba(94,149,154,0.28) !important; }
 
-    /* ── Chat row cam status indicator (right border, overlays karma when both apply) ── */
-    #txt .ichc-chat-oncam  { border-right: 2px solid rgba(40,200,90,0.75) !important; }
-    #txt .ichc-chat-camoff { border-right: 2px solid rgba(200,60,60,0.65) !important; }
+    /* ── Chat row cam status indicator (left border) ── */
+    #txt .ichc-chat-oncam  { border-left: 2px solid rgba(40,200,90,0.75) !important; }
+    #txt .ichc-chat-camoff { border-left: 2px solid rgba(200,60,60,0.65) !important; }
 
     /* ── Consecutive same-user message grouping ── */
     /* Row that continues from the row above (same user) */
@@ -351,67 +515,67 @@
     }
     /* Breathing glow for mid tiers */
     @keyframes ichc-glow-pulse {
-        0%, 100% { text-shadow: 0 0 4px rgba(57,160,171,0.55), 0 0 14px rgba(50,136,150,0.22); }
-        50%       { text-shadow: 0 0 8px rgba(64,183,192,0.85), 0 0 24px rgba(61,170,182,0.48), 0 0 44px rgba(54,148,161,0.22); }
+        0%, 100% { text-shadow: 0 0 4px rgba(93,144,150,0.55), 0 0 14px rgba(89,132,139,0.22); }
+        50%       { text-shadow: 0 0 8px rgba(96,156,160,0.85), 0 0 24px rgba(95,149,155,0.48), 0 0 44px rgba(91,138,145,0.22); }
     }
     /* Multi-stage legendary sparkle */
     @keyframes ichc-gold-sparkle {
-        0%   { text-shadow: 0 0 6px rgba(60,169,179,0.72), 0 0 18px rgba(53,142,158,0.38); filter: brightness(1); }
-        28%  { text-shadow: 0 0 12px rgba(205,235,238,1),  0 0 30px rgba(62,176,186,0.72), 0 0 55px rgba(56,149,169,0.35); filter: brightness(1.28); }
-        56%  { text-shadow: 0 0 8px rgba(124,203,211,0.88), 0 0 22px rgba(60,166,179,0.52); filter: brightness(1.1); }
-        100% { text-shadow: 0 0 6px rgba(60,169,179,0.72), 0 0 18px rgba(53,142,158,0.38); filter: brightness(1); }
+        0%   { text-shadow: 0 0 6px rgba(94,149,154,0.72), 0 0 18px rgba(91,135,143,0.38); filter: brightness(1); }
+        28%  { text-shadow: 0 0 12px rgba(167,182,183,1),  0 0 30px rgba(95,152,157,0.72), 0 0 55px rgba(92,139,149,0.35); filter: brightness(1.28); }
+        56%  { text-shadow: 0 0 8px rgba(126,166,170,0.88), 0 0 22px rgba(94,147,154,0.52); filter: brightness(1.1); }
+        100% { text-shadow: 0 0 6px rgba(94,149,154,0.72), 0 0 18px rgba(91,135,143,0.38); filter: brightness(1); }
     }
     /* Cam card aura pulse */
     @keyframes ichc-cam-aura {
-        0%, 100% { box-shadow: 0 0 0 2px rgba(55,152,164,0.88), 0 0 10px rgba(51,137,152,0.42), 0 0 26px rgba(45,116,134,0.16); }
-        50%       { box-shadow: 0 0 0 2px rgba(64,183,192,0.98), 0 0 20px rgba(61,168,182,0.62), 0 0 50px rgba(57,153,171,0.3); }
+        0%, 100% { box-shadow: 0 0 0 2px rgba(123,127,128,0.88), 0 0 10px rgba(118,122,123,0.42), 0 0 26px rgba(110,114,115,0.16); }
+        50%       { box-shadow: 0 0 0 2px rgba(133,139,139,0.98), 0 0 20px rgba(128,134,134,0.62), 0 0 50px rgba(124,129,130,0.30); }
     }
-    /* Legendary cam pulse — border brightens to near-white cyan */
+    /* Legendary cam pulse — border brightens to near-white slate */
     @keyframes ichc-cam-legend {
-        0%, 100% { box-shadow: 0 0 0 2px rgba(62,176,186,0.92), 0 0 16px rgba(58,162,174,0.58), 0 0 38px rgba(54,143,161,0.28); }
-        50%       { box-shadow: 0 0 0 3px rgba(205,235,238,1),   0 0 28px rgba(64,183,192,0.82), 0 0 65px rgba(61,166,184,0.45); }
+        0%, 100% { box-shadow: 0 0 0 2px rgba(130,136,136,0.92), 0 0 16px rgba(125,131,131,0.58), 0 0 38px rgba(121,125,126,0.28); }
+        50%       { box-shadow: 0 0 0 3px rgba(176,178,178,1),    0 0 28px rgba(133,139,139,0.82), 0 0 65px rgba(128,134,134,0.45); }
     }
 
     /* ── Userlist bar: fills from right, sqrt-scaled so 20k ≈ 38%, 100k ≈ 85% ── */
     /* Uses background-image so it layers over existing row background-color.       */
     #ichc-userlist .ichc-ul-user.ichc-kt0 {
         background-image: linear-gradient(to left,
-            rgba(37,72,76,0.17) 0%, rgba(31,59,62,0.08) 2%, transparent 4%) !important;
+            rgba(83,100,102,0.17) 0%, rgba(80,94,95,0.08) 2%, transparent 4%) !important;
     }
     #ichc-userlist .ichc-ul-user.ichc-kt1 {
         background-image: linear-gradient(to left,
-            rgba(46,91,97,0.20) 0%, rgba(37,74,79,0.10) 3.5%, transparent 7%) !important;
+            rgba(87,110,113,0.20) 0%, rgba(83,101,104,0.10) 3.5%, transparent 7%) !important;
     }
     #ichc-userlist .ichc-ul-user.ichc-kt2 {
         background-image: linear-gradient(to left,
-            rgba(54,117,125,0.27) 0%, rgba(44,97,105,0.14) 5.5%, transparent 11%) !important;
+            rgba(91,123,127,0.27) 0%, rgba(86,113,117,0.14) 5.5%, transparent 11%) !important;
     }
     #ichc-userlist .ichc-ul-user.ichc-kt3 {
         background-image: linear-gradient(to left,
-            rgba(56,136,144,0.32) 0%, rgba(49,118,126,0.16) 11%, transparent 22%) !important;
+            rgba(92,132,136,0.32) 0%, rgba(89,123,127,0.16) 11%, transparent 22%) !important;
     }
     #ichc-userlist .ichc-ul-user.ichc-kt4 {
         background-image: linear-gradient(to left,
-            rgba(60,153,163,0.36) 0%, rgba(52,133,143,0.18) 15%, transparent 30%) !important;
+            rgba(94,141,146,0.36) 0%, rgba(90,131,136,0.18) 15%, transparent 30%) !important;
     }
     #ichc-userlist .ichc-ul-user.ichc-kt5 {
         background-image: linear-gradient(to left,
-            rgba(62,167,175,0.40) 0%, rgba(54,145,155,0.20) 21%, rgba(45,121,130,0.09) 32%, transparent 42%) !important;
+            rgba(95,148,152,0.40) 0%, rgba(91,137,142,0.20) 21%, rgba(87,125,129,0.09) 32%, transparent 42%) !important;
     }
     #ichc-userlist .ichc-ul-user.ichc-kt6 {
         background-image: linear-gradient(to left,
-            rgba(62,178,186,0.45) 0%, rgba(56,159,169,0.24) 22%, rgba(48,134,144,0.11) 42%, transparent 62%) !important;
+            rgba(95,153,157,0.45) 0%, rgba(92,144,149,0.24) 22%, rgba(88,131,136,0.11) 42%, transparent 62%) !important;
     }
-    /* Tier 7 (50k+): animated shimmer streak over a cyan base fill ~72% */
+    /* Tier 7 (50k+): animated shimmer streak over a slate base fill ~72% */
     #ichc-userlist .ichc-ul-user.ichc-kt7 {
         background-image: linear-gradient(110deg,
             transparent 20%,
-            rgba(205,235,238,0.11) 38%,
-            rgba(64,183,192,0.26)  50%,
-            rgba(205,235,238,0.11) 62%,
+            rgba(167,182,183,0.11) 38%,
+            rgba(96,156,160,0.26)  50%,
+            rgba(167,182,183,0.11) 62%,
             transparent 80%),
             linear-gradient(to left,
-                rgba(59,166,176,0.30) 0%, rgba(51,142,154,0.15) 28%, transparent 72%) !important;
+                rgba(94,147,152,0.30) 0%, rgba(90,135,141,0.15) 28%, transparent 72%) !important;
         background-size: 280% 100%, 100% 100% !important;
         animation: ichc-shimmer 2.2s linear infinite !important;
     }
@@ -419,46 +583,46 @@
     #ichc-userlist .ichc-ul-user.ichc-kt8 {
         background-image: linear-gradient(110deg,
             transparent 15%,
-            rgba(221,242,244,0.14) 35%,
-            rgba(64,188,191,0.34)  50%,
-            rgba(221,242,244,0.14) 65%,
+            rgba(175,185,186,0.14) 35%,
+            rgba(96,158,160,0.34)  50%,
+            rgba(175,185,186,0.14) 65%,
             transparent 85%),
             linear-gradient(to left,
-                rgba(64,183,192,0.36) 0%, rgba(59,164,176,0.19) 12%, rgba(50,138,150,0.09) 44%, transparent 88%) !important;
+                rgba(96,156,160,0.36) 0%, rgba(94,146,152,0.19) 12%, rgba(89,133,139,0.09) 44%, transparent 88%) !important;
         background-size: 260% 100%, 100% 100% !important;
         animation: ichc-shimmer 1.5s linear infinite !important;
     }
 
     /* ── Chat username ── */
     /* Low tiers: coloured underline only */
-    #txt a.userlink.ichc-kt0 { border-bottom: 1px solid rgba(37,72,76,0.5)      !important; }
-    #txt a.userlink.ichc-kt1 { border-bottom: 1px solid rgba(46,91,97,0.62)     !important; }
-    #txt a.userlink.ichc-kt2 { border-bottom: 1px solid rgba(54,117,125,0.72)   !important; }
-    #txt a.userlink.ichc-kt3 { border-bottom: 1px solid rgba(56,136,144,0.82)   !important; }
+    #txt a.userlink.ichc-kt0 { border-bottom: 1px solid rgba(83,100,102,0.5)    !important; }
+    #txt a.userlink.ichc-kt1 { border-bottom: 1px solid rgba(87,110,113,0.62)   !important; }
+    #txt a.userlink.ichc-kt2 { border-bottom: 1px solid rgba(91,123,127,0.72)   !important; }
+    #txt a.userlink.ichc-kt3 { border-bottom: 1px solid rgba(92,132,136,0.82)   !important; }
     /* Mid tiers: thicker underline + ambient glow */
     #txt a.userlink.ichc-kt4 {
-        border-bottom: 2px solid rgba(60,153,163,0.9) !important;
-        text-shadow: 0 0 5px rgba(60,153,163,0.38) !important;
+        border-bottom: 2px solid rgba(94,141,146,0.9) !important;
+        text-shadow: 0 0 5px rgba(94,141,146,0.38) !important;
     }
     #txt a.userlink.ichc-kt5 {
-        border-bottom: 2px solid rgba(62,167,175,0.95) !important;
+        border-bottom: 2px solid rgba(95,148,152,0.95) !important;
         animation: ichc-glow-pulse 3s ease-in-out infinite !important;
     }
     #txt a.userlink.ichc-kt6 {
-        border-bottom: 2px solid #3aa6ae !important;
-        text-shadow: 0 0 6px rgba(59,166,176,0.65), 0 0 16px rgba(53,146,159,0.32) !important;
+        border-bottom: 2px solid #5d9397 !important;
+        text-shadow: 0 0 6px rgba(94,147,152,0.65), 0 0 16px rgba(91,137,144,0.32) !important;
         animation: ichc-glow-pulse 2.4s ease-in-out infinite !important;
     }
-    /* Tier 7: cyan border + shimmer sheen */
+    /* Tier 7: slate border + shimmer sheen */
     #txt a.userlink.ichc-kt7 {
-        border-bottom: 2px solid #40b7c0 !important;
-        background: linear-gradient(110deg, transparent 25%, rgba(205,235,238,0.18) 50%, transparent 75%) !important;
+        border-bottom: 2px solid #609ca0 !important;
+        background: linear-gradient(110deg, transparent 25%, rgba(167,182,183,0.18) 50%, transparent 75%) !important;
         background-size: 280% 100% !important;
         animation: ichc-shimmer 2.2s linear infinite, ichc-glow-pulse 2.5s ease-in-out infinite !important;
     }
     /* Tier 8: legendary sparkle */
     #txt a.userlink.ichc-kt8 {
-        border-bottom: 2px solid #a6e1e1 !important;
+        border-bottom: 2px solid #93b1b1 !important;
         animation: ichc-gold-sparkle 2s ease-in-out infinite !important;
     }
 
@@ -493,6 +657,62 @@
         background-size: 260% 100% !important;
         border-color: #ffd700 !important;
         animation: ichc-shimmer 1.8s linear infinite, ichc-glow-pulse 2.5s ease-in-out infinite !important;
+    }
+
+    /* ── Emote wrap + disable button ── */
+    #txt .ichc-emote-wrap {
+        display: block !important;
+        position: relative !important;
+        width: fit-content !important;
+    }
+    #txt .ichc-emote-ban-btn {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: absolute !important;
+        top: 4px !important;
+        right: 4px !important;
+        width: 20px !important;
+        height: 20px !important;
+        padding: 0 !important;
+        border-radius: 4px !important;
+        border: 1px solid rgba(220,38,38,0.4) !important;
+        background: rgba(127,29,29,0.75) !important;
+        color: #fca5a5 !important;
+        font-size: 14px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        z-index: 2 !important;
+        transition: opacity 0.1s ease !important;
+    }
+    #txt .ichc-emote-wrap:hover .ichc-emote-ban-btn {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+    #txt .ichc-emote-ban-btn:hover {
+        background: rgba(185,28,28,0.9) !important;
+        border-color: rgba(239,68,68,0.7) !important;
+    }
+    #txt .ichc-emote-disabled-label {
+        display: inline-block !important;
+        margin: 2px 2px 2px 0 !important;
+        padding: 1px 5px !important;
+        border-radius: 4px !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: rgba(255,255,255,0.04) !important;
+        color: #80848e !important;
+        font-size: 11px !important;
+        font-family: monospace !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        user-select: none !important;
+    }
+    #txt .ichc-emote-disabled-label:hover {
+        background: rgba(88,101,242,0.15) !important;
+        border-color: rgba(88,101,242,0.35) !important;
+        color: #c9cdd2 !important;
     }
 
     /* Inline image embeds posted in chat */
@@ -697,17 +917,18 @@
         padding: 10px 12px !important;
         margin: 0 12px 4px !important;
         border-radius: 14px !important;
-        border: 1px solid rgba(248, 113, 113, 0.26) !important;
-        background: linear-gradient(180deg, rgba(44, 10, 14, 0.96), rgba(24, 8, 12, 0.98)) !important;
-        color: #ffe4e6 !important;
+        border: 1px solid rgba(255,255,255,0.07) !important;
+        background: rgba(26,28,31,0.96) !important;
+        color: #c8ccd2 !important;
         box-shadow: none !important;
         font-size: 12px !important;
         line-height: 1.35 !important;
         visibility: hidden !important;
     }
+    /* Button is shown in cam area instead — keep lurkDiv hidden from chat */
     #lurkMessageDiv.ichc-visible {
-        display: flex !important;
-        visibility: visible !important;
+        display: none !important;
+        visibility: hidden !important;
     }
     #lurkMessageDiv a {
         display: inline-flex !important;
@@ -716,17 +937,17 @@
         margin-left: auto !important;
         padding: 7px 12px !important;
         border-radius: 999px !important;
-        border: 1px solid rgba(74, 222, 128, 0.34) !important;
-        background: rgba(10, 50, 28, 0.82) !important;
-        color: #dcfce7 !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: rgba(40,42,48,0.8) !important;
+        color: #dbdee1 !important;
         font-size: 11px !important;
         font-weight: 700 !important;
         white-space: nowrap !important;
         text-decoration: none !important;
     }
     #lurkMessageDiv a:hover {
-        background: rgba(15, 74, 42, 0.9) !important;
-        border-color: rgba(74, 222, 128, 0.5) !important;
+        background: rgba(55,58,65,0.9) !important;
+        border-color: rgba(255,255,255,0.22) !important;
     }
 
     /* ── Footer ── */
@@ -736,16 +957,13 @@
     .room_footer_links { color: #7289da !important; font-size: 11px !important; }
     .gray_back[style*="rgba(0,0,0"] { background: #18191c !important; }
 
-    /* ── Dialogs — pinned bottom-right as a toast notification ── */
+    /* ── Dialogs ── */
     .ui-dialog {
-        /* Override jQuery UI inline top/left positioning */
         position: fixed !important;
-        top: auto !important;
-        left: auto !important;
-        bottom: 80px !important;
-        right: 20px !important;
-        max-width: 300px !important;
-        width: 300px !important;
+        /* top/left left to inline styles so JS centering + drag work */
+        max-width: 320px !important;
+        width: 320px !important;
+        max-height: calc(100vh - 40px) !important;
         background: #1e2024 !important;
         border: 1px solid rgba(255,255,255,0.10) !important;
         border-radius: 12px !important;
@@ -753,6 +971,7 @@
         z-index: 2147483646 !important;
         overflow: hidden !important;
         padding: 0 !important;
+        /* NO display:flex — jQuery UI closes dialogs via display:none inline style */
         font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
     }
     .ui-dialog-titlebar {
@@ -764,32 +983,75 @@
         font-weight: 700 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.07em !important;
-        padding: 8px 12px !important;
+        padding: 0 8px 0 12px !important;
+        height: 36px !important;
+        display: flex !important;
+        align-items: center !important;
+        cursor: grab !important;
+        user-select: none !important;
+        position: relative !important;
+        box-sizing: border-box !important;
+    }
+    .ui-dialog-titlebar:active { cursor: grabbing !important; }
+    .ui-dialog-title {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        display: block !important;
+        position: static !important;
     }
     .ui-dialog-titlebar-close {
-        color: #4e5058 !important;
-        background: transparent !important;
-        border: none !important;
-        top: 50% !important;
-        transform: translateY(-50%) !important;
+        position: relative !important;
+        flex-shrink: 0 !important;
+        width: 22px !important;
+        height: 22px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: rgba(127,29,29,0.4) !important;
+        border: 1px solid rgba(220,38,38,0.3) !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
+        transform: none !important;
+        top: auto !important;
+        right: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
-    .ui-dialog-titlebar-close:hover { color: #dbdee1 !important; }
+    /* Hide jQuery UI's own icon content, show × via ::before */
+    .ui-dialog-titlebar-close > * { display: none !important; }
+    .ui-dialog-titlebar-close::before {
+        content: '×' !important;
+        font-size: 17px !important;
+        line-height: 1 !important;
+        color: #fca5a5 !important;
+        font-family: system-ui, sans-serif !important;
+        font-weight: 400 !important;
+        pointer-events: none !important;
+    }
+    .ui-dialog-titlebar-close:hover { background: rgba(185,28,28,0.65) !important; border-color: rgba(220,38,38,0.6) !important; }
+    .ui-dialog-titlebar-close:hover::before { color: #fff !important; }
     .ui-dialog-content {
         background: #1e2024 !important;
         color: #b5bac1 !important;
         padding: 14px 14px 16px !important;
         font-size: 12px !important;
         line-height: 1.5 !important;
+        max-height: calc(100vh - 120px) !important;
+        overflow-y: auto !important;
+        scrollbar-width: thin !important;
     }
     /* Style anchor/button links inside dialog content as card-buttons */
     .ui-dialog-content a {
         display: block !important;
-        margin: 0 0 8px !important;
-        padding: 10px 12px !important;
+        margin: 0 0 6px !important;
+        padding: 9px 12px !important;
         border-radius: 8px !important;
-        background: rgba(88,101,242,0.14) !important;
-        border: 1px solid rgba(88,101,242,0.30) !important;
-        color: #949cf7 !important;
+        background: #4752c4 !important;
+        border: 1px solid #5865f2 !important;
+        color: #fff !important;
         font-size: 13px !important;
         font-weight: 600 !important;
         text-align: center !important;
@@ -798,24 +1060,9 @@
         transition: background 0.15s ease, border-color 0.15s ease !important;
     }
     .ui-dialog-content a:hover {
-        background: rgba(88,101,242,0.24) !important;
-        border-color: rgba(88,101,242,0.50) !important;
-        color: #b0b8ff !important;
-    }
-    /* Secondary / dismiss links — last anchor in content */
-    .ui-dialog-content a:last-of-type {
-        background: transparent !important;
-        border-color: rgba(255,255,255,0.07) !important;
-        color: #4e5058 !important;
-        font-size: 11px !important;
-        font-weight: 500 !important;
-        padding: 6px 12px !important;
-        margin-bottom: 0 !important;
-    }
-    .ui-dialog-content a:last-of-type:hover {
-        background: rgba(255,255,255,0.04) !important;
-        color: #80848e !important;
-        border-color: rgba(255,255,255,0.12) !important;
+        background: #5865f2 !important;
+        border-color: #7983f5 !important;
+        color: #fff !important;
     }
     /* Small descriptive text inside dialog */
     .ui-dialog-content p,
@@ -1019,8 +1266,13 @@
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }
+    #ichc-karma-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: baseline !important;
+        gap: 5px !important;
+    }
     #ichc-userinfo-karma {
-        display: block !important;
         font-size: 11px !important;
         color: #80848e !important;
         font-weight: 400 !important;
@@ -1028,6 +1280,15 @@
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }
+    #ichc-karma-delta {
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        line-height: 1.1 !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }
+    .ichc-karma-delta-up   { color: #3ba55d !important; }
+    .ichc-karma-delta-down { color: #ed4245 !important; }
     #ichc-header-userinfo b { color: #dbdee1 !important; font-weight: 600 !important; }
     #ichc-header-userinfo a { color: #7289da !important; }
     #ichc-primary-actions {
@@ -1924,7 +2185,7 @@
         min-height: 0 !important;
         padding: 0 !important;
     }
-    #cams.ichc-empty-cams > * {
+    #cams.ichc-empty-cams > *:not(.ichc-cam-resume) {
         display: none !important;
     }
     #cams.ichc-empty-cams::before {
@@ -1938,6 +2199,60 @@
         font-size: 14px !important;
         letter-spacing: 0.02em !important;
         text-align: center !important;
+    }
+    /* When lurk is active: override cam grid, show resume button regardless of ichc-empty-cams */
+    #cams.ichc-lurk-active {
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+    }
+    #cams.ichc-lurk-active > *:not(.ichc-cam-resume) {
+        display: none !important;
+    }
+    #cams.ichc-lurk-active::before {
+        display: none !important;
+    }
+    #cams.ichc-lurk-active > .ichc-cam-resume {
+        display: flex !important;
+    }
+    /* Inactivity resume button — hidden until ichc-lurk-active */
+    .ichc-cam-resume {
+        display: none !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 14px !important;
+        padding: 32px 24px !important;
+        border-radius: 12px !important;
+        border: 1px dashed rgba(255,255,255,0.10) !important;
+        background: rgba(26,28,31,0.55) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        text-align: center !important;
+    }
+    .ichc-cam-resume-msg {
+        color: #80848e !important;
+        font-size: 13px !important;
+        line-height: 1.4 !important;
+    }
+    .ichc-cam-resume-btn {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        padding: 8px 22px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: rgba(40,42,48,0.9) !important;
+        color: #c8ccd2 !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+        transition: background 0.15s, border-color 0.15s, color 0.15s !important;
+    }
+    .ichc-cam-resume-btn:hover {
+        background: rgba(55,58,65,0.95) !important;
+        border-color: rgba(255,255,255,0.24) !important;
+        color: #fff !important;
     }
     #cams > * {
         width: 100% !important;
@@ -2058,9 +2373,42 @@
         white-space: nowrap !important;
         pointer-events: none !important;
         line-height: 1 !important;
+        opacity: 0 !important;
+        transition: opacity 0.15s ease !important;
     }
     .ichc-cam-timer:empty {
         display: none !important;
+    }
+    #cams .rounded_square:hover .ichc-cam-timer {
+        opacity: 1 !important;
+    }
+
+    /* ── Mod shield badge in userlist ── */
+    .ichc-ul-mod-badge {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin-left: auto !important;
+        padding-left: 4px !important;
+        color: #7289da !important;
+        opacity: 0.55 !important;
+        flex-shrink: 0 !important;
+        font-size: 11px !important;
+        pointer-events: none !important;
+    }
+    #ichc-userlist .ichc-ul-user.mod:hover .ichc-ul-mod-badge {
+        opacity: 0.9 !important;
+    }
+
+    /* ── Get Hearted footer link pink glow ── */
+    a[href*="GetHearted"] {
+        color: rgba(255,130,190,0.92) !important;
+        text-shadow: 0 0 10px rgba(255,105,180,0.45) !important;
+        transition: text-shadow 0.2s, color 0.2s !important;
+    }
+    a[href*="GetHearted"]:hover {
+        color: rgba(255,170,220,1) !important;
+        text-shadow: 0 0 14px rgba(255,105,180,0.72), 0 0 28px rgba(255,80,170,0.315) !important;
     }
     #cams .rounded_square:hover .ichc-card-tools,
     #cams .rounded_square:focus-within .ichc-card-tools,
@@ -2252,7 +2600,7 @@
     }
     #txt {
         background: #18191c !important;
-        padding: 8px 0 8px 6px !important;
+        padding: 4px 6px 4px 0 !important;
         font-size: 13px !important;
         position: relative !important;
         z-index: 1 !important;
@@ -2323,7 +2671,7 @@
         display: flex !important;
         flex-direction: column !important;
         align-items: stretch !important;
-        gap: 5px !important;
+        gap: 4px !important;
         padding: 0 2px 8px 0 !important;
         border-bottom: 1px solid rgba(255,255,255,0.07) !important;
         margin-bottom: 4px !important;
@@ -2331,16 +2679,7 @@
     #ichc-userlist .ichc-ul-title-row {
         display: flex !important;
         align-items: center !important;
-        justify-content: space-between !important;
         gap: 4px !important;
-    }
-    #ichc-userlist .ichc-ul-title {
-        color: #e3e5e8 !important;
-        font-size: 12px !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.06em !important;
-        text-transform: uppercase !important;
-        flex: 1 1 auto !important;
     }
     /* Shared sizing for all icon buttons in the title row */
     #ichc-userlist .ichc-ul-search-btn,
@@ -2422,14 +2761,14 @@
         width: 100% !important;
         box-sizing: border-box !important;
         border-radius: 4px !important;
-        padding: 2px 6px !important;
+        padding: 0 6px !important;
         background: rgba(26,28,31,0.6) !important;
         border: 1px solid rgba(255,255,255,0.04) !important;
         border-left: 2px solid rgba(255,255,255,0.1) !important;
         cursor: pointer !important;
         color: #c8ccd2 !important;
-        font-size: 12px !important;
-        line-height: 1.2 !important;
+        font-size: 11px !important;
+        line-height: 1.15 !important;
         font-weight: 500 !important;
         letter-spacing: 0 !important;
         text-align: left !important;
@@ -2487,8 +2826,8 @@
     /* Site supporter avatar decoration */
     .ichc-ul-avatar-wrap.ichc-ul-supporter {
         overflow: visible !important;
-        border: 1px solid rgba(255, 130, 190, 0.9) !important;
-        box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.35), 0 0 16px rgba(255, 105, 180, 0.42) !important;
+        border: 1px solid rgba(255, 130, 190, 0.81) !important;
+        box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.315), 0 0 16px rgba(255, 105, 180, 0.378) !important;
         transition: box-shadow 0.2s, border-color 0.2s !important;
         isolation: isolate !important;
     }
@@ -2500,7 +2839,7 @@
         width: 30px !important;
         height: 10px !important;
         border-radius: 999px !important;
-        background: rgba(255, 82, 170, 0.78) !important;
+        background: rgba(255, 82, 170, 0.702) !important;
         filter: blur(6px) !important;
         opacity: 1 !important;
         transform: translateX(-50%) !important;
@@ -2509,11 +2848,11 @@
         z-index: -1 !important;
     }
     .ichc-ul-user:hover .ichc-ul-avatar-wrap.ichc-ul-supporter {
-        border-color: rgba(255, 160, 210, 1) !important;
-        box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.5), 0 0 22px rgba(255, 105, 180, 0.62) !important;
+        border-color: rgba(255, 160, 210, 0.9) !important;
+        box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.45), 0 0 22px rgba(255, 105, 180, 0.558) !important;
     }
     .ichc-ul-user:hover .ichc-ul-avatar-wrap.ichc-ul-supporter::after {
-        background: rgba(255, 72, 176, 0.95) !important;
+        background: rgba(255, 72, 176, 0.855) !important;
         filter: blur(7px) !important;
     }
     /* Sidebar collapsed-state broadcasting avatars */
@@ -2584,14 +2923,16 @@
         flex-shrink: 0 !important;
         align-self: center !important;
         letter-spacing: 0.01em !important;
-        /* Collapsed — border+padding folded inside max-width:0 via border-box */
+        /* Collapsed — no space, no border outline */
         max-width: 0 !important;
+        border-width: 0 !important;
         overflow: hidden !important;
         opacity: 0 !important;
         transition: max-width 0.2s ease, opacity 0.15s ease !important;
     }
     #ichc-userlist .ichc-ul-user:hover .ichc-ul-year-badge {
         max-width: 50px !important;
+        border-width: 1px !important;
         opacity: 1 !important;
     }
     #ichc-userlist .ichc-ul-year-badge:empty {
@@ -2627,12 +2968,13 @@
         color: #c8ccd2 !important;
         border-left-color: rgba(255,255,255,0.18) !important;
     }
-    /* Cammed: muted teal-grey — present without shouting */
+    /* Cammed: box/bg treatment to distinguish broadcasters */
     #ichc-userlist .ichc-ul-user.cammed {
         color: #7eb89a !important;
-        border-color: rgba(80,140,110,0.08) !important;
-        border-left-color: rgba(80,140,110,0.4) !important;
-        background-color: rgba(50,110,80,0.05) !important;
+        border-color: rgba(80,140,110,0.20) !important;
+        border-left-color: rgba(80,140,110,0.55) !important;
+        background-color: rgba(50,110,80,0.12) !important;
+        padding: 4px 6px !important;
         font-weight: 600 !important;
     }
     /* Mod: blurple */
@@ -2648,19 +2990,43 @@
         background: transparent !important;
         opacity: 0.75 !important;
     }
+    /* ── Cams row (top of header) ── */
     #ichc-userlist .ichc-ul-count {
-        display: block !important;
-        margin: 0 0 4px 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 3px !important;
+        margin: 0 !important;
         padding: 0 2px !important;
-        font-size: 9px !important;
         line-height: 1.2 !important;
     }
-    .ichc-ul-count-users { color: #7289da !important; }
-    .ichc-ul-count-cams  { color: #7eb89a !important; }
-    .ichc-ul-count-sep   { color: #4e5058 !important; }
-    /* Inactive/hidden parenthetical text in muted colour */
-    .ichc-ul-count-users,
-    .ichc-ul-count-cams  { white-space: nowrap !important; }
+    /* ── Users row (below cams, shares line with search + 3-dot) ── */
+    #ichc-userlist .ichc-ul-title-row {
+        align-items: baseline !important;
+    }
+    /* Large numbers */
+    .ichc-ul-count-cams {
+        color: #7eb89a !important;
+        font-size: 20px !important;
+        font-weight: 800 !important;
+        line-height: 1 !important;
+        letter-spacing: -0.01em !important;
+    }
+    .ichc-ul-count-users {
+        color: #7289da !important;
+        font-size: 20px !important;
+        font-weight: 800 !important;
+        line-height: 1 !important;
+        letter-spacing: -0.01em !important;
+    }
+    /* Label text beside the numbers */
+    .ichc-ul-count-cam-label,
+    .ichc-ul-count-user-label {
+        font-size: 12px !important;
+        color: #4e5058 !important;
+        white-space: nowrap !important;
+        flex: 1 1 auto !important;
+    }
+    .ichc-ul-count-sep { color: #4e5058 !important; }
     .ichc-ul-sep {
         display: none !important;
     }
@@ -2774,6 +3140,17 @@
         flex-shrink: 0 !important;
         width: 16px !important;
         color: #7289da !important;
+    }
+    .ichc-color-swatch {
+        display: inline-block !important;
+        width: 13px !important;
+        height: 13px !important;
+        border-radius: 50% !important;
+        border: 1px solid rgba(255,255,255,0.22) !important;
+        background: #dbeafe !important;
+        flex-shrink: 0 !important;
+        margin-left: auto !important;
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.3) !important;
     }
 
     /* ── Reload cams header button ── */
@@ -3212,11 +3589,16 @@
         font-size: 11px !important;
         transition: background 0.15s !important;
         padding: 6px 0 0 !important;
-        overflow: visible !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        scrollbar-width: none !important;
         z-index: 8 !important;
     }
-    /* Badge at the very top — large numbers filling the strip */
+    /* Badge: hidden when userlist is visible, shown when collapsed */
     #ichc-ul-toggle-badge {
+        display: none !important;
+    }
+    #ichc-chat-shell.ichc-ul-collapsed #ichc-ul-toggle-badge {
         display: flex !important;
         order: -1 !important;
         flex-direction: column !important;
@@ -3226,6 +3608,11 @@
         padding: 4px 0 8px !important;
         border-bottom: 1px solid rgba(255,255,255,0.06) !important;
         line-height: 1 !important;
+        position: sticky !important;
+        top: 0 !important;
+        background: #18191c !important;
+        z-index: 1 !important;
+        flex-shrink: 0 !important;
     }
     #ichc-ul-toggle-badge svg {
         width: 18px !important;
@@ -3470,9 +3857,9 @@
     /* Userlist resize handle — left edge of #ichc-userlist */
     #ichc-userlist-resizer {
         position: absolute !important;
-        left: 0 !important;
+        left: -2px !important;
         top: 0 !important;
-        width: 6px !important;
+        width: 4px !important;
         height: 100% !important;
         cursor: col-resize !important;
         z-index: 10 !important;
@@ -3942,6 +4329,50 @@
     }
     html.ichc-light-theme .ichc-emote-item:hover,
     html.ichc-light-theme .ichc-emoji-item:hover { background: #c4c8ce !important; }
+
+    /* ── Emoji / meme tab-complete popup ── */
+    .ichc-tc-popup {
+        position: fixed !important;
+        z-index: 2147483646 !important;
+        background: #1e2024 !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.55) !important;
+        overflow: hidden !important;
+        overflow-y: auto !important;
+        max-height: 260px !important;
+        min-width: 180px !important;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+        font-size: 13px !important;
+        pointer-events: auto !important;
+    }
+    .ichc-tc-item {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 5px 10px !important;
+        cursor: pointer !important;
+        color: #dbdee1 !important;
+        user-select: none !important;
+    }
+    .ichc-tc-item:hover,
+    .ichc-tc-item.ichc-tc-sel {
+        background: rgba(88,101,242,0.22) !important;
+    }
+    .ichc-tc-char {
+        font-size: 17px !important;
+        line-height: 1 !important;
+        min-width: 22px !important;
+        text-align: center !important;
+        flex-shrink: 0 !important;
+    }
+    .ichc-tc-label {
+        color: #b5bac1 !important;
+        font-size: 12px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
 
     /* Overlays / modals */
     html.ichc-light-theme .ichc-overlay-backdrop { background: rgba(0,0,0,0.4) !important; }
