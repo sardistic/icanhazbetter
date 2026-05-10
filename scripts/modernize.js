@@ -5289,7 +5289,6 @@
             growButton.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
             growButton.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); _adjustCardSpan(card, +1); });
         }
-
         card.appendChild(toggleButton);
         card.appendChild(tools);
         card.appendChild(timerEl);
