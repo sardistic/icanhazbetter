@@ -859,6 +859,12 @@
         return m ? m[1].trim() : '';
     }
 
+    function _renderEventRow(row, label, names) {
+        const count = document.createElement('b');
+        count.textContent = names.length;
+        row.replaceChildren(count, document.createTextNode(' ' + label + ': ' + names.join(', ')));
+    }
+
     function _addToEventCollector(type, nick, refRow) {
         refRow.style.setProperty('display', 'none', 'important');
         if (type === 'join') {
@@ -868,7 +874,7 @@
                 chatEventCollector.joinRow.className = 'ichc-event-collector ichc-event-join';
                 refRow.after(chatEventCollector.joinRow);
             }
-            chatEventCollector.joinRow.textContent = 'Joined: ' + chatEventCollector.joinNames.join(', ');
+            _renderEventRow(chatEventCollector.joinRow, 'Joined', chatEventCollector.joinNames);
         } else {
             chatEventCollector.leaveNames.push(nick);
             if (!chatEventCollector.leaveRow?.isConnected) {
@@ -876,7 +882,7 @@
                 chatEventCollector.leaveRow.className = 'ichc-event-collector ichc-event-leave';
                 (chatEventCollector.joinRow?.isConnected ? chatEventCollector.joinRow : refRow).after(chatEventCollector.leaveRow);
             }
-            chatEventCollector.leaveRow.textContent = 'Left: ' + chatEventCollector.leaveNames.join(', ');
+            _renderEventRow(chatEventCollector.leaveRow, 'Left', chatEventCollector.leaveNames);
         }
         chatScrollState.lastMessageAt = Date.now();
         if (chatScrollState.auto) { scheduleChatFollow(false); }
@@ -1234,7 +1240,8 @@
                                  node.classList.contains('ichc-nick-sep') ||
                                  node.classList.contains('ichc-emote-wrap') ||
                                  node.classList.contains('ichc-emote-disabled-label') ||
-                                 !!node.closest?.('.ichc-nick-block'));
+                                 !!node.closest?.('.ichc-nick-block') ||
+                                 !!node.closest?.('.ichc-event-collector'));
                             if (!isInserted) {
                                 const evType = _classifyEventRow(node);
                                 if (evType === 'join' || evType === 'leave') {

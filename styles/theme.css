@@ -250,8 +250,8 @@
     #txt > p.ichc-bcast-live,
     #txt > ul.ichc-bcast-live,
     #txt .line.ichc-bcast-live {
-        color: #6fcf87 !important;
-        background: rgba(80,200,100,0.10) !important;
+        color: #47bccc !important;
+        background: rgba(50,180,200,0.10) !important;
     }
     #txt .ichc-bcast-live td,
     #txt .ichc-bcast-live font,
@@ -259,15 +259,15 @@
     #txt .ichc-bcast-live div,
     #txt .ichc-bcast-live p,
     #txt .ichc-bcast-live li {
-        color: #6fcf87 !important;
+        color: #47bccc !important;
     }
     #txt > table.ichc-bcast-stop,
     #txt > div.ichc-bcast-stop,
     #txt > p.ichc-bcast-stop,
     #txt > ul.ichc-bcast-stop,
     #txt .line.ichc-bcast-stop {
-        color: #e07070 !important;
-        background: rgba(200,80,80,0.10) !important;
+        color: #72767d !important;
+        background: rgba(100,104,110,0.08) !important;
     }
     #txt .ichc-bcast-stop td,
     #txt .ichc-bcast-stop font,
@@ -275,7 +275,7 @@
     #txt .ichc-bcast-stop div,
     #txt .ichc-bcast-stop p,
     #txt .ichc-bcast-stop li {
-        color: #e07070 !important;
+        color: #72767d !important;
     }
     /* ── "Cammed down for" golden achievement row ── */
     /* filter is not !important-locked on these rows, so the animation can drive it */
@@ -375,8 +375,8 @@
         white-space: normal !important;
         overflow: visible !important;
     }
-    #txt .ichc-event-join  { color: rgba(80,210,120,0.85)  !important; }
-    #txt .ichc-event-leave { color: rgba(200,100,90,0.80)  !important; }
+    #txt .ichc-event-join  { color: rgba(110,170,240,0.90)  !important; }
+    #txt .ichc-event-leave { color: rgba(180,140,160,0.88) !important; }
 
     /* Chat timestamps: right-aligned, dimmed — like PM */
     #txt td.ichc-ts {
@@ -459,7 +459,7 @@
     #txt [data-ichc-kt="8"] { border-right: 4px solid rgba(96,156,160,1.00) !important; box-shadow: inset -4px 0 12px rgba(94,149,154,0.28) !important; }
 
     /* ── Chat row cam status indicator (left border) ── */
-    #txt .ichc-chat-oncam  { border-left: 2px solid rgba(40,200,90,0.75) !important; }
+    #txt .ichc-chat-oncam  { border-left: 2px solid rgba(50,180,200,0.75) !important; }
     #txt .ichc-chat-camoff { border-left: 2px solid rgba(200,60,60,0.65) !important; }
 
     /* ── Consecutive same-user message grouping ── */
@@ -887,6 +887,10 @@
     #btn.chat_send_btn:hover { background: #4752c4 !important; }
     .room_command_bar,
     .chat_button { display: none !important; }
+    /* ID-level overrides beat any site CSS that uses ID + !important on these */
+    #scrollControl, #chatFontSize, #Div4, #showNotifications, #toggleChatSound,
+    #pickColor, #toggleEmoticons, #toggleImageViewing, #togglePMs, #showHelp,
+    #togglePMViewing { display: none !important; }
 
     /* ── User list ── */
     #activeUserList { display: none !important; }
@@ -1102,7 +1106,7 @@
 
     /* ── Generic buttons ── */
     input[type="button"],
-    button:not(.cam-button):not(#btn) {
+    button:not(.cam-button):not(#btn):not(.ichc-cam-resume-btn) {
         background: #25272b !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
         color: #dbdee1 !important;
@@ -1111,7 +1115,7 @@
         cursor: pointer !important;
     }
     input[type="button"]:hover,
-    button:not(.cam-button):not(#btn):hover { background: #2d2f34 !important; }
+    button:not(.cam-button):not(#btn):not(.ichc-cam-resume-btn):hover { background: #2d2f34 !important; }
 
     /* ── Scrollbars ── */
     ::-webkit-scrollbar { width: 5px !important; height: 5px !important; }
@@ -1346,9 +1350,9 @@
     }
     /* ── Go Live ── */
     #camControl a, #camControl div a, #ichc-primary-actions > a.ichc-broadcast-btn {
-        background: rgba(35,165,89,0.15) !important;
-        color: #3ba55c !important;
-        border: 1px solid rgba(59,165,92,0.35) !important;
+        background: rgba(50,180,200,0.15) !important;
+        color: #47bccc !important;
+        border: 1px solid rgba(50,180,200,0.35) !important;
         box-shadow: none !important;
     }
     #ichc-primary-actions > a.ichc-broadcast-btn::before,
@@ -1358,13 +1362,19 @@
         flex-shrink: 0 !important;
         width: 1.4em !important;
         height: 1.4em !important;
+        color: #3ba55c !important;
+        transition: filter 0.2s !important;
     }
     #camControl a:hover, #camControl div a:hover,
     #ichc-primary-actions > a.ichc-broadcast-btn:hover {
-        background: rgba(35,165,89,0.24) !important;
-        border-color: rgba(59,165,92,0.55) !important;
-        box-shadow: 0 0 10px rgba(35,165,89,0.16) !important;
+        background: rgba(50,180,200,0.24) !important;
+        border-color: rgba(50,180,200,0.55) !important;
+        box-shadow: 0 0 10px rgba(50,180,200,0.16) !important;
         transform: translateY(-1px) !important;
+    }
+    #ichc-primary-actions > a.ichc-broadcast-btn:hover .ichc-btn-icon-lg svg,
+    #camControl a:hover svg:first-child {
+        filter: drop-shadow(0 0 5px rgba(59,165,92,0.9)) drop-shadow(0 0 2px rgba(59,165,92,0.6)) !important;
     }
     @keyframes ichc-golive-glow {
         0%, 100% { box-shadow: 0 0 8px rgba(237,66,69,0.5), 0 0 0 1px rgba(237,66,69,0.3) !important; filter: brightness(1); }
@@ -2241,17 +2251,17 @@
         appearance: none !important;
         padding: 8px 22px !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
-        background: rgba(40,42,48,0.9) !important;
-        color: #c8ccd2 !important;
+        border: 1px solid rgba(254,202,202,0.35) !important;
+        background: #dc2626 !important;
+        color: #fff !important;
         font-size: 13px !important;
         font-weight: 600 !important;
         cursor: pointer !important;
         transition: background 0.15s, border-color 0.15s, color 0.15s !important;
     }
     .ichc-cam-resume-btn:hover {
-        background: rgba(55,58,65,0.95) !important;
-        border-color: rgba(255,255,255,0.24) !important;
+        background: #b91c1c !important;
+        border-color: rgba(254,202,202,0.55) !important;
         color: #fff !important;
     }
     #cams > * {
@@ -2772,12 +2782,25 @@
         font-weight: 500 !important;
         letter-spacing: 0 !important;
         text-align: left !important;
+        position: relative !important;
         user-select: none !important;
         text-decoration: none !important;
         position: relative !important;
         z-index: 1 !important;
         pointer-events: auto !important;
         transition: background 0.1s, border-color 0.1s !important;
+    }
+    #ichc-userlist .ichc-ul-user::before {
+        content: '' !important;
+        position: absolute !important;
+        inset: 0 !important;
+        background-image: var(--ichc-bg-img, none) !important;
+        background-size: cover !important;
+        background-position: center top !important;
+        opacity: 0.10 !important;
+        pointer-events: none !important;
+        z-index: -1 !important;
+        border-radius: inherit !important;
     }
     #ichc-userlist .ichc-ul-user:hover {
         background: rgba(40,42,48,0.9) !important;
@@ -2970,10 +2993,10 @@
     }
     /* Cammed: box/bg treatment to distinguish broadcasters */
     #ichc-userlist .ichc-ul-user.cammed {
-        color: #7eb89a !important;
-        border-color: rgba(80,140,110,0.20) !important;
-        border-left-color: rgba(80,140,110,0.55) !important;
-        background-color: rgba(50,110,80,0.12) !important;
+        color: #47bccc !important;
+        border-color: rgba(50,180,200,0.20) !important;
+        border-left-color: rgba(50,180,200,0.55) !important;
+        background-color: rgba(50,180,200,0.10) !important;
         padding: 4px 6px !important;
         font-weight: 600 !important;
     }
@@ -3005,7 +3028,7 @@
     }
     /* Large numbers */
     .ichc-ul-count-cams {
-        color: #7eb89a !important;
+        color: #47bccc !important;
         font-size: 20px !important;
         font-weight: 800 !important;
         line-height: 1 !important;
@@ -3048,8 +3071,8 @@
     ── */
     #ichc-input-row {
         display: grid !important;
-        grid-template-columns: 1fr 40px auto !important;
-        /* col1=input(flex), col2=gif(40px), col3=send(auto) */
+        grid-template-columns: 1fr 40px !important;
+        /* col1=input(flex), col2=gif(40px); send button hidden */
         align-items: center !important;
         column-gap: 4px !important;
         padding: 6px 4px !important;
@@ -3079,12 +3102,8 @@
         z-index: 2 !important;
         position: relative !important;
     }
-    #ichc-input-row #btn.chat_send_btn {
-        grid-column: 3 !important;
-        grid-row: 1 !important;
-        margin: 0 !important;
-        border-radius: 6px !important;
-        padding: 8px 14px !important;
+    #ichc-input-row #btn {
+        display: none !important;
     }
     /* ── Hidden chat buttons ── */
     .ichc-cmd-hidden { display: none !important; }
@@ -3629,7 +3648,7 @@
     }
     /* Cam count: muted teal */
     #ichc-ul-badge-cams {
-        color: #7eb89a !important;
+        color: #47bccc !important;
         font-size: 15px !important;
         font-weight: 800 !important;
         display: block !important;
@@ -3791,7 +3810,11 @@
     }
     html.ichc-light-theme .ichc-pm-avatar-badge { border-color: #dde0e4 !important; }
 
-    /* Theme button starts the bottom cluster — PM + cog follow right below */
+    /* PM avatars anchor the bottom cluster — pushes pm-avatars + theme + PM + cog
+       to the bottom of the sidebar strip so they sit at the same level as the input row */
+    #ichc-ul-toggle-btn #ichc-pm-avatars {
+        margin-top: auto !important;
+    }
     #ichc-ul-toggle-btn #ichc-theme-toggle-btn {
         margin-top: 0 !important;
     }
@@ -4365,6 +4388,14 @@
         min-width: 22px !important;
         text-align: center !important;
         flex-shrink: 0 !important;
+    }
+    .ichc-tc-char img {
+        width: 28px !important;
+        height: 28px !important;
+        object-fit: cover !important;
+        border-radius: 4px !important;
+        display: block !important;
+        vertical-align: middle !important;
     }
     .ichc-tc-label {
         color: #b5bac1 !important;

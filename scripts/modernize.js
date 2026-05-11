@@ -74,6 +74,8 @@
     const profileKarmaCache = new Map();   // username_lower → karma number | null
     const profileYearCache  = new Map();   // username_lower → highest trophy year | null
     const profileGuestCache = new Map();   // username_lower → true (nick/guest) | false | null (unknown)
+    const profileBgCache    = new Map();   // username_lower → bg image URL string | null
+    const profileJoinTsCache = new Map(); // username_lower → join timestamp ms | null
     let _gifDataCache = null;              // shared with tab-complete: { gifs: [{code,src,full}] }
     function _profileCacheSet(key, value) {
         if (profileImageCache.size >= 200) {
@@ -136,6 +138,10 @@
     const _YB_TTL         = 3 * 24 * 3600e3;    // 3-day TTL so corrections pick up sooner
     const _GS_LS          = 'ichc_gs1_';        // guest/nick status localStorage key prefix
     const _GS_TTL         = 24 * 3600e3;        // 1 day — guests may register
+    const _BG_LS          = 'ichc_bg1_';        // profile background image localStorage key prefix
+    const _BG_TTL         = 7 * 24 * 3600e3;    // 7 days
+    const _JT_LS          = 'ichc_jt1_';        // join timestamp localStorage key prefix
+    const _JT_TTL         = 7 * 24 * 3600e3;    // 7 days
     let   _avActive       = 0;
     const _AV_MAX         = 1;
     const _AV_START_GAP   = 900;
@@ -1595,6 +1601,24 @@
                 }
             } catch (_) {}
         }
+        if (!profileBgCache.has(key)) {
+            try {
+                const bs = localStorage.getItem(_BG_LS + key);
+                if (bs) {
+                    const { bgUrl, ts } = JSON.parse(bs);
+                    if ((Date.now() - ts) < _BG_TTL) { profileBgCache.set(key, bgUrl ?? null); }
+                }
+            } catch (_) {}
+        }
+        if (!profileJoinTsCache.has(key)) {
+            try {
+                const js = localStorage.getItem(_JT_LS + key);
+                if (js) {
+                    const { joinTs, ts } = JSON.parse(js);
+                    if ((Date.now() - ts) < _JT_TTL) { profileJoinTsCache.set(key, joinTs ?? null); }
+                }
+            } catch (_) {}
+        }
 
         const pending = _scheduleAvatarFetch(() => _doFetchProfileImage(key))
             .finally(() => profileImagePending.delete(key));
@@ -1779,6 +1803,37 @@
         return maxYear > 0 ? maxYear : null;
     }
 
+    const _JT_MONTH_IDX = { january:0, february:1, march:2, april:3, may:4, june:5,
+                             july:6, august:7, september:8, october:9, november:10, december:11 };
+    const _JT_MONTHS_RE = 'january|february|march|april|may|june|july|august|september|october|november|december';
+    function _extractJoinTimestampFromDoc(doc) {
+        const bodyText = doc.body?.textContent || '';
+        const currentYear = new Date().getFullYear();
+        // Try month + year for maximum precision: "since: January 2012"
+        const monthYearRe = new RegExp(`since[^0-9]{0,60}(${_JT_MONTHS_RE})\\.?\\s+(20\\d{2}|199\\d)`, 'i');
+        const mm = bodyText.match(monthYearRe);
+        if (mm) {
+            const mo = _JT_MONTH_IDX[mm[1].toLowerCase()];
+            const yr = parseInt(mm[2], 10);
+            if (yr >= 2005 && yr <= currentYear && mo !== undefined) { return Date.UTC(yr, mo, 1); }
+        }
+        // Fall back to year-only patterns
+        const yearPatterns = [
+            /member\s+since[^0-9]{0,60}(20\d{2}|199\d)/i,
+            /joined[^0-9]{0,60}(20\d{2}|199\d)/i,
+            /registered[^0-9]{0,60}(20\d{2}|199\d)/i,
+            /since[^0-9]{0,60}(20\d{2}|199\d)/i,
+        ];
+        for (const re of yearPatterns) {
+            const ym = bodyText.match(re);
+            if (ym) {
+                const yr = parseInt(ym[ym.length - 1], 10);
+                if (yr >= 2005 && yr <= currentYear) { return Date.UTC(yr, 0, 1); }
+            }
+        }
+        return null;
+    }
+
     function _extractIsGuestFromDoc(doc) {
         const t = doc.body?.textContent || '';
         return /using a nick|finger command|active chatter.*nick|using a nick\. You can use/i.test(t);
@@ -1807,6 +1862,17 @@
                 profileGuestCache.set(key, isGuest);
                 _trimMap(profileGuestCache, 300);
                 try { localStorage.setItem(_GS_LS + key, JSON.stringify({ isGuest, ts: Date.now() })); } catch (_) {}
+
+                const bgInput = doc.getElementById('ctl00_ContentPlaceHolder1_backImgUrl');
+                const bgUrl = bgInput?.value?.trim() || null;
+                profileBgCache.set(key, bgUrl);
+                _trimMap(profileBgCache, 300);
+                try { localStorage.setItem(_BG_LS + key, JSON.stringify({ bgUrl, ts: Date.now() })); } catch (_) {}
+
+                const joinTs = _extractJoinTimestampFromDoc(doc);
+                profileJoinTsCache.set(key, joinTs);
+                _trimMap(profileJoinTsCache, 300);
+                try { localStorage.setItem(_JT_LS + key, JSON.stringify({ joinTs, ts: Date.now() })); } catch (_) {}
 
                 const url = _extractAvatarFromDoc(doc, pageUrl);
                 if (url) {
@@ -2230,8 +2296,8 @@
             const mExact = [], mFuzzy = [];
             for (const g of gifs) {
                 const name = g.code.replace(/^:/, '').toLowerCase();
-                if (name.startsWith(q)) { mExact.push({ char: '🎬', label: name, insert: g.code }); }
-                else if (name.includes(q)) { mFuzzy.push({ char: '🎬', label: name, insert: g.code }); }
+                if (name.startsWith(q)) { mExact.push({ label: name, insert: g.code, src: 'https:' + g.src }); }
+                else if (name.includes(q)) { mFuzzy.push({ label: name, insert: g.code, src: 'https:' + g.src }); }
             }
             out.push(...mExact.slice(0, 6), ...mFuzzy.slice(0, Math.max(0, 6 - mExact.length)));
             return out;
@@ -2248,7 +2314,14 @@
                 item.className = 'ichc-tc-item' + (i === sel ? ' ichc-tc-sel' : '');
                 const charEl = document.createElement('span');
                 charEl.className = 'ichc-tc-char';
-                charEl.textContent = h.char;
+                if (h.src) {
+                    const img = document.createElement('img');
+                    img.src = h.src;
+                    img.alt = h.label;
+                    charEl.appendChild(img);
+                } else {
+                    charEl.textContent = h.char;
+                }
                 const labelEl = document.createElement('span');
                 labelEl.className = 'ichc-tc-label';
                 labelEl.textContent = h.label;
@@ -2288,14 +2361,24 @@
             _render();
         });
 
+        // Capture-phase doc listener for Tab — fires before any bubble-phase listener
+        // on the input (including the site's own username tab-complete), so stopImmediatePropagation
+        // prevents the site's handler from running when our popup is open.
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Tab' || e.target !== input || popup.hidden) { return; }
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (e.shiftKey) {
+                sel = (sel - 1 + hits.length) % hits.length;
+                _render();
+            } else {
+                _pick(sel);
+            }
+        }, true);
+
         input.addEventListener('keydown', e => {
             if (popup.hidden) { return; }
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                e.stopPropagation();
-                sel = e.shiftKey ? (sel - 1 + hits.length) % hits.length : (sel + 1) % hits.length;
-                _render();
-            } else if (e.key === 'ArrowDown') {
+            if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 sel = (sel + 1) % hits.length;
                 _render();
@@ -3188,6 +3271,20 @@
         window.setTimeout(() => requestCamRelayout(40), 5000);
     }
 
+    const _STRIP_ALLOWED_IDS = new Set([
+        'ichc-ul-toggle-badge', 'ichc-pm-avatars', 'ichc-theme-toggle-btn',
+        'ichc-pm-toggle-btn', 'ichc-cog-wrapper', 'ichc-ul-sidebar-avatars',
+    ]);
+    const _STRIP_ALLOWED_CLASSES = new Set(['ichc-ul-toggle-chevron']);
+
+    function _purgeStrayStripChildren(strip) {
+        [...strip.children].forEach(child => {
+            if (_STRIP_ALLOWED_IDS.has(child.id)) { return; }
+            if ([...child.classList].some(c => _STRIP_ALLOWED_CLASSES.has(c))) { return; }
+            child.remove();
+        });
+    }
+
     function transformCommandBar() {
         // Hide command bar native buttons (do this every call so it catches late-loaded bars)
         const bar = document.getElementById('room_command_bar');
@@ -3244,6 +3341,7 @@
                     const tb = document.getElementById('ichc-theme-toggle-btn');
                     sidebarStrip.insertBefore(pmAvStrip, tb || sidebarStrip.firstChild);
                 }
+                _purgeStrayStripChildren(sidebarStrip);
             }
             // gif lives directly in inputRow, between txtMsg and sendBtn
             const gifWrap = document.getElementById('ichc-gif-wrapper');
@@ -3653,6 +3751,7 @@
                 sidebarStrip.insertBefore(pmAvatarStrip, themeBtn);
             }
             initPmAvatarObserver();
+            _purgeStrayStripChildren(sidebarStrip);
         } else {
             // Strip not built yet — retry after buildUserList creates it.
             [200, 600, 1400].forEach(d => window.setTimeout(transformCommandBar, d));
@@ -4139,9 +4238,19 @@
                 const ka = a.karma ?? -Infinity, kb = b.karma ?? -Infinity;
                 if (ka !== kb) { return kb - ka; }
             } else if (sm === 'age') {
-                const ya = profileYearCache.get(a.name.trim().toLowerCase()) ?? -1;
-                const yb = profileYearCache.get(b.name.trim().toLowerCase()) ?? -1;
-                if (ya !== yb) { return yb - ya; }
+                const nka = a.name.trim().toLowerCase(), nkb = b.name.trim().toLowerCase();
+                const _toTs = nk => {
+                    const jt = profileJoinTsCache.get(nk);
+                    if (jt != null) { return jt; }
+                    const yr = profileYearCache.get(nk);
+                    return (yr > 0) ? Date.UTC(new Date().getFullYear() - yr, 0, 1) : null;
+                };
+                const ta = _toTs(nka), tb = _toTs(nkb);
+                if (ta !== tb) {
+                    if (ta == null) { return 1; }
+                    if (tb == null) { return -1; }
+                    return ta - tb;  // smaller (earlier) timestamp = older member = first
+                }
             }
             return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
         });
@@ -4213,6 +4322,11 @@
                 chevronBtn.innerHTML = _ulCollapsed ? ICONS.chevronLeft : ICONS.chevronRight;
             });
             sidebarDiv.insertBefore(chevronBtn, sidebarDiv.firstChild);
+
+            // Guard: remove any foreign elements the site injects into the strip.
+            const _stripGuard = new MutationObserver(() => _purgeStrayStripChildren(sidebarDiv));
+            _stripGuard.observe(sidebarDiv, { childList: true });
+
             // Sidebar strip just created — give transformCommandBar a chance to place
             // PM/cog/gif buttons into it (they may already exist but not placed yet).
             window.setTimeout(transformCommandBar, 0);
@@ -4386,6 +4500,10 @@
             // If URL is already resolved (localStorage hit on this session), show immediately
             const cachedUrl = profileImageCache.get(imgKey); // undefined = not yet fetched
             if (cachedUrl) { _loadAvatarSrc(avatarImg, cachedUrl, imgKey); }
+            // Apply profile background image if already cached
+            const cachedBg = profileBgCache.get(imgKey);
+            if (cachedBg) { span.style.setProperty('--ichc-bg-img', `url("${cachedBg}")`); }
+
             // Tag the row so the observer can trigger the fetch when it scrolls into view
             span.dataset.ichcAvKey = imgKey;
             const avatarWrap = document.createElement('span');
@@ -4554,6 +4672,8 @@
             if (row) {
                 if (isGuest != null) { row.classList.toggle('ichc-ul-guest', isGuest); }
                 _setKarmaTierClass(row, k ?? null);
+                const bg = profileBgCache.get(key);
+                if (bg) { row.style.setProperty('--ichc-bg-img', `url("${bg}")`); }
             }
             _updateChatBadgesForUser(key);
             _updateCamBadgesForUser(key);
