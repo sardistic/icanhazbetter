@@ -866,6 +866,7 @@
     }
 
     function _addToEventCollector(type, nick, refRow) {
+        refRow.dataset.ichcEventProcessed = '1';
         refRow.style.setProperty('display', 'none', 'important');
         if (type === 'join') {
             chatEventCollector.joinNames.push(nick);
@@ -1240,6 +1241,7 @@
                                  node.classList.contains('ichc-nick-sep') ||
                                  node.classList.contains('ichc-emote-wrap') ||
                                  node.classList.contains('ichc-emote-disabled-label') ||
+                                 !!node.dataset?.ichcEventProcessed ||
                                  !!node.closest?.('.ichc-nick-block') ||
                                  !!node.closest?.('.ichc-event-collector'));
                             if (!isInserted) {
