@@ -2776,19 +2776,9 @@
 
     function getPersistHiddenCardName(card) {
         const name = getCardName(card).trim();
-        if (!name) { return ''; }
-
+        if (!name || looksLikePlaceholderName(name)) { return ''; }
         const blocked = loadBlockedUsers();
-        if (!blocked.has(name.toLowerCase())) { return ''; }
-
-        const container = card.querySelector('.videocontainer');
-        if (!container) { return ''; }
-
-        const hiddenInline = container.style.getPropertyValue('display') === 'none';
-        const hiddenComputed = window.getComputedStyle(container).display === 'none';
-        if (!hiddenInline && !hiddenComputed) { return ''; }
-
-        return name;
+        return blocked.has(name.toLowerCase()) ? name : '';
     }
 
     function revealBlockedUser(username, options = {}) {
@@ -5368,18 +5358,17 @@
                     }
                 }
 
+                const vc = card.querySelector('.videocontainer');
+                if (action === 'disable' || action === 'stop') {
+                    vc?.style?.setProperty('display', 'none', 'important');
+                } else if (action === 'start' || action === 'enable') {
+                    vc?.style?.removeProperty?.('display');
+                }
                 const nativeToggle = getNativeCamToggleControl(card);
                 const nativeLabel = (getNativeCamActionLabel(nativeToggle) || '').toLowerCase();
                 const actionTarget = nativeToggle?.closest('a, button, [onclick], [href]') || nativeToggle;
                 if (actionTarget && nativeLabel && nativeLabel === action) {
                     invokeNativeElementAction(actionTarget);
-                } else {
-                    const vc = card.querySelector('.videocontainer');
-                    if (action === 'disable' || action === 'stop') {
-                        vc?.style?.setProperty('display', 'none', 'important');
-                    } else if (action === 'start' || action === 'enable') {
-                        vc?.style?.removeProperty?.('display');
-                    }
                 }
                 buildHiddenCamManager();
                 buildUserList();
