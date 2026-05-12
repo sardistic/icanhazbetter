@@ -10,7 +10,7 @@ A browser extension that upgrades [icanhazchat.com](https://www.icanhazchat.com)
 
 **Theme**
 - Full dark UI across chat, cams, menus, and overlays — light theme also available via the sun icon
-- Modern avatar initials with hash-based per-user colors and real profile image fallback
+- Real profile images for avatars, falling back to hash-colored initials when no profile picture is set
 - Site supporter hearts — users with a supporter badge get a subtle pink glow on their avatar
 
 **User list**
