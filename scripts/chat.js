@@ -493,7 +493,23 @@
         // Also embed image URLs that weren't wrapped in <a> tags by the site
         _embedPlainImageUrls(root);
 
-        reGroupChatRows(log);
+        // Full-log call (initial paint): run immediately.
+        // Per-row call (new message): defer to next frame so a burst of messages
+        // only triggers one full rescan instead of one per message.
+        if (root === log) {
+            reGroupChatRows(log);
+        } else {
+            _scheduleReGroup();
+        }
+    }
+
+    let _reGroupRAF = null;
+    function _scheduleReGroup() {
+        if (_reGroupRAF !== null) { return; }
+        _reGroupRAF = requestAnimationFrame(() => {
+            _reGroupRAF = null;
+            reGroupChatRows(getChatLog());
+        });
     }
 
     function reGroupChatRows(log) {
