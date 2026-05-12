@@ -8,14 +8,16 @@ A browser extension that upgrades [icanhazchat.com](https://www.icanhazchat.com)
 
 ## Features
 
-**Dark theme**
-- Full dark UI across chat, cams, menus, and overlays
+**Theme**
+- Full dark UI across chat, cams, menus, and overlays — light theme also available via the sun icon
 - Modern avatar initials with hash-based per-user colors and real profile image fallback
 - Site supporter hearts — users with a supporter badge get a subtle pink glow on their avatar
 
 **User list**
 - Rebuilt user list with compact rows, online/cammed/idle/mod indicators
 - Filter bar that searches both active users and the hidden-cams section simultaneously
+- Sort by name, age (absolute join date), or status
+- Year badges and karma tier indicators on user rows
 - Sidebar strip shows broadcaster avatars with name tooltips when the list is collapsed
 - Collapse/expand toggle built into the sidebar strip
 
@@ -23,12 +25,14 @@ A browser extension that upgrades [icanhazchat.com](https://www.icanhazchat.com)
 - Hide individual cams — they stay hidden across page refreshes (saved to `localStorage`)
 - Hidden cams listed in a collapsible section at the bottom of the user list
 - Cam refresh throttled to prevent disruptive random reloads
+- Broadcast timer shown on active cam cards
 
 **Chat**
-- Image links in chat auto-embed as inline previews
-- Join/leave timestamps hidden for cleaner scrollback
-- GIF picker with search, plus an emoji tab with ~170 standard emojis
-- Private message panel
+- Consecutive join and leave events are combined into a single counted row (e.g. _3 Joined: alice, bob, charlie_) and reset on the next regular message
+- Image links auto-embed as inline previews; non-image URLs get a compact Open Graph card
+- Relative timestamps on messages (e.g. _2m ago_)
+- GIF/meme picker with search, plus an emoji tab; type `:name` in the chat box for inline tab-complete
+- Private message panel with unread badge, resize/drag, and per-conversation history
 
 ---
 
