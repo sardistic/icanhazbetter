@@ -3479,19 +3479,18 @@
 
     /* ── User list hidden cam entries ── */
     #ichc-userlist .ichc-ul-hidden-live {
-        background: rgba(80,30,30,0.18) !important;
-        border-color: rgba(180,80,80,0.12) !important;
-        border-left-color: rgba(180,80,80,0.45) !important;
-        color: #c49898 !important;
+        background: rgba(40,42,46,0.55) !important;
+        border-color: rgba(255,255,255,0.05) !important;
+        border-left-color: rgba(255,255,255,0.12) !important;
+        color: #6b7280 !important;
     }
     #ichc-userlist .ichc-ul-hidden-live:hover {
-        background: rgba(90,35,35,0.26) !important;
-        border-color: rgba(180,80,80,0.2) !important;
+        background: rgba(50,52,58,0.65) !important;
+        border-color: rgba(255,255,255,0.09) !important;
     }
     #ichc-userlist .ichc-ul-hidden-live .ichc-ul-user-name {
-        /* Same size and alignment as other users — only tinted muted rose */
         font-size: 11px !important;
-        color: #c49898 !important;
+        color: #6b7280 !important;
         text-align: left !important;
         justify-content: flex-start !important;
         align-self: center !important;
