@@ -2363,24 +2363,29 @@
     }
 
     function _updateNickIndicators(el, nick) {
-        const joinTs = profileJoinTsCache.get(nick);
-        const year   = profileYearCache.get(nick);
-        const karma  = profileKarmaCache.get(nick);
-        const isNew        = (joinTs != null && (Date.now() - joinTs) < 30 * 24 * 3600e3) || (joinTs == null && year === 0);
+        const year    = profileYearCache.get(nick);
+        const karma   = profileKarmaCache.get(nick);
+        // Only show indicators once we have confirmed profile data (both caches set,
+        // even if values are null). Without this guard the sprout appears for every
+        // user before their profile loads.
+        const hasData = profileYearCache.has(nick) && profileJoinTsCache.has(nick);
+        // year === null after a successful profile fetch means no trophy yet → < ~1 year old
+        const isNew        = hasData && year === null;
+        // 7+ year account with low engagement
         const isOldDormant = year != null && year >= 7 && karma != null && karma < 700;
         el.textContent = '';
         if (isNew) {
             const s = document.createElement('span');
             s.className = 'ichc-ni ichc-ni-new';
             s.textContent = '\u{1F331}';
-            s.title = 'New account (less than 30 days old)';
+            s.title = 'New account (no year badge yet)';
             el.appendChild(s);
         }
         if (isOldDormant) {
             const s = document.createElement('span');
             s.className = 'ichc-ni ichc-ni-dormant';
             s.textContent = '\u{1F578}️';
-            s.title = 'Veteran account with low activity (7+ years, under 700 karma)';
+            s.title = `${year}yr account, low karma (${karma})`;
             el.appendChild(s);
         }
     }
