@@ -512,6 +512,28 @@
         });
     }
 
+    function _updateGroupNickWrap(row, hide) {
+        const existing = row.querySelector('.ichc-nick-repeat');
+        if (hide && !existing) {
+            const anchor = row.querySelector('a.userlink');
+            if (!anchor) { return; }
+            const wrap = document.createElement('span');
+            wrap.className = 'ichc-nick-repeat';
+            anchor.parentNode.insertBefore(wrap, anchor);
+            wrap.appendChild(anchor);
+            const after = wrap.nextSibling;
+            if (after?.nodeType === Node.TEXT_NODE && /^\s*:/.test(after.textContent)) {
+                wrap.appendChild(after);
+            }
+        } else if (!hide && existing) {
+            const parent = existing.parentNode;
+            if (parent) {
+                while (existing.firstChild) { parent.insertBefore(existing.firstChild, existing); }
+                existing.remove();
+            }
+        }
+    }
+
     function reGroupChatRows(log) {
         if (!log) { return; }
         const allRows = getChatRowNodes(log);
@@ -535,7 +557,10 @@
 
         allRows.forEach((row, i) => {
             const nick = nickOf.get(row);
-            if (!nick) { return; }
+            if (!nick) {
+                _updateGroupNickWrap(row, false);
+                return;
+            }
             const prevNick = i > 0 ? nickOf.get(allRows[i - 1]) : null;
             const nextNick = i < allRows.length - 1 ? nickOf.get(allRows[i + 1]) : null;
             const sameAsPrev = prevNick === nick;
@@ -543,6 +568,7 @@
             if (sameAsPrev && sameAsNext) { row.classList.add('ichc-chat-group-mid'); }
             else if (sameAsPrev) { row.classList.add('ichc-chat-group-last'); }
             else if (sameAsNext) { row.classList.add('ichc-chat-group-first'); }
+            _updateGroupNickWrap(row, sameAsPrev);
         });
     }
 

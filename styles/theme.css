@@ -221,20 +221,28 @@
 
     /* ── Same-user message grouping ── */
     #txt .ichc-chat-group-first {
-        border-radius: 6px 6px 0 0 !important;
+        border-radius: 4px 4px 0 0 !important;
         margin-bottom: 0 !important;
-        border-bottom: 0 !important;
+        padding-bottom: 1px !important;
+        border-bottom: none !important;
     }
     #txt .ichc-chat-group-mid {
         border-radius: 0 !important;
+        margin-top: 0 !important;
         margin-bottom: 0 !important;
-        border-top: 0 !important;
-        border-bottom: 0 !important;
+        padding-top: 1px !important;
+        padding-bottom: 1px !important;
+        border-top: none !important;
+        border-bottom: none !important;
     }
     #txt .ichc-chat-group-last {
-        border-radius: 0 0 6px 6px !important;
-        border-top: 0 !important;
+        border-radius: 0 0 4px 4px !important;
+        margin-top: 0 !important;
+        padding-top: 1px !important;
+        border-top: none !important;
     }
+    /* nick + colon hidden on continuation rows */
+    .ichc-nick-repeat { display: none !important; }
 
     /* ── Broadcasting events — centered, large, bold ── */
     #txt .ichc-bcast-event {
@@ -2672,6 +2680,48 @@
     .ichc-cam-toggle-btn::after {
         content: none !important;
     }
+
+    /* ── Per-cam refresh button (left of X button) ── */
+    .ichc-cam-refresh-btn {
+        position: absolute !important;
+        top: 8px !important;
+        right: 44px !important;
+        z-index: 16 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 28px !important;
+        min-width: 28px !important;
+        height: 28px !important;
+        padding: 0 !important;
+        font-size: 13px !important;
+        line-height: 1 !important;
+        color: rgba(255,255,255,0.55) !important;
+        background: rgba(17,18,20,0.72) !important;
+        backdrop-filter: blur(6px) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        border-radius: 6px !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+        transition: opacity 0.18s ease, background 0.15s ease, color 0.15s ease !important;
+        cursor: pointer !important;
+    }
+    #cams .rounded_square:hover .ichc-cam-refresh-btn,
+    #cams .rounded_square:focus-within .ichc-cam-refresh-btn {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+    .ichc-cam-refresh-btn:hover {
+        color: #93c5fd !important;
+        background: rgba(17,18,20,0.90) !important;
+        border-color: rgba(147,197,253,0.35) !important;
+    }
+    @keyframes ichc-spin { to { transform: rotate(360deg); } }
+    .ichc-cam-refresh-btn.ichc-refreshing {
+        animation: ichc-spin 0.65s linear !important;
+        pointer-events: none !important;
+    }
+
     #cams .ichc-native-cam-action-hidden {
         display: none !important;
     }

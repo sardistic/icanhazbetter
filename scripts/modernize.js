@@ -5656,8 +5656,52 @@
         requestCamRelayout(40);
     }
 
+    function _buildCamRefreshBtn(card) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ichc-overlay-btn ichc-cam-refresh-btn';
+        btn.innerHTML = ICONS.rotate;
+        btn.title = 'Refresh cam feed';
+        btn.setAttribute('aria-label', 'Refresh cam feed');
+        btn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+        btn.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            btn.classList.add('ichc-refreshing');
+            setTimeout(() => btn.classList.remove('ichc-refreshing'), 700);
+            const videos = [...card.querySelectorAll('video')];
+            if (videos.length) {
+                videos.forEach(v => {
+                    const src = v.currentSrc || v.src;
+                    if (!src) { return; }
+                    v.pause();
+                    v.src = '';
+                    v.load();
+                    v.src = src;
+                    v.load();
+                    v.play?.().catch?.(() => {});
+                });
+            } else {
+                card.querySelectorAll('iframe').forEach(f => {
+                    const src = f.src;
+                    if (src) { f.src = ''; requestAnimationFrame(() => { f.src = src; }); }
+                });
+            }
+        });
+        return btn;
+    }
+
     function ensureCardTools(card) {
-        if (card.querySelector('.ichc-card-tools') || card.querySelector('.ichc-cam-toggle-btn')) { return; }
+        // If tools exist but the refresh button was added in a later version, inject it now.
+        if (card.querySelector('.ichc-card-tools') || card.querySelector('.ichc-cam-toggle-btn')) {
+            if (!card.querySelector('.ichc-cam-refresh-btn')) {
+                const toggleBtn = card.querySelector('.ichc-cam-toggle-btn');
+                const refreshBtn = _buildCamRefreshBtn(card);
+                if (toggleBtn) { card.insertBefore(refreshBtn, toggleBtn); }
+                else { card.appendChild(refreshBtn); }
+            }
+            return;
+        }
 
         const toggleButton = document.createElement('button');
         toggleButton.type = 'button';
@@ -5741,6 +5785,7 @@
             growButton.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
             growButton.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); _adjustCardSpan(card, +1); });
         }
+        card.appendChild(_buildCamRefreshBtn(card));
         card.appendChild(toggleButton);
         card.appendChild(tools);
         card.appendChild(timerEl);
