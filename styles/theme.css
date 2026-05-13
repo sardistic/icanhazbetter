@@ -1247,9 +1247,11 @@
         align-items: center !important;
         justify-content: flex-start !important;
         align-self: stretch !important;
+        height: var(--ichc-topbar-height) !important;
     }
     #ichc-header-topic #topic {
         align-self: center !important;
+        width: 100% !important;
     }
     #topic {
         position: static !important;
@@ -1257,16 +1259,16 @@
         left: auto !important;
         margin: 0 !important;
         min-width: 0 !important;
-        font-size: 13px !important;
-        line-height: 1.2 !important;
+        font-size: clamp(12px, calc(var(--ichc-topbar-height) * 0.38), 16px) !important;
+        line-height: 1 !important;
         color: #b5bac1 !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
     }
     #topic b {
-        display: inline-block !important;
-        font-size: 13px !important;
+        display: inline !important;
+        font-size: inherit !important;
         color: #dbdee1 !important;
     }
     #topic a {
