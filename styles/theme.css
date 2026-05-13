@@ -221,15 +221,19 @@
 
     /* ── Same-user message grouping ── */
     #txt .ichc-chat-group-first {
-        border-radius: 6px 6px 2px 2px !important;
-        margin-bottom: 1px !important;
+        border-radius: 6px 6px 0 0 !important;
+        margin-bottom: 0 !important;
+        border-bottom: 0 !important;
     }
     #txt .ichc-chat-group-mid {
-        border-radius: 2px !important;
-        margin-bottom: 1px !important;
+        border-radius: 0 !important;
+        margin-bottom: 0 !important;
+        border-top: 0 !important;
+        border-bottom: 0 !important;
     }
     #txt .ichc-chat-group-last {
-        border-radius: 2px 2px 6px 6px !important;
+        border-radius: 0 0 6px 6px !important;
+        border-top: 0 !important;
     }
 
     /* ── Broadcasting events — centered, large, bold ── */
@@ -443,6 +447,38 @@
     #txt .ichc-chat-year-badge:empty {
         display: none !important;
     }
+    /* ── Nick account-age indicators (sprout / cobweb) — visible on row hover ── */
+    #txt .ichc-nick-indicators {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 1px !important;
+        vertical-align: middle !important;
+        line-height: 1 !important;
+        max-width: 0 !important;
+        overflow: hidden !important;
+        opacity: 0 !important;
+        margin-right: 0 !important;
+        transition: max-width 0.2s ease, opacity 0.15s ease, margin-right 0.15s ease !important;
+        pointer-events: none !important;
+    }
+    #txt .ichc-nick-indicators:empty { display: none !important; }
+    #txt .line:hover .ichc-nick-indicators,
+    #txt > table:hover .ichc-nick-indicators,
+    #txt > div:hover .ichc-nick-indicators,
+    #txt > p:hover .ichc-nick-indicators,
+    #txt > ul:hover .ichc-nick-indicators {
+        max-width: 40px !important;
+        opacity: 1 !important;
+        margin-right: 2px !important;
+        pointer-events: auto !important;
+    }
+    #txt .ichc-ni {
+        font-size: 11px !important;
+        line-height: 1 !important;
+        cursor: default !important;
+        display: inline-block !important;
+        white-space: nowrap !important;
+    }
     #txt a.ichc-chat-guest {
         font-style: italic !important;
         opacity: 0.6 !important;
@@ -524,6 +560,10 @@
         28%  { text-shadow: 0 0 12px rgba(167,182,183,1),  0 0 30px rgba(95,152,157,0.72), 0 0 55px rgba(92,139,149,0.35); filter: brightness(1.28); }
         56%  { text-shadow: 0 0 8px rgba(126,166,170,0.88), 0 0 22px rgba(94,147,154,0.52); filter: brightness(1.1); }
         100% { text-shadow: 0 0 6px rgba(94,149,154,0.72), 0 0 18px rgba(91,135,143,0.38); filter: brightness(1); }
+    }
+    @keyframes ichc-pulse-ring {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(251,146,60,0.55); }
+        50%       { box-shadow: 0 0 0 7px rgba(251,146,60,0); }
     }
     /* Cam card aura pulse */
     @keyframes ichc-cam-aura {
@@ -1527,10 +1567,22 @@
         max-height: calc(100vh - var(--ichc-topbar-height)) !important;
         order: 1 !important;
         overflow: hidden !important;
+        position: relative !important;
     }
     #ichc-cams-col #ichc-cams-panel {
         flex: 1 1 auto !important;
         min-height: 0 !important;
+        overflow: hidden !important;
+        padding-bottom: var(--ichc-footer-height) !important;
+    }
+    /* Footer is absolutely positioned so the flex+inline-height system can't push it anywhere */
+    #ichc-cams-col #ichc-footer-bar {
+        position: absolute !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 10 !important;
+        margin: 0 !important;
     }
     #ichc-stage-divider {
         flex: 0 0 4px !important;
@@ -1579,7 +1631,7 @@
         width: 100% !important;
         margin: 0 !important;
     }
-    /* Footer bar — 2px border-like strip at the bottom of the cams column */
+    /* Footer bar — pinned to the bottom of the cams column */
     #ichc-footer-bar {
         width: 100% !important;
         margin: 0 !important;
@@ -1597,7 +1649,6 @@
         background: #18191c !important;
         overflow: visible !important;
         position: relative !important;
-        order: 999 !important;
     }
     #ichc-footer-copy {
         font-size: 10px !important;
@@ -2226,43 +2277,67 @@
     #cams.ichc-lurk-active > .ichc-cam-resume {
         display: flex !important;
     }
-    /* Inactivity resume button — hidden until ichc-lurk-active */
+    /* Inactivity resume overlay — hidden until ichc-lurk-active */
     .ichc-cam-resume {
         display: none !important;
         flex-direction: column !important;
         align-items: center !important;
         justify-content: center !important;
-        gap: 14px !important;
-        padding: 32px 24px !important;
-        border-radius: 12px !important;
-        border: 1px dashed rgba(255,255,255,0.10) !important;
-        background: rgba(26,28,31,0.55) !important;
+        gap: 10px !important;
+        padding: 40px 28px !important;
+        border-radius: 0 !important;
+        border: none !important;
+        border-top: 1px solid rgba(251,146,60,0.18) !important;
+        background: linear-gradient(160deg,#1a1c20 0%,#1e2028 100%) !important;
         width: 100% !important;
         box-sizing: border-box !important;
         text-align: center !important;
     }
+    .ichc-cam-resume-icon {
+        font-size: 40px !important;
+        line-height: 1 !important;
+        color: #fb923c !important;
+        opacity: 0.6 !important;
+        margin-bottom: 4px !important;
+    }
+    .ichc-cam-resume-title {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: #e3e5e8 !important;
+        letter-spacing: 0.01em !important;
+    }
     .ichc-cam-resume-msg {
-        color: #80848e !important;
-        font-size: 13px !important;
-        line-height: 1.4 !important;
+        color: #6b7280 !important;
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+        max-width: 220px !important;
     }
     .ichc-cam-resume-btn {
         -webkit-appearance: none !important;
         appearance: none !important;
-        padding: 8px 22px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        padding: 9px 22px !important;
+        margin-top: 6px !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(254,202,202,0.35) !important;
-        background: #dc2626 !important;
+        border: 1px solid rgba(251,146,60,0.45) !important;
+        background: #ea580c !important;
         color: #fff !important;
         font-size: 13px !important;
         font-weight: 600 !important;
         cursor: pointer !important;
-        transition: background 0.15s, border-color 0.15s, color 0.15s !important;
+        transition: background 0.15s, transform 0.1s !important;
+        animation: ichc-pulse-ring 2.4s ease-in-out infinite !important;
     }
     .ichc-cam-resume-btn:hover {
-        background: #b91c1c !important;
-        border-color: rgba(254,202,202,0.55) !important;
-        color: #fff !important;
+        background: #c2410c !important;
+        border-color: rgba(251,146,60,0.7) !important;
+        transform: translateY(-1px) !important;
+        animation: none !important;
+    }
+    .ichc-cam-resume-btn:active {
+        transform: translateY(0) !important;
     }
     #cams > * {
         width: 100% !important;
@@ -2276,8 +2351,42 @@
     #cams .rounded_square.ichc-hidden-slot,
     #cams .rounded_square.ichc-persist-hidden-slot,
     #cams .rounded_square.ichc-ghost-slot { display: none !important; }
+    /* Disabled placeholder card — shimmer skeleton instead of raw opacity */
     #cams .rounded_square.ichc-placeholder-slot {
-        opacity: 0.82 !important;
+        background: #16181c !important;
+        overflow: hidden !important;
+        min-height: 90px !important;
+    }
+    #cams .rounded_square.ichc-placeholder-slot > *:not(.ichc-disabled-overlay) {
+        visibility: hidden !important;
+    }
+    /* Disabled cam overlay — covers card, shows camera-off icon centered */
+    .ichc-disabled-overlay {
+        position: absolute !important;
+        inset: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 7px !important;
+        pointer-events: none !important;
+        background: linear-gradient(135deg,#14161a 0%,#1c1f24 50%,#14161a 100%) !important;
+        background-size: 200% 200% !important;
+        animation: ichc-shimmer 2.8s ease-in-out infinite !important;
+        z-index: 1 !important;
+    }
+    .ichc-disabled-overlay-icon {
+        font-size: 26px !important;
+        opacity: 0.22 !important;
+        line-height: 1 !important;
+        color: #b0b4bc !important;
+    }
+    .ichc-disabled-overlay-label {
+        font-size: 10px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.12em !important;
+        text-transform: uppercase !important;
+        color: rgba(255,255,255,0.18) !important;
     }
     #cams .rounded_square {
         position: relative !important;
@@ -4271,6 +4380,17 @@
     }
     html.ichc-light-theme #cams .cam_overlay,
     html.ichc-light-theme #cams .cam_overlay * { color: #313338 !important; }
+    html.ichc-light-theme .ichc-disabled-overlay {
+        background: linear-gradient(135deg,#c4c8ce 0%,#cdd0d5 50%,#c4c8ce 100%) !important;
+    }
+    html.ichc-light-theme .ichc-disabled-overlay-icon { color: #4e5058 !important; opacity: 0.35 !important; }
+    html.ichc-light-theme .ichc-disabled-overlay-label { color: rgba(49,51,56,0.4) !important; }
+    html.ichc-light-theme .ichc-cam-resume {
+        background: linear-gradient(160deg,#d4d7dc 0%,#c8ccd2 100%) !important;
+        border-top-color: rgba(251,146,60,0.3) !important;
+    }
+    html.ichc-light-theme .ichc-cam-resume-title { color: #2e3035 !important; }
+    html.ichc-light-theme .ichc-cam-resume-msg { color: #5c6070 !important; }
 
     /* User list panel */
     html.ichc-light-theme #ichc-userlist,

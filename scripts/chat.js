@@ -846,15 +846,15 @@
     };
 
     const chatEventCollector = {
-        joinRow:   null,
-        leaveRow:  null,
-        joinNames: [],
+        joinRow:    null,
+        leaveRow:   null,
+        joinNames:  [],
         leaveNames: [],
     };
 
     function _sealChatEvents() {
-        chatEventCollector.joinRow   = null;
-        chatEventCollector.leaveRow  = null;
+        chatEventCollector.joinRow    = null;
+        chatEventCollector.leaveRow   = null;
         chatEventCollector.joinNames  = [];
         chatEventCollector.leaveNames = [];
     }
@@ -973,7 +973,7 @@
         const d = new Date(epochMs);
         const ampm = d.getHours() < 12 ? 'am' : 'pm';
         const h12 = d.getHours() % 12 || 12;
-        return `${h12}:${String(d.getMinutes()).padStart(2, '0')} ${ampm}`;
+        return `${h12}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} ${ampm}`;
     }
 
     function _relativeTime(epochMs) {
@@ -1259,7 +1259,8 @@
                                  node.classList.contains('ichc-emote-disabled-label') ||
                                  !!node.dataset?.ichcEventProcessed ||
                                  !!node.closest?.('.ichc-nick-block') ||
-                                 !!node.closest?.('.ichc-event-collector'));
+                                 !!node.closest?.('.ichc-event-collector') ||
+                                 !!node.closest?.('[data-ichc-event-processed]'));
                             if (!isInserted) {
                                 const evType = _classifyEventRow(node);
                                 if (evType === 'join' || evType === 'leave') {
@@ -1267,21 +1268,29 @@
                                     if (nick) {
                                         _addToEventCollector(evType, nick, node);
                                     } else {
-                                        _sealChatEvents();
+                                        // Unrecognised event row — theme it but let timer seal
                                         applyChatTheme(node);
                                         sawNewRows = true;
                                     }
                                 } else {
-                                    _sealChatEvents();
+                                    // Seal only on real "nick: message" rows — not DOM noise or misclassified events
+                                    const a = node.querySelector?.('a.userlink');
+                                    if (a) {
+                                        const next = a.nextSibling;
+                                        if (next?.nodeType === Node.TEXT_NODE && /^\s*:/.test(next.textContent)) {
+                                            _sealChatEvents();
+                                        }
+                                    }
                                     applyChatTheme(node);
                                     sawNewRows = true;
                                 }
                             }
                         } else if (node.nodeType === 3 && mutation.target instanceof Element) {
-                            // Skip text updates inside our own inserted elements
+                            // Skip text updates inside our own inserted elements or processed refRows
                             if (mutation.target.classList.contains('ichc-chat-year-badge') ||
                                 mutation.target.classList.contains('ichc-event-collector') ||
-                                mutation.target.classList.contains('ichc-ts')) { return; }
+                                mutation.target.classList.contains('ichc-ts') ||
+                                !!mutation.target.closest?.('[data-ichc-event-processed]')) { return; }
                             applyChatTheme(mutation.target);
                             sawNewRows = true;
                         }
@@ -1317,11 +1326,11 @@
             if (currentLog && currentLog !== chatScrollState.observedRoot) {
                 initChatScrollSync();
             }
-            // Heartbeat: nudge cR() if no new messages for 45s regardless of scroll
+            // Heartbeat: nudge cR() if no new messages for 12s regardless of scroll
             // state — the long-poll can silently time out even when auto=false (user
             // scrolled up), which previously blocked this check entirely.
             if (chatScrollState.lastMessageAt > 0 &&
-                    Date.now() - chatScrollState.lastMessageAt > 45_000) {
+                    Date.now() - chatScrollState.lastMessageAt > 12_000) {
                 chatScrollState.lastMessageAt = Date.now();
                 runInPageContext(`if (typeof window.cR === 'function') { window.cR(); }`);
             }

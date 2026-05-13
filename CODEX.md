@@ -33,7 +33,7 @@ Chrome Manifest V3 extension for [icanhazchat.com](https://www.icanhazchat.com).
 | `ichc_featured_cam` | Spotlighted cam key |
 | `ichc_stage_side_width` | Manual stage split override |
 | `ichc_theme` | `'light'` or unset (dark) |
-| `ichc_av3_<name>` | Cached avatar URL (or null miss) per username. v3 = current generation. |
+| `ichc_av4_<name>` | Cached avatar URL (or null miss) per username. v4 = current generation. |
 | `ichc_bcast_<name>` | Epoch ms when a broadcaster's cam first went live. Cleared on ghost/removal. |
 | `ichc_blocked_users` | JSON array of hidden-cam usernames (lowercase) |
 
@@ -52,9 +52,9 @@ The `MutationObserver` on `#cams` (subtree) debounces to `requestCamRelayout`. A
 `sawNewRows` flag prevents the extension's own DOM insertions (inline images, OG cards, timestamp nodes) from triggering a scroll-to-bottom or stealing focus from the cam panel.
 
 ### Avatar fetch (`modernize.js`)
-`fetchProfileImage(username)` → memory cache (`profileImageCache`) → localStorage (`ichc_av3_*`) → HTTP fetch (`_doFetchProfileImage`).
+`fetchProfileImage(username)` → memory cache (`profileImageCache`) → localStorage (`ichc_av4_*`) → HTTP fetch (`_doFetchProfileImage`).
 
-`_doFetchProfileImage` GETs `/user/<name>`, parses with `DOMParser`, extracts image via broad selector list (`_extractAvatarFromDoc`). Miss TTL: 2 h. Hit TTL: 7 days. Max 3 concurrent fetches (`_AV_MAX`), 300 ms between starts.
+`_doFetchProfileImage` GETs `/user/<name>`, parses with `DOMParser`, extracts image via broad selector list (`_extractAvatarFromDoc`). Miss TTL: 30 min. Hit TTL: 7 days. Max 1 concurrent fetch (`_AV_MAX`), 900 ms between starts, with per-user pending fetch de-dupe.
 
 Priority prefetch order: broadcasting cams → non-idle users → idle users (alphabetical within each tier).
 
@@ -62,8 +62,8 @@ Priority prefetch order: broadcasting cams → non-idle users → idle users (al
 
 ### Supporter / mod detection (`buildUserList`)
 Three-layer detection inside `#activeUserList`:
-1. **Section header scan** — `<p>, <h2>–<h4>` inside `#activeUserList` AND direct children of its parent (browsers may push `<p>` inside `<ul>` outside the `<ul>` during HTML parsing). Section text matched against `supporterPattern` / `/\bmod(erator)?s?\b/i`.
-2. **Marker scan** — `img.smicon`, `img[src*="heart"]`, `[title*="support"]`, etc. on individual `<li>` rows.
+1. **Section header scan** — short `<p>, <h2>–<h4>` headings inside `#activeUserList` AND direct children of its parent (browsers may push `<p>` inside `<ul>` outside the `<ul>` during HTML parsing). Section text is matched narrowly against supporter/contributor labels or `/\bmod(erator)?s?\b/i`.
+2. **Marker scan** — `img.smicon`, `img[src*="heart"]`, `[title*="support"]`, `[title*="contrib"]`, etc. on individual `<li>` rows.
 3. **Context check** — `className`, `title`, `data-original-title` on the `<a>` and parent `<li>`.
 
 Supporter rows get `ichc-ul-supporter` class → pink glow pfp background via CSS.

@@ -27,6 +27,7 @@
         gifIcon:     `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M1 5.25A2.25 2.25 0 0 1 3.25 3h13.5A2.25 2.25 0 0 1 19 5.25v9.5A2.25 2.25 0 0 1 16.75 17H3.25A2.25 2.25 0 0 1 1 14.75v-9.5zm4.049 3.49A.75.75 0 0 0 4.25 9.5v1A.75.75 0 0 0 5 11.25h1.25a.75.75 0 0 0 0-1.5H5.75V9.5a.75.75 0 0 0-.701-.76zm2.551-.74a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75zm2 0a.75.75 0 0 1 .673.418L11 10.108l.727-1.69A.75.75 0 0 1 13.25 8v3.75a.75.75 0 0 1-1.5 0v-1.608l-.227.529a.75.75 0 0 1-1.046 0l-.227-.53v1.609a.75.75 0 0 1-1.5 0V8.75a.75.75 0 0 1 .75-.75z" clip-rule="evenodd"/></svg>`,
         users:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M7 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM14.5 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM1.615 16.428a1.224 1.224 0 0 1-.569-1.175 6.002 6.002 0 0 1 11.908 0c.058.467-.172.92-.57 1.174A9.953 9.953 0 0 1 7 17a9.953 9.953 0 0 1-5.385-1.572zM14.5 16h-.106c.07-.297.088-.611.048-.933a7.47 7.47 0 0 0-1.588-3.755 4.502 4.502 0 0 1 5.874 2.636.818.818 0 0 1-.36.8A7.468 7.468 0 0 1 14.5 16z"/></svg>`,
         videoCam2:   `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M3.25 4A2.25 2.25 0 0 0 1 6.25v7.5A2.25 2.25 0 0 0 3.25 16h7.5A2.25 2.25 0 0 0 13 13.75v-7.5A2.25 2.25 0 0 0 10.75 4h-7.5zM19 7.573a.75.75 0 0 0-1.214-.588l-3.036 2.427V10.5l3.036 2.423A.75.75 0 0 0 19 12.423V7.573z"/></svg>`,
+        videoCamOff: `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M3.25 4A2.25 2.25 0 0 0 1 6.25v7.5A2.25 2.25 0 0 0 3.25 16h7.5A2.25 2.25 0 0 0 13 13.75v-7.5A2.25 2.25 0 0 0 10.75 4h-7.5z" opacity=".35"/><path d="M19 7.573a.75.75 0 0 0-1.214-.588l-3.036 2.427V10.5l3.036 2.423A.75.75 0 0 0 19 12.423V7.573z" opacity=".35"/><path fill-rule="evenodd" d="M1.22 1.22a.75.75 0 0 1 1.06 0l16.5 16.5a.75.75 0 1 1-1.06 1.06L1.22 2.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd"/></svg>`,
         chevronRight:`<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02z" clip-rule="evenodd"/></svg>`,
         chevronLeft: `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02z" clip-rule="evenodd"/></svg>`,
         shield:      `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M9.661 2.237a.531.531 0 0 1 .678 0 11.947 11.947 0 0 0 7.078 2.749.5.5 0 0 1 .479.425c.069.52.104 1.05.104 1.589 0 5.162-3.384 9.563-8.06 11.076a.475.475 0 0 1-.32 0C4.384 16.563 1 12.162 1 7c0-.539.035-1.069.104-1.589a.5.5 0 0 1 .48-.425 11.947 11.947 0 0 0 7.077-2.749z" clip-rule="evenodd"/></svg>`,
@@ -285,6 +286,8 @@
         {e:'🤕',n:'hurt bandage'},{e:'🤢',n:'nauseated sick'},{e:'🤮',n:'vomiting'},
         {e:'🤧',n:'sneezing'},{e:'🥵',n:'hot flushed'},{e:'🥶',n:'cold frozen'},
         {e:'🥴',n:'woozy drunk'},{e:'😵',n:'dizzy dead eyes'},{e:'🤯',n:'exploding head mind blown'},
+        {e:'🥱',n:'yawn bored tired'},{e:'🫠',n:'melting face'},
+        {e:'🫥',n:'dotted face invisible'},{e:'🫨',n:'shaking face'},
         // Faces – negative
         {e:'😞',n:'disappointed'},{e:'😟',n:'worried'},{e:'😣',n:'persevering'},
         {e:'😖',n:'confounded'},{e:'😫',n:'tired'},{e:'😩',n:'weary'},
@@ -294,12 +297,15 @@
         {e:'😈',n:'devil smiling'},{e:'👿',n:'devil angry'},{e:'💀',n:'skull dead'},
         {e:'☠️',n:'skull crossbones'},{e:'💩',n:'poop'},{e:'🤡',n:'clown'},
         {e:'👹',n:'ogre monster'},{e:'👺',n:'goblin'},{e:'👻',n:'ghost'},
-        {e:'👽',n:'alien'},{e:'🤖',n:'robot'},
+        {e:'👽',n:'alien'},{e:'🤖',n:'robot'},{e:'🫶',n:'heart hands love'},
         // Gestures & hands
         {e:'👋',n:'wave hi hello'},{e:'🤚',n:'raised back hand'},
         {e:'🖐️',n:'hand five fingers'},{e:'✋',n:'raised hand stop'},
         {e:'🖖',n:'vulcan salute spock'},{e:'🫱',n:'rightwards hand'},
+        {e:'🫲',n:'leftwards hand'},{e:'🫳',n:'palm down'},
+        {e:'🫴',n:'palm up'},{e:'🫵',n:'point you'},
         {e:'👌',n:'ok perfect'},{e:'🤌',n:'pinched fingers chef kiss'},
+        {e:'🤏',n:'pinching hand small tiny'},
         {e:'✌️',n:'peace victory two'},{e:'🤞',n:'crossed fingers luck'},
         {e:'🤟',n:'love you hand'},{e:'🤘',n:'horns rock metal'},
         {e:'🤙',n:'call me shaka hang loose'},{e:'👈',n:'left point'},
@@ -308,58 +314,350 @@
         {e:'👎',n:'thumbs down dislike'},{e:'✊',n:'raised fist'},
         {e:'👊',n:'oncoming fist punch'},{e:'🤛',n:'left fist bump'},
         {e:'🤜',n:'right fist bump'},{e:'👏',n:'clap applause'},
-        {e:'🙌',n:'raising hands celebration'},{e:'🫶',n:'heart hands love'},
+        {e:'🙌',n:'raising hands celebration'},
         {e:'👐',n:'open hands'},{e:'🤲',n:'palms up prayer'},
         {e:'🙏',n:'pray please thank you'},{e:'🤝',n:'handshake deal'},
         {e:'💅',n:'nail polish sassy'},{e:'🤳',n:'selfie'},
         {e:'💪',n:'muscle strong flex'},{e:'🦵',n:'leg kick'},{e:'🦶',n:'foot'},
         {e:'👂',n:'ear listen'},{e:'👃',n:'nose sniff'},
+        {e:'🫀',n:'heart anatomical organ'},{e:'🫁',n:'lungs'},
+        {e:'🦷',n:'tooth teeth'},{e:'🦴',n:'bone'},
         // Hearts & affection
         {e:'❤️',n:'red heart love'},{e:'🧡',n:'orange heart'},
         {e:'💛',n:'yellow heart'},{e:'💚',n:'green heart'},
         {e:'💙',n:'blue heart'},{e:'💜',n:'purple heart'},
         {e:'🖤',n:'black heart'},{e:'🤍',n:'white heart'},
         {e:'🤎',n:'brown heart'},{e:'💔',n:'broken heart'},
-        {e:'❤️‍🔥',n:'heart fire burning love'},{e:'💕',n:'two hearts'},
-        {e:'💞',n:'revolving hearts'},{e:'💓',n:'beating heart'},
-        {e:'💗',n:'growing heart'},{e:'💖',n:'sparkling heart'},
-        {e:'💘',n:'heart arrow cupid'},{e:'💝',n:'heart ribbon gift'},
-        {e:'💟',n:'heart decoration'},{e:'♥️',n:'heart suit card'},
-        {e:'😻',n:'heart eyes cat'},{e:'💋',n:'kiss mark lips'},
-        // Common objects & symbols
-        {e:'🔥',n:'fire hot lit'},{e:'✨',n:'sparkles magic'},
-        {e:'⭐',n:'star'},{e:'🌟',n:'glowing star'},{e:'💫',n:'dizzy star spinning'},
-        {e:'🎉',n:'party popper celebration'},{e:'🎊',n:'confetti ball party'},
-        {e:'🎈',n:'balloon'},{e:'🎁',n:'gift present wrapped'},
-        {e:'🏆',n:'trophy winner'},{e:'🥇',n:'gold medal first place'},
-        {e:'🍕',n:'pizza'},{e:'🍔',n:'burger'},{e:'🍟',n:'fries'},
-        {e:'🌮',n:'taco'},{e:'🍣',n:'sushi'},{e:'🍜',n:'noodles ramen'},
-        {e:'🍺',n:'beer mug'},{e:'🍻',n:'clinking beers cheers'},
-        {e:'🥂',n:'champagne toast'},{e:'☕',n:'coffee hot'},
-        {e:'🧃',n:'juice box'},{e:'🎮',n:'game controller'},
-        {e:'💻',n:'laptop computer'},{e:'📱',n:'phone mobile'},
-        {e:'📷',n:'camera photo'},{e:'🎵',n:'music note'},
-        {e:'🎶',n:'musical notes'},{e:'💤',n:'zzz sleep'},
-        {e:'💯',n:'hundred percent perfect'},
-        {e:'‼️',n:'double exclamation'},{e:'❓',n:'question'},
-        {e:'❗',n:'exclamation'},{e:'✅',n:'check mark yes'},
-        {e:'❌',n:'cross no x'},{e:'⚠️',n:'warning caution'},
-        {e:'🚀',n:'rocket launch'},{e:'🛸',n:'ufo flying saucer'},
-        {e:'🌈',n:'rainbow'},{e:'☀️',n:'sun'},{e:'🌙',n:'moon crescent'},
-        {e:'⚡',n:'lightning bolt zap'},{e:'🌊',n:'wave ocean water'},
-        {e:'💥',n:'boom explosion'},{e:'👀',n:'eyes looking watching'},
-        {e:'🗣️',n:'speaking head talk'},{e:'💬',n:'speech bubble chat'},
+        {e:'❤️‍🔥',n:'heart fire burning love'},{e:'❤️‍🩹',n:'heart bandage mending'},
+        {e:'💕',n:'two hearts'},{e:'💞',n:'revolving hearts'},
+        {e:'💓',n:'beating heart'},{e:'💗',n:'growing heart'},
+        {e:'💖',n:'sparkling heart'},{e:'💘',n:'heart arrow cupid'},
+        {e:'💝',n:'heart ribbon gift'},{e:'💟',n:'heart decoration'},
+        {e:'♥️',n:'heart suit card'},{e:'😻',n:'heart eyes cat'},
+        {e:'💋',n:'kiss mark lips'},
+        // People & activities
         {e:'🫂',n:'hug people'},{e:'🤦',n:'facepalm'},
         {e:'🤷',n:'shrug whatever'},{e:'💁',n:'info person sassy'},
         {e:'🙆',n:'ok gesture person'},{e:'🙅',n:'no gesture forbidden'},
         {e:'🙋',n:'raising hand question'},{e:'🤸',n:'cartwheel gymnastics'},
         {e:'💃',n:'dance woman'},{e:'🕺',n:'dance man'},
+        {e:'🧘',n:'yoga meditate lotus'},{e:'🏃',n:'running person'},
+        {e:'🚶',n:'walking person'},{e:'🧗',n:'climbing person'},
+        {e:'🤾',n:'handball throw'},{e:'⛹️',n:'basketball dribble'},
+        {e:'🏋️',n:'weight lifting gym'},{e:'🤼',n:'wrestling'},
+        {e:'🤺',n:'fencing sword'},{e:'🏇',n:'horse racing jockey'},
+        {e:'🚴',n:'cycling bike'},{e:'🏊',n:'swimming'},
+        {e:'🤽',n:'water polo'},{e:'🧜',n:'mermaid'},
+        {e:'🧙',n:'wizard mage magic'},{e:'🧟',n:'zombie'},
+        {e:'🧛',n:'vampire'},{e:'🧝',n:'elf'},
+        {e:'🧞',n:'genie'},{e:'🧚',n:'fairy'},
+        {e:'🧜',n:'mermaid'},{e:'👷',n:'construction worker hardhat'},
+        {e:'💂',n:'guard soldier'},{e:'🕵️',n:'detective spy'},
+        {e:'👨‍🍳',n:'chef cook'},{e:'👨‍🎤',n:'rock star singer'},
+        {e:'👩‍💻',n:'developer programmer coder'},
+        // Animals – mammals
         {e:'🐱',n:'cat kitten'},{e:'🐶',n:'dog puppy'},
-        {e:'🐸',n:'frog'},{e:'🐧',n:'penguin'},
-        {e:'🦊',n:'fox'},{e:'🐼',n:'panda'},
-        {e:'🌸',n:'cherry blossom flower pink'},
-        {e:'🌺',n:'hibiscus flower'},{e:'🌻',n:'sunflower'},
-        {e:'🍀',n:'four leaf clover luck'},
+        {e:'🐭',n:'mouse'},{e:'🐹',n:'hamster'},
+        {e:'🐰',n:'rabbit bunny'},{e:'🦊',n:'fox'},
+        {e:'🐻',n:'bear'},{e:'🐼',n:'panda'},
+        {e:'🐨',n:'koala'},{e:'🐯',n:'tiger'},
+        {e:'🦁',n:'lion'},{e:'🐮',n:'cow moo'},
+        {e:'🐷',n:'pig oink'},{e:'🐸',n:'frog'},
+        {e:'🐵',n:'monkey'},{e:'🙈',n:'see no evil monkey'},
+        {e:'🙉',n:'hear no evil monkey'},{e:'🙊',n:'speak no evil monkey'},
+        {e:'🐒',n:'monkey animal'},{e:'🦍',n:'gorilla ape'},
+        {e:'🦧',n:'orangutan'},{e:'🦮',n:'guide dog'},
+        {e:'🐕',n:'dog'},{e:'🐩',n:'poodle'},
+        {e:'🐈',n:'cat'},{e:'🐎',n:'horse'},
+        {e:'🦄',n:'unicorn'},{e:'🦓',n:'zebra'},
+        {e:'🦌',n:'deer'},{e:'🦬',n:'bison'},
+        {e:'🐄',n:'cow'},{e:'🐖',n:'pig'},
+        {e:'🐏',n:'sheep ram'},{e:'🐑',n:'ewe sheep'},
+        {e:'🦙',n:'llama'},{e:'🐐',n:'goat'},
+        {e:'🐪',n:'camel'},{e:'🐫',n:'two hump camel'},
+        {e:'🦒',n:'giraffe'},{e:'🦘',n:'kangaroo'},
+        {e:'🦣',n:'mammoth'},{e:'🐘',n:'elephant'},
+        {e:'🦏',n:'rhinoceros'},{e:'🦛',n:'hippopotamus'},
+        {e:'🐁',n:'mouse rat'},{e:'🐀',n:'rat'},
+        {e:'🐇',n:'rabbit'},{e:'🦔',n:'hedgehog'},
+        {e:'🦇',n:'bat'},{e:'🐿️',n:'chipmunk squirrel'},
+        // Animals – birds
+        {e:'🐧',n:'penguin'},{e:'🐦',n:'bird'},
+        {e:'🦅',n:'eagle'},{e:'🦆',n:'duck'},
+        {e:'🦉',n:'owl'},{e:'🦚',n:'peacock'},
+        {e:'🦜',n:'parrot'},{e:'🦩',n:'flamingo'},
+        {e:'🕊️',n:'dove peace'},{e:'🐓',n:'rooster chicken'},
+        {e:'🦃',n:'turkey'},{e:'🦢',n:'swan'},
+        {e:'🐔',n:'chicken'},{e:'🦤',n:'dodo'},
+        // Animals – aquatic & reptiles
+        {e:'🐟',n:'fish'},{e:'🐠',n:'tropical fish'},
+        {e:'🐡',n:'blowfish puffer'},{e:'🦈',n:'shark'},
+        {e:'🐙',n:'octopus'},{e:'🦑',n:'squid'},
+        {e:'🦞',n:'lobster'},{e:'🦀',n:'crab'},
+        {e:'🦐',n:'shrimp'},{e:'🦪',n:'oyster'},
+        {e:'🐬',n:'dolphin'},{e:'🐳',n:'whale'},
+        {e:'🐋',n:'whale'},{e:'🦭',n:'seal'},
+        {e:'🐊',n:'crocodile alligator'},{e:'🐢',n:'turtle'},
+        {e:'🦎',n:'lizard'},{e:'🐍',n:'snake'},
+        {e:'🐲',n:'dragon'},{e:'🦕',n:'sauropod dinosaur'},
+        {e:'🦖',n:'t-rex dinosaur'},
+        // Animals – bugs & insects
+        {e:'🐛',n:'bug caterpillar worm'},{e:'🦋',n:'butterfly'},
+        {e:'🐌',n:'snail'},{e:'🐞',n:'ladybug'},
+        {e:'🐜',n:'ant'},{e:'🦟',n:'mosquito'},
+        {e:'🦗',n:'cricket'},{e:'🦂',n:'scorpion'},
+        {e:'🕷️',n:'spider'},{e:'🕸️',n:'spider web'},
+        {e:'🐝',n:'bee honey'},{e:'🪲',n:'beetle'},
+        {e:'🪳',n:'cockroach'},{e:'🦠',n:'microbe germ virus'},
+        // Nature – plants & flowers
+        {e:'🌸',n:'cherry blossom flower pink'},{e:'🌺',n:'hibiscus flower'},
+        {e:'🌻',n:'sunflower'},{e:'🌹',n:'rose'},
+        {e:'🥀',n:'wilted rose dead'},{e:'🌷',n:'tulip'},
+        {e:'💐',n:'bouquet flowers'},{e:'🌼',n:'blossom daisy'},
+        {e:'🪷',n:'lotus flower'},{e:'🌱',n:'seedling sprout new'},
+        {e:'🌿',n:'herb leaves plant'},{e:'☘️',n:'shamrock clover'},
+        {e:'🍀',n:'four leaf clover luck'},{e:'🎋',n:'bamboo'},
+        {e:'🎍',n:'pine decoration'},{e:'🍃',n:'leaves flying'},
+        {e:'🍂',n:'fallen leaf autumn'},{e:'🍁',n:'maple leaf canada'},
+        {e:'🌾',n:'sheaf rice grain'},{e:'🪴',n:'potted plant'},
+        {e:'🌵',n:'cactus desert'},{e:'🎄',n:'christmas tree'},
+        {e:'🌲',n:'evergreen pine tree'},{e:'🌳',n:'tree deciduous'},
+        {e:'🌴',n:'palm tree tropical'},{e:'🪵',n:'log wood'},
+        {e:'🪨',n:'rock stone'},
+        // Nature – sky & weather
+        {e:'☀️',n:'sun sunny'},{e:'🌤️',n:'sun behind cloud'},
+        {e:'⛅',n:'partly cloudy'},{e:'🌦️',n:'sun behind rain'},
+        {e:'🌧️',n:'cloud rain'},{e:'⛈️',n:'thunder storm lightning'},
+        {e:'🌩️',n:'lightning storm'},{e:'🌨️',n:'snow cloud'},
+        {e:'❄️',n:'snowflake cold winter'},{e:'🌬️',n:'wind blowing'},
+        {e:'🌀',n:'cyclone typhoon'},{e:'🌈',n:'rainbow'},
+        {e:'☁️',n:'cloud'},{e:'🌫️',n:'fog mist'},
+        {e:'🌪️',n:'tornado twister'},{e:'🌡️',n:'thermometer temperature'},
+        {e:'☂️',n:'umbrella rain'},{e:'⛱️',n:'beach umbrella'},
+        {e:'🌙',n:'crescent moon night'},{e:'🌛',n:'crescent moon face'},
+        {e:'🌜',n:'crescent moon face'},{e:'🌝',n:'full moon face'},
+        {e:'🌞',n:'sun face'},{e:'🌚',n:'new moon face dark'},
+        {e:'⭐',n:'star'},{e:'🌟',n:'glowing star'},
+        {e:'💫',n:'dizzy star spinning'},{e:'✨',n:'sparkles magic'},
+        {e:'☄️',n:'comet meteor'},{e:'🌌',n:'milky way galaxy'},
+        // Food & drink – savory
+        {e:'🍕',n:'pizza'},{e:'🍔',n:'burger'},
+        {e:'🍟',n:'fries'},{e:'🌭',n:'hot dog'},
+        {e:'🌮',n:'taco'},{e:'🌯',n:'burrito wrap'},
+        {e:'🫔',n:'tamale'},{e:'🥙',n:'pita flatbread'},
+        {e:'🧆',n:'falafel'},{e:'🥚',n:'egg'},
+        {e:'🍳',n:'fried egg pan'},{e:'🥘',n:'pot stew casserole'},
+        {e:'🍲',n:'pot food stew'},{e:'🫕',n:'fondue'},
+        {e:'🥣',n:'bowl cereal'},{e:'🥗',n:'salad green'},
+        {e:'🍜',n:'noodles ramen'},{e:'🍝',n:'spaghetti pasta'},
+        {e:'🍛',n:'curry rice'},{e:'🍚',n:'rice bowl'},
+        {e:'🍙',n:'rice ball'},{e:'🍘',n:'rice cracker'},
+        {e:'🍣',n:'sushi'},{e:'🍱',n:'bento box'},
+        {e:'🦪',n:'oyster'},{e:'🍤',n:'shrimp fried'},
+        {e:'🍙',n:'onigiri rice'},{e:'🧁',n:'cupcake'},
+        {e:'🍦',n:'soft ice cream'},{e:'🍧',n:'shaved ice'},
+        {e:'🥩',n:'meat steak cut'},{e:'🍗',n:'chicken leg poultry'},
+        {e:'🍖',n:'meat bone'},{e:'🥓',n:'bacon'},
+        {e:'🫙',n:'jar'},
+        // Food & drink – bread & sweets
+        {e:'🥐',n:'croissant french'},{e:'🥖',n:'baguette bread'},
+        {e:'🍞',n:'bread loaf'},{e:'🥨',n:'pretzel'},
+        {e:'🧀',n:'cheese'},{e:'🥞',n:'pancakes'},
+        {e:'🧇',n:'waffle'},{e:'🧈',n:'butter'},
+        {e:'🍰',n:'cake slice'},{e:'🎂',n:'birthday cake'},
+        {e:'🍮',n:'custard pudding flan'},{e:'🍭',n:'lollipop candy'},
+        {e:'🍬',n:'candy sweet'},{e:'🍫',n:'chocolate bar'},
+        {e:'🍩',n:'donut doughnut'},{e:'🍪',n:'cookie'},
+        {e:'🥧',n:'pie'},{e:'🍡',n:'dango sweet dumpling'},
+        {e:'🍢',n:'oden japanese'},{e:'🍧',n:'shaved ice dessert'},
+        // Food & drink – fruit & veg
+        {e:'🍎',n:'apple red'},{e:'🍊',n:'tangerine orange'},
+        {e:'🍋',n:'lemon yellow'},{e:'🍇',n:'grapes purple'},
+        {e:'🍓',n:'strawberry'},{e:'🫐',n:'blueberry'},
+        {e:'🍈',n:'melon'},{e:'🍉',n:'watermelon summer'},
+        {e:'🍑',n:'peach'},{e:'🍒',n:'cherries'},
+        {e:'🍍',n:'pineapple tropical'},{e:'🥭',n:'mango'},
+        {e:'🥥',n:'coconut'},{e:'🍌',n:'banana'},
+        {e:'🍐',n:'pear'},{e:'🫒',n:'olive'},
+        {e:'🥑',n:'avocado'},{e:'🥦',n:'broccoli'},
+        {e:'🥬',n:'leafy greens'},{e:'🥒',n:'cucumber'},
+        {e:'🌽',n:'corn maize'},{e:'🥕',n:'carrot'},
+        {e:'🫛',n:'pea pod beans'},{e:'🧄',n:'garlic'},
+        {e:'🧅',n:'onion'},{e:'🥔',n:'potato'},
+        {e:'🍆',n:'eggplant aubergine'},{e:'🥑',n:'avocado'},
+        {e:'🌶️',n:'hot pepper chili spicy'},
+        // Drinks
+        {e:'☕',n:'coffee hot'},{e:'🍵',n:'tea hot cup'},
+        {e:'🧋',n:'bubble tea boba'},{e:'🥤',n:'cup straw soft drink'},
+        {e:'🧃',n:'juice box'},{e:'🥛',n:'milk glass'},
+        {e:'🍺',n:'beer mug'},{e:'🍻',n:'clinking beers cheers'},
+        {e:'🥂',n:'champagne toast'},{e:'🍷',n:'wine red glass'},
+        {e:'🍸',n:'cocktail martini'},{e:'🍹',n:'tropical drink'},
+        {e:'🧉',n:'mate drink'},{e:'🍾',n:'champagne bottle pop'},
+        {e:'🫗',n:'pouring liquid'},
+        // Travel & transport
+        {e:'🚗',n:'car red automobile'},{e:'🚕',n:'taxi cab'},
+        {e:'🚙',n:'suv car'},{e:'🚌',n:'bus'},
+        {e:'🚎',n:'trolleybus'},{e:'🏎️',n:'racing car formula'},
+        {e:'🚓',n:'police car'},{e:'🚑',n:'ambulance'},
+        {e:'🚒',n:'fire truck'},{e:'🚐',n:'minibus van'},
+        {e:'🛻',n:'pickup truck'},{e:'🚚',n:'delivery truck'},
+        {e:'🚛',n:'semi truck articulated'},{e:'🚜',n:'tractor'},
+        {e:'🏍️',n:'motorcycle motorbike'},{e:'🛵',n:'scooter moped'},
+        {e:'🚲',n:'bicycle bike'},{e:'🛴',n:'kick scooter'},
+        {e:'🛺',n:'auto rickshaw tuk-tuk'},{e:'✈️',n:'airplane plane fly'},
+        {e:'🛩️',n:'small plane'},{e:'🚀',n:'rocket launch'},
+        {e:'🛸',n:'ufo flying saucer'},{e:'🚁',n:'helicopter'},
+        {e:'🛶',n:'canoe boat'},{e:'⛵',n:'sailboat'},
+        {e:'🚤',n:'speedboat'},{e:'🛥️',n:'motor boat'},
+        {e:'🚢',n:'ship cruise'},{e:'⛴️',n:'ferry'},
+        {e:'🚂',n:'locomotive train'},{e:'🚃',n:'railway car'},
+        {e:'🚄',n:'bullet train'},{e:'🚅',n:'bullet train fast'},
+        {e:'🚇',n:'metro subway'},{e:'🚊',n:'tram'},
+        {e:'🚉',n:'station'},{e:'⛽',n:'fuel pump gas'},
+        {e:'🛞',n:'wheel tire'},{e:'🚦',n:'traffic light'},
+        {e:'🛣️',n:'motorway highway'},{e:'🗺️',n:'map world'},
+        {e:'🧭',n:'compass navigate'},{e:'⚓',n:'anchor ship'},
+        {e:'🏕️',n:'camping tent'},{e:'🏔️',n:'mountain snow'},
+        {e:'🗻',n:'mount fuji mountain'},{e:'🌋',n:'volcano eruption'},
+        {e:'🏖️',n:'beach sand'},{e:'🏝️',n:'island tropical'},
+        {e:'🏜️',n:'desert'},
+        // Places & buildings
+        {e:'🏠',n:'house home'},{e:'🏡',n:'house garden'},
+        {e:'🏢',n:'office building'},{e:'🏣',n:'post office'},
+        {e:'🏥',n:'hospital'},{e:'🏦',n:'bank'},
+        {e:'🏨',n:'hotel'},{e:'🏩',n:'love hotel'},
+        {e:'🏪',n:'convenience store'},{e:'🏫',n:'school'},
+        {e:'🏬',n:'department store shopping'},{e:'🏰',n:'castle european'},
+        {e:'🏯',n:'japanese castle'},{e:'⛩️',n:'shinto shrine'},
+        {e:'🗼',n:'tokyo tower'},{e:'🗽',n:'statue liberty'},
+        {e:'🎡',n:'ferris wheel'},{e:'🎢',n:'roller coaster'},
+        {e:'🎠',n:'carousel'},{e:'⛲',n:'fountain'},
+        {e:'🎪',n:'circus tent'},{e:'🌃',n:'night stars city'},
+        {e:'🌉',n:'bridge night'},{e:'🌁',n:'foggy'},
+        {e:'🌄',n:'sunrise mountain'},{e:'🌅',n:'sunrise'},
+        {e:'🌆',n:'cityscape dusk'},{e:'🌇',n:'sunset city'},
+        // Objects – entertainment
+        {e:'🎮',n:'game controller video'},{e:'🕹️',n:'joystick arcade'},
+        {e:'🎲',n:'dice game'},{e:'🧩',n:'puzzle piece'},
+        {e:'🪀',n:'yo-yo'},{e:'🪁',n:'sling shot'},
+        {e:'🎭',n:'performing arts theatre'},{e:'🎨',n:'palette art paint'},
+        {e:'🖼️',n:'painting picture frame'},{e:'🎬',n:'clapper film movie'},
+        {e:'📽️',n:'film projector'},{e:'📺',n:'television tv'},
+        {e:'🎙️',n:'microphone studio'},{e:'🎚️',n:'level slider'},
+        {e:'🎛️',n:'control knobs'},{e:'📻',n:'radio'},
+        {e:'🎸',n:'guitar rock'},{e:'🎹',n:'piano keyboard'},
+        {e:'🥁',n:'drum percussion'},{e:'🎺',n:'trumpet brass'},
+        {e:'🎻',n:'violin fiddle'},{e:'🪗',n:'accordion'},
+        {e:'🪘',n:'long drum bongo'},{e:'🎷',n:'saxophone sax'},
+        {e:'🎵',n:'music note'},{e:'🎶',n:'musical notes'},
+        {e:'🎤',n:'microphone karaoke sing'},{e:'🎧',n:'headphones music'},
+        // Objects – tech & tools
+        {e:'💻',n:'laptop computer'},{e:'🖥️',n:'desktop computer monitor'},
+        {e:'⌨️',n:'keyboard type'},{e:'🖱️',n:'computer mouse'},
+        {e:'🖨️',n:'printer'},{e:'📱',n:'mobile phone'},
+        {e:'📞',n:'telephone handset'},{e:'☎️',n:'phone landline'},
+        {e:'📟',n:'pager'},{e:'📠',n:'fax machine'},
+        {e:'📷',n:'camera photo'},{e:'📸',n:'camera flash'},
+        {e:'📹',n:'video camera'},{e:'🎥',n:'movie camera'},
+        {e:'📡',n:'satellite antenna'},{e:'🔭',n:'telescope star watch'},
+        {e:'🔬',n:'microscope science'},{e:'💡',n:'lightbulb idea'},
+        {e:'🔦',n:'flashlight torch'},{e:'🕯️',n:'candle flame'},
+        {e:'🪫',n:'low battery dead'},{e:'🔋',n:'battery charge'},
+        {e:'🔌',n:'electric plug'},{e:'💾',n:'floppy disk save'},
+        {e:'💿',n:'cd disc'},{e:'📀',n:'dvd disc'},
+        {e:'📼',n:'videocassette vhs tape'},{e:'📺',n:'tv television'},
+        {e:'🧲',n:'magnet attract'},{e:'🪜',n:'ladder'},
+        {e:'⚙️',n:'gear settings cog'},{e:'🔧',n:'wrench tool fix'},
+        {e:'🔩',n:'nut bolt'},{e:'🪛',n:'screwdriver'},
+        {e:'🔨',n:'hammer'},{e:'⚒️',n:'hammer pick'},
+        {e:'🪚',n:'carpentry saw'},{e:'🗜️',n:'clamp'},
+        {e:'⚖️',n:'scales balance justice'},
+        // Objects – everyday
+        {e:'📚',n:'books stack'},{e:'📖',n:'open book read'},
+        {e:'📝',n:'memo note write'},{e:'✏️',n:'pencil write'},
+        {e:'🖊️',n:'pen write'},{e:'🖋️',n:'fountain pen'},
+        {e:'📌',n:'pushpin location'},{e:'📍',n:'round pushpin map'},
+        {e:'📎',n:'paperclip'},{e:'🖇️',n:'linked paperclips'},
+        {e:'✂️',n:'scissors cut'},{e:'🗂️',n:'card index dividers'},
+        {e:'🗃️',n:'card file box'},{e:'🗄️',n:'file cabinet'},
+        {e:'🗑️',n:'wastebasket trash'},{e:'🔐',n:'locked key'},
+        {e:'🔑',n:'key unlock'},{e:'🗝️',n:'old key'},
+        {e:'🔒',n:'locked padlock'},{e:'🔓',n:'unlocked padlock'},
+        {e:'🔔',n:'bell notification'},{e:'🔕',n:'bell slash muted'},
+        {e:'📣',n:'megaphone loud'},{e:'📢',n:'loudspeaker announcement'},
+        {e:'🪄',n:'magic wand'},{e:'💎',n:'gem diamond jewel'},
+        {e:'💰',n:'money bag rich'},{e:'💵',n:'dollar bill cash'},
+        {e:'💳',n:'credit card'},{e:'🎫',n:'ticket admission'},
+        {e:'🎟️',n:'admission tickets'},{e:'🏷️',n:'label tag price'},
+        {e:'📦',n:'package box'},{e:'📫',n:'mailbox closed'},
+        {e:'📬',n:'open mailbox'},{e:'📭',n:'mailbox empty'},
+        {e:'✉️',n:'envelope letter email'},{e:'📧',n:'email message'},
+        {e:'📩',n:'envelope arrow incoming'},{e:'📨',n:'incoming envelope'},
+        {e:'🎒',n:'backpack school bag'},{e:'👝',n:'purse clutch'},
+        {e:'👛',n:'purse wallet'},{e:'👜',n:'handbag'},
+        {e:'🧳',n:'luggage travel suitcase'},{e:'☂️',n:'umbrella rain'},
+        {e:'🧵',n:'thread sew stitch'},{e:'🧶',n:'yarn wool knit'},
+        {e:'💊',n:'pill medicine tablet'},{e:'💉',n:'syringe needle injection'},
+        {e:'🩺',n:'stethoscope doctor'},{e:'🩹',n:'adhesive bandage first aid'},
+        {e:'🧬',n:'dna genetics science'},{e:'🧪',n:'test tube experiment'},
+        {e:'🧫',n:'petri dish biology'},{e:'⚗️',n:'alembic chemistry'},
+        {e:'🔮',n:'crystal ball fortune'},{e:'🪬',n:'hamsa evil eye'},
+        {e:'🧿',n:'nazar amulet evil eye'},
+        // Sports & games
+        {e:'⚽',n:'soccer football'},{e:'🏀',n:'basketball'},
+        {e:'🏈',n:'american football'},{e:'⚾',n:'baseball'},
+        {e:'🥎',n:'softball'},{e:'🏐',n:'volleyball'},
+        {e:'🏉',n:'rugby football'},{e:'🎾',n:'tennis'},
+        {e:'🥏',n:'flying disc frisbee'},{e:'🎳',n:'bowling'},
+        {e:'🏏',n:'cricket game'},{e:'🏑',n:'field hockey'},
+        {e:'🏒',n:'ice hockey'},{e:'🥍',n:'lacrosse'},
+        {e:'🏓',n:'ping pong table tennis'},{e:'🏸',n:'badminton'},
+        {e:'🥊',n:'boxing glove'},{e:'🥋',n:'martial arts belt'},
+        {e:'🥅',n:'goal net'},{e:'⛳',n:'golf flag hole'},
+        {e:'⛸️',n:'ice skate'},{e:'🎿',n:'ski skis'},
+        {e:'🛷',n:'sled toboggan'},{e:'🎯',n:'direct hit bullseye'},
+        {e:'🎱',n:'pool billiard 8 ball'},{e:'🏹',n:'bow arrow'},
+        {e:'🎣',n:'fishing rod fish'},{e:'🤿',n:'diving mask snorkel'},
+        {e:'🎽',n:'running shirt sports'},{e:'🎖️',n:'military medal'},
+        {e:'🏆',n:'trophy winner'},{e:'🥇',n:'gold medal first place'},
+        {e:'🥈',n:'silver medal second'},{e:'🥉',n:'bronze medal third'},
+        // Symbols & misc
+        {e:'🔥',n:'fire hot lit'},{e:'💥',n:'boom explosion'},
+        {e:'💢',n:'anger symbol mad'},{e:'💨',n:'dashing running wind'},
+        {e:'💦',n:'sweat drops water'},{e:'💤',n:'zzz sleep'},
+        {e:'🕳️',n:'hole void'},{e:'💣',n:'bomb explosion'},
+        {e:'💈',n:'barber pole'},{e:'🚁',n:'helicopter'},
+        {e:'🎉',n:'party popper celebration'},{e:'🎊',n:'confetti ball party'},
+        {e:'🎈',n:'balloon'},{e:'🎁',n:'gift present wrapped'},
+        {e:'🎀',n:'ribbon bow'},{e:'🪅',n:'piñata'},
+        {e:'🎃',n:'jack-o-lantern halloween'},{e:'🎆',n:'fireworks'},
+        {e:'🎇',n:'sparkler'},{e:'🧨',n:'firecracker red'},
+        {e:'✨',n:'sparkles'},{e:'🎍',n:'bamboo decoration'},
+        {e:'🎋',n:'tanabata tree bamboo'},{e:'🎎',n:'japanese dolls'},
+        {e:'🎐',n:'wind chime'},{e:'🎑',n:'moon viewing ceremony'},
+        {e:'💯',n:'hundred percent perfect'},{e:'🔞',n:'no under 18'},
+        {e:'‼️',n:'double exclamation'},{e:'❓',n:'question mark'},
+        {e:'❗',n:'exclamation mark'},{e:'✅',n:'check mark yes'},
+        {e:'❌',n:'cross no x'},{e:'⚠️',n:'warning caution'},
+        {e:'🆒',n:'cool button'},{e:'🆕',n:'new button'},
+        {e:'🆓',n:'free button'},{e:'🆙',n:'up button'},
+        {e:'🆗',n:'ok button'},{e:'🆘',n:'sos emergency'},
+        {e:'🔴',n:'red circle'},{e:'🟠',n:'orange circle'},
+        {e:'🟡',n:'yellow circle'},{e:'🟢',n:'green circle'},
+        {e:'🔵',n:'blue circle'},{e:'🟣',n:'purple circle'},
+        {e:'⚫',n:'black circle'},{e:'⚪',n:'white circle'},
+        {e:'🔶',n:'orange diamond large'},{e:'🔷',n:'blue diamond large'},
+        {e:'🔸',n:'orange diamond small'},{e:'🔹',n:'blue diamond small'},
+        {e:'🔺',n:'red triangle up'},{e:'🔻',n:'red triangle down'},
+        {e:'👀',n:'eyes looking watching'},{e:'🗣️',n:'speaking head talk'},
+        {e:'💬',n:'speech bubble chat'},{e:'💭',n:'thought bubble thinking'},
+        {e:'🗯️',n:'anger bubble shout'},{e:'🫧',n:'bubbles'},
+        {e:'🪐',n:'planet saturn'},{e:'🌍',n:'earth europe africa'},
+        {e:'🌎',n:'earth americas'},{e:'🌏',n:'earth asia'},
+        {e:'🗺️',n:'world map'},{e:'🧭',n:'compass'},
+        {e:'🚩',n:'flag triangular red'},{e:'🏴',n:'black flag'},
+        {e:'🏳️',n:'white flag surrender'},{e:'🏁',n:'chequered flag finish'},
     ];
 
     // ─── JS ──────────────────────────────────────────────────────────────────────
@@ -917,7 +1215,7 @@
     }
 
     function ensureFooterBar() {
-        // Footer lives at the bottom of #ichc-cams-col (under the cams panel)
+        // Footer is fixed-positioned to the absolute bottom of the viewport
         let bar = document.getElementById('ichc-footer-bar');
         const camsCol = document.getElementById('ichc-cams-col');
         if (!bar) {
@@ -1444,13 +1742,12 @@
             initUserlistResizer(ulResizer);
         }
 
-        collectRoomLinks(stage);
-        ensureFooterBar(); // ensure footer bar is in cams-col
         ensureWordCloud();
         if (_wordCloudMode) { setWordCloudMode(true); }
         installRoomRoot(stage);
         installUnifiedHeader();
         resetRoomShell(stage);
+        collectRoomLinks(stage);
         applyPrefs(loadPrefs());
         initStageDivider();
         buildHiddenCamManager();
@@ -2018,6 +2315,11 @@
         nickBlock.className = 'ichc-nick-block';
         badge.replaceWith(nickBlock);
         nickBlock.appendChild(badge);
+        const indicators = document.createElement('span');
+        indicators.className = 'ichc-nick-indicators';
+        indicators.dataset.ichcNickIndicators = nick;
+        _updateNickIndicators(indicators, nick);
+        nickBlock.appendChild(indicators);
         nickBlock.appendChild(anchor);
         const nextNode = nickBlock.nextSibling;
         if (nextNode?.nodeType === Node.TEXT_NODE) {
@@ -2046,7 +2348,7 @@
             _applyChatGrouping(row, nick);
         }
 
-        if (!profileYearCache.has(nick)) {
+        if (!profileYearCache.has(nick) || !profileJoinTsCache.has(nick)) {
             fetchProfileImage(nick).then(() => {
                 _updateChatBadgesForUser(nick);
                 _updateCamBadgesForUser(nick);
@@ -2058,6 +2360,29 @@
         if (!root) { return; }
         const anchors = root.matches?.('a.userlink') ? [root] : [...root.querySelectorAll('a.userlink')];
         anchors.forEach(_applyChatBadge);
+    }
+
+    function _updateNickIndicators(el, nick) {
+        const joinTs = profileJoinTsCache.get(nick);
+        const year   = profileYearCache.get(nick);
+        const karma  = profileKarmaCache.get(nick);
+        const isNew        = (joinTs != null && (Date.now() - joinTs) < 30 * 24 * 3600e3) || (joinTs == null && year === 0);
+        const isOldDormant = year != null && year >= 7 && karma != null && karma < 700;
+        el.textContent = '';
+        if (isNew) {
+            const s = document.createElement('span');
+            s.className = 'ichc-ni ichc-ni-new';
+            s.textContent = '\u{1F331}';
+            s.title = 'New account (less than 30 days old)';
+            el.appendChild(s);
+        }
+        if (isOldDormant) {
+            const s = document.createElement('span');
+            s.className = 'ichc-ni ichc-ni-dormant';
+            s.textContent = '\u{1F578}️';
+            s.title = 'Veteran account with low activity (7+ years, under 700 karma)';
+            el.appendChild(s);
+        }
     }
 
     function _updateChatBadgesForUser(key) {
@@ -2083,6 +2408,9 @@
         document.querySelectorAll(`#txt span[data-ichc-year-badge="${CSS.escape(key)}"]`).forEach(span => {
             _setBadgeYear(span, year ?? null);
             _setYearTierClass(span, year ?? null);
+        });
+        document.querySelectorAll(`#txt span[data-ichc-nick-indicators="${CSS.escape(key)}"]`).forEach(el => {
+            _updateNickIndicators(el, key);
         });
     }
 
@@ -3813,17 +4141,17 @@
             if (!existing) {
                 const wrap = document.createElement('div');
                 wrap.className = 'ichc-cam-resume';
-                const label = document.createElement('span');
-                label.className = 'ichc-cam-resume-msg';
-                label.textContent = 'Cams paused due to inactivity';
+                wrap.innerHTML =
+                    `<div class="ichc-cam-resume-icon">${ICONS.videoCamOff}</div>` +
+                    `<div class="ichc-cam-resume-title">Cams Paused</div>` +
+                    `<div class="ichc-cam-resume-msg">Room went idle — click below to restart streams.</div>`;
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'ichc-cam-resume-btn';
-                btn.textContent = 'Restart Cams';
+                btn.innerHTML = ICONS.rotate + '<span>Restart Cams</span>';
                 btn.addEventListener('click', () => {
                     document.getElementById('lurkMessageDiv')?.querySelector('a')?.click();
                 });
-                wrap.appendChild(label);
                 wrap.appendChild(btn);
                 cams.appendChild(wrap);
             }
@@ -3838,9 +4166,16 @@
         syncLurkBanner();
 
         if (!lurkState.pollTimer) {
-            lurkState.pollTimer = window.setInterval(() => {
-                syncLurkBanner();
-            }, 5000);
+            lurkState.pollTimer = window.setInterval(syncLurkBanner, 1000);
+        }
+
+        // React immediately when the site shows/hides lurkMessageDiv
+        const lurkDiv = document.getElementById('lurkMessageDiv');
+        if (lurkDiv && !lurkDiv._ichcLurkObs) {
+            lurkDiv._ichcLurkObs = true;
+            new MutationObserver(syncLurkBanner).observe(lurkDiv, {
+                attributes: true, childList: true,
+            });
         }
     }
 
@@ -4970,7 +5305,15 @@
         const cams = document.getElementById('cams');
         if (cams && userListState.camsObservedEl !== cams) {
             userListState.camsObserver?.disconnect();
-            userListState.camsObserver = new MutationObserver(() => scheduleUserListBuild(220));
+            userListState.camsObserver = new MutationObserver(mutations => {
+                for (const m of mutations) {
+                    // Cam-timer textContent updates fire every second — ignore them; they don't affect the user list.
+                    const el = m.target instanceof Element ? m.target : m.target.parentElement;
+                    if (el?.classList.contains('ichc-cam-timer')) { continue; }
+                    scheduleUserListBuild(220);
+                    return;
+                }
+            });
             userListState.camsObserver.observe(cams, {
                 childList: true,
                 subtree: true,
@@ -5512,6 +5855,21 @@
         card.classList.toggle('ichc-persist-hidden-slot', persistHidden);
         card.classList.toggle('ichc-ghost-slot', ghost);
         card.classList.toggle('ichc-placeholder-slot', placeholder);
+
+        // Disabled-state overlay — shows immediately so there's no blank gap
+        let disabledOverlay = card.querySelector('.ichc-disabled-overlay');
+        if (disabled) {
+            if (!disabledOverlay) {
+                disabledOverlay = document.createElement('div');
+                disabledOverlay.className = 'ichc-disabled-overlay';
+                disabledOverlay.innerHTML =
+                    `<span class="ichc-disabled-overlay-icon">${ICONS.videoCamOff}</span>` +
+                    `<span class="ichc-disabled-overlay-label">Paused</span>`;
+                card.appendChild(disabledOverlay);
+            }
+        } else {
+            disabledOverlay?.remove();
+        }
         if (mediaAspect && !placeholder && !hidden) {
             const [aw, ah] = mediaAspect.split('/').map(s => Number(s.trim()));
             const isPortrait = aw > 0 && ah > 0 && ah > aw;
