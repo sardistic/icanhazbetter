@@ -2913,6 +2913,16 @@
         item.appendChild(closeBtn);
 
         item.addEventListener('click', () => {
+            const pmBtn = document.getElementById('ichc-pm-toggle-btn');
+            const isPmOpen = pmBtn?.classList.contains('ichc-pm-open');
+            if (item.classList.contains('ichc-pm-avatar-active') && isPmOpen) {
+                // Second click on the already-active avatar collapses the PM window
+                // and un-expands the avatar pill back to just the circle.
+                document.querySelectorAll('#ichc-pm-avatars .ichc-pm-avatar-active')
+                    .forEach(a => a.classList.remove('ichc-pm-avatar-active'));
+                window.dispatchEvent(new CustomEvent('ichc-pm-user-toggle'));
+                return;
+            }
             window.dispatchEvent(new CustomEvent('ichc-pm-open', { detail: { nick, forceShow: true } }));
             window.dispatchEvent(new CustomEvent('ichc-pm-active', { detail: { nick } }));
             _clearPmAvatarBadge(nick);
