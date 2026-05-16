@@ -1,3 +1,69 @@
+    /* ── Page loading overlay (fills the Rocket Loader deferral gap) ── */
+    #ichc-loading-overlay {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 9999998 !important;
+        background: #111214 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 14px !important;
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+        opacity: 1 !important;
+        transition: opacity 0.55s ease !important;
+        pointer-events: auto !important;
+    }
+    #ichc-loading-overlay.ichc-loading-out {
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    #ichc-loading-icon {
+        color: #5865f2 !important;
+        animation: ichc-load-pulse 1.8s ease-in-out infinite !important;
+        line-height: 1 !important;
+    }
+    #ichc-loading-icon svg {
+        width: 40px !important;
+        height: 40px !important;
+    }
+    @keyframes ichc-load-pulse {
+        0%, 100% { opacity: 0.35; transform: scale(0.93); }
+        50%       { opacity: 0.85; transform: scale(1.0); }
+    }
+    #ichc-loading-wordmark {
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: lowercase !important;
+        color: #4e5058 !important;
+    }
+    #ichc-loading-bar {
+        width: 160px !important;
+        height: 2px !important;
+        background: rgba(255,255,255,0.07) !important;
+        border-radius: 2px !important;
+        overflow: hidden !important;
+    }
+    #ichc-loading-bar-fill {
+        height: 100% !important;
+        width: 38% !important;
+        background: linear-gradient(90deg, transparent, #5865f2, transparent) !important;
+        border-radius: 2px !important;
+        animation: ichc-load-sweep 1.6s ease-in-out infinite !important;
+    }
+    @keyframes ichc-load-sweep {
+        0%   { transform: translateX(-280%); }
+        100% { transform: translateX(680%); }
+    }
+    #ichc-loading-sub {
+        font-size: 10px !important;
+        color: #4e5058 !important;
+        letter-spacing: 0.05em !important;
+    }
+    html.ichc-light-theme #ichc-loading-overlay { background: #f2f3f5 !important; }
+    html.ichc-light-theme #ichc-loading-bar { background: rgba(0,0,0,0.08) !important; }
+
     /* ── Base ── */
     html, body {
         min-height: 100vh !important;

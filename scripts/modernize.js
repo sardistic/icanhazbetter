@@ -690,6 +690,45 @@
         document.documentElement.classList.add('ichc-light-theme');
     }
 
+    // ── Loading overlay — fills the Rocket Loader deferral gap ──────────────────
+    (function _installLoadingOverlay() {
+        const overlay = document.createElement('div');
+        overlay.id = 'ichc-loading-overlay';
+        overlay.innerHTML =
+            `<div id="ichc-loading-icon">${ICONS.broadcast}</div>` +
+            `<div id="ichc-loading-wordmark">icanhazchat</div>` +
+            `<div id="ichc-loading-bar"><div id="ichc-loading-bar-fill"></div></div>` +
+            `<div id="ichc-loading-sub">connecting…</div>`;
+        document.documentElement.appendChild(overlay);
+
+        let _gone = false;
+        const dismiss = () => {
+            if (_gone) { return; }
+            _gone = true;
+            overlay.classList.add('ichc-loading-out');
+            setTimeout(() => { overlay.remove(); }, 620);
+        };
+
+        // If scripts already ran (e.g. extension reloaded mid-session), dismiss instantly.
+        if (typeof window.refreshCams === 'function') { dismiss(); return; }
+
+        // After window.load Rocket Loader starts executing deferred scripts.
+        // Poll briefly for the site's main cam function to confirm they've run.
+        window.addEventListener('load', () => {
+            let _t = 0;
+            const _poll = setInterval(() => {
+                _t += 60;
+                if (typeof window.refreshCams === 'function' || _t >= 4000) {
+                    clearInterval(_poll);
+                    dismiss();
+                }
+            }, 60);
+        });
+
+        // Hard cap: never block longer than 12 s regardless of script state.
+        setTimeout(dismiss, 12000);
+    }());
+
     installBroadcastQualityPatch();
 
     document.addEventListener('DOMContentLoaded', () => {
