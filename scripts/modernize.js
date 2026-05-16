@@ -33,6 +33,8 @@
         shield:      `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M9.661 2.237a.531.531 0 0 1 .678 0 11.947 11.947 0 0 0 7.078 2.749.5.5 0 0 1 .479.425c.069.52.104 1.05.104 1.589 0 5.162-3.384 9.563-8.06 11.076a.475.475 0 0 1-.32 0C4.384 16.563 1 12.162 1 7c0-.539.035-1.069.104-1.589a.5.5 0 0 1 .48-.425 11.947 11.947 0 0 0 7.077-2.749z" clip-rule="evenodd"/></svg>`,
         sun:         `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M10 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 2zM10 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 15zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM15.657 5.404a.75.75 0 1 0-1.06-1.06l-1.061 1.06a.75.75 0 0 0 1.06 1.06l1.061-1.06zM6.464 14.596a.75.75 0 1 0-1.06-1.06l-1.06 1.06a.75.75 0 0 0 1.06 1.06l1.06-1.06zM18 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 18 10zM5 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 5 10zM14.596 15.657a.75.75 0 0 0 1.06-1.06l-1.06-1.061a.75.75 0 1 0-1.06 1.06l1.06 1.061zM5.404 6.464a.75.75 0 0 0 1.06-1.06L5.403 4.343a.75.75 0 0 0-1.06 1.06l1.06 1.061z"/></svg>`,
         moon:        `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M7.455 2.004a.75.75 0 0 1 .26.77 7 7 0 0 0 9.958 7.967.75.75 0 0 1 1.067.853A8.5 8.5 0 1 1 6.647 1.921a.75.75 0 0 1 .808.083z" clip-rule="evenodd"/></svg>`,
+        popOut:      `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06z" clip-rule="evenodd"/></svg>`,
+        popIn:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M14.78 5.22a.75.75 0 0 0-1.06 0L6 12.94V7.5a.75.75 0 0 0-1.5 0v6.75c0 .414.336.75.75.75H12a.75.75 0 0 0 0-1.5H6.56l7.72-7.72a.75.75 0 0 0 0-1.06z" clip-rule="evenodd"/></svg>`,
     };
 
     const PREF_KEY = 'ichc_layout_prefs';
@@ -40,7 +42,27 @@
     const FEATURED_KEY = 'ichc_featured_cam';
     const SIDE_WIDTH_KEY = 'ichc_stage_side_width';
     const CAM_SPAN_KEY = 'ichc_cam_spans_v1';
+    const CAM_LAYOUT_CACHE_KEY = 'ichc_cam_layout_v2';
     const DEFAULT_PREFS = { camMin: 360, chatWidth: 430, chatSide: 'right' };
+
+    // Restore last known cam layout immediately so first paint matches last session.
+    // This runs synchronously at document_start before any DOM is parsed.
+    try {
+        const _lc = JSON.parse(localStorage.getItem(CAM_LAYOUT_CACHE_KEY) || 'null');
+        if (_lc && typeof _lc === 'object') {
+            const _r = document.documentElement;
+            if (_lc.columns) { _r.style.setProperty('--ichc-cam-columns', String(_lc.columns)); }
+            if (_lc.camMin)  { _r.style.setProperty('--ichc-cam-min', `${_lc.camMin}px`); }
+            if (_lc.aspect)  { _r.style.setProperty('--ichc-cam-aspect', _lc.aspect); }
+            if (_lc.sideWidth)  { _r.style.setProperty('--ichc-stage-side-width', `${_lc.sideWidth}px`); }
+            if (_lc.chatWidth)  { _r.style.setProperty('--ichc-chat-width', `${_lc.chatWidth}px`); }
+            if (_lc.ulWidth)    { _r.style.setProperty('--ichc-userlist-width', `${_lc.ulWidth}px`); }
+        }
+    } catch (_) {}
+    // Mark the initial settle window; removed after first layout so transitions are safe.
+    document.documentElement.classList.add('ichc-cams-init');
+    // Safety net: never hold the init class longer than 1.5s regardless of DOM readiness.
+    window.setTimeout(() => document.documentElement.classList.remove('ichc-cams-init'), 1500);
     const dragState = { handleArmed: null, activeCard: null };
     const userListState = {
         timer: null,
@@ -54,7 +76,8 @@
         _suppressBlur: false,  // true during panel.innerHTML='' so the sync blur doesn't clear searchFocused
         rebuildPendingAfterSearch: false,
         moreMenuDismissBound: false,
-        sortMode: localStorage.getItem('ichc_ul_sort') || 'alpha',  // 'alpha' | 'karma' | 'age'
+        sortMode: localStorage.getItem('ichc_ul_sort') || 'karma',  // 'alpha' | 'karma' | 'age'
+        showAvatars: localStorage.getItem('ichc_ul_show_avatars') === 'true',
     };
     const lurkState = {
         pollTimer: null,
@@ -716,6 +739,9 @@
         _wrapRefreshCams();
         window.setTimeout(_wrapRefreshCams, 2000);
         window.setTimeout(_wrapRefreshCams, 5000);
+        // Remove the init veil immediately if layout is already measurable,
+        // bypassing guards in initCamLayout/layoutChat that require #cams/#chat_container.
+        updateCamDensity();
     });
 
     // ── Dialog center + drag ──────────────────────────────────────────────────────
@@ -807,16 +833,33 @@
             dialog.style.display = 'none';
         };
 
-        // Close button — replace jQuery UI's sprite icon with a plain ×
+        // Close button — replace jQuery UI sprite icon with SVG X
         const closeBtn = dialog.querySelector('.ui-dialog-titlebar-close');
         if (closeBtn) {
             closeBtn.replaceChildren();
-            closeBtn.textContent = '×';
+            closeBtn.insertAdjacentHTML('beforeend',
+                '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" ' +
+                'style="pointer-events:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;fill:none;">' +
+                '<line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg>');
             closeBtn.addEventListener('click', e => { e.stopPropagation(); _closeDialog(); });
         }
 
         // "Send Private Message" / "Start Private Message" → open PM tab
         const nick = dialog.querySelector('.ui-dialog-title')?.textContent?.trim() || '';
+
+        // Apply profile background image to dialog
+        if (nick) {
+            const _applyDialogBg = () => {
+                const bgUrl = profileBgCache.get(nick.toLowerCase());
+                if (bgUrl && dialog.isConnected) {
+                    dialog.style.setProperty('--ichc-dialog-bg', `url("${bgUrl}")`);
+                    dialog.classList.add('ichc-has-profile-bg');
+                }
+            };
+            _applyDialogBg();
+            setTimeout(_applyDialogBg, 600);
+            setTimeout(_applyDialogBg, 1800);
+        }
 
         // Seed avatar cache from the dialog's own DOM — the profile pic is in
         // td.trophy_case img.rounded and is already loaded; no page fetch needed.
@@ -850,7 +893,7 @@
             });
         }
 
-        // Drag via titlebar
+        // Drag via titlebar — RAF-throttled to avoid jank
         if (!titlebar) { return; }
         titlebar.addEventListener('mousedown', e => {
             if (e.button !== 0 || e.target.closest('.ui-dialog-titlebar-close')) { return; }
@@ -860,11 +903,19 @@
             const startLeft = parseFloat(dialog.style.left) || 0;
             const startTop  = parseFloat(dialog.style.top)  || 0;
             titlebar.style.cursor = 'grabbing';
-            const onMove = e => {
-                dialog.style.left = Math.max(0, startLeft + e.clientX - startX) + 'px';
-                dialog.style.top  = Math.max(0, startTop  + e.clientY - startY) + 'px';
+            let _pendingX = startX, _pendingY = startY, _rafId = null;
+            const onMove = ev => {
+                _pendingX = ev.clientX;
+                _pendingY = ev.clientY;
+                if (_rafId) { return; }
+                _rafId = requestAnimationFrame(() => {
+                    _rafId = null;
+                    dialog.style.left = Math.max(0, startLeft + _pendingX - startX) + 'px';
+                    dialog.style.top  = Math.max(0, startTop  + _pendingY - startY) + 'px';
+                });
             };
             const onUp = () => {
+                if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
                 titlebar.style.cursor = '';
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup',  onUp);
@@ -1090,12 +1141,25 @@
             chatSide: 'right',
             chatWidth: 430,
         };
-        document.documentElement.style.setProperty('--ichc-cam-min', `${DEFAULT_PREFS.camMin}px`);
-        document.documentElement.style.setProperty('--ichc-chat-width', `${prefs.chatWidth}px`);
-        document.documentElement.style.setProperty('--ichc-cam-columns', '1');
-        const storedSideWidth = loadStoredSideWidth();
+        // Use cached layout from last session as the base — updateCamDensity() will
+        // refine these once the DOM is measured, but this prevents the initial jump.
+        let cachedLayout = null;
+        try { cachedLayout = JSON.parse(localStorage.getItem(CAM_LAYOUT_CACHE_KEY) || 'null'); } catch (_) {}
+        const camMin = cachedLayout?.camMin || DEFAULT_PREFS.camMin;
+        const camCols = cachedLayout?.columns || 1;
+        document.documentElement.style.setProperty('--ichc-cam-min', `${camMin}px`);
+        document.documentElement.style.setProperty('--ichc-cam-columns', String(camCols));
+        if (cachedLayout?.aspect) {
+            document.documentElement.style.setProperty('--ichc-cam-aspect', cachedLayout.aspect);
+        }
+        const storedSideWidth = cachedLayout?.sideWidth || loadStoredSideWidth();
         if (storedSideWidth) {
             document.documentElement.style.setProperty('--ichc-stage-side-width', `${storedSideWidth}px`);
+            // CSS now sizes #ichc-chat-shell via --ichc-chat-width + --ichc-userlist-width
+            const _ulW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ichc-userlist-width')) || 200;
+            document.documentElement.style.setProperty('--ichc-chat-width', `${Math.max(280, storedSideWidth - _ulW)}px`);
+        } else {
+            document.documentElement.style.setProperty('--ichc-chat-width', `${prefs.chatWidth}px`);
         }
 
         const stage = document.getElementById('ichc-room-stage');
@@ -1215,32 +1279,40 @@
     }
 
     function ensureFooterBar() {
-        // Footer is fixed-positioned to the absolute bottom of the viewport
         let bar = document.getElementById('ichc-footer-bar');
         const camsCol = document.getElementById('ichc-cams-col');
         if (!bar) {
             bar = document.createElement('div');
             bar.id = 'ichc-footer-bar';
 
-            // Copyright line + key links
+            // Left — holds the theme toggle button (placed later by transformCommandBar)
+            const left = document.createElement('div');
+            left.id = 'ichc-footer-left';
+            bar.appendChild(left);
+
+            // Center — copyright only, no links
             const copy = document.createElement('div');
             copy.id = 'ichc-footer-copy';
-            copy.innerHTML = `\u00a9 2025 icanhazchat.com \u00b7 ` + [
-                ['Help',          'https://www.icanhazchat.com/Help'],
-                ['Get Hearted',   'https://www.icanhazchat.com/GetHearted'],
-                ['Credits',       'https://www.icanhazchat.com/credits'],
-                ['Contact',       'https://www.icanhazchat.com/contact'],
+            copy.textContent = `© ${new Date().getFullYear()} icanhazchat.com`;
+            bar.appendChild(copy);
+
+            // Right — links, cloud toggle, More button (submenu appended by collectRoomLinks)
+            const right = document.createElement('div');
+            right.id = 'ichc-footer-right';
+
+            const linksSpan = document.createElement('span');
+            linksSpan.id = 'ichc-footer-links';
+            linksSpan.innerHTML = [
+                ['Help',        'https://www.icanhazchat.com/Help'],
+                ['Get Hearted', 'https://www.icanhazchat.com/GetHearted'],
+                ['Credits',     'https://www.icanhazchat.com/credits'],
+                ['Contact',     'https://www.icanhazchat.com/contact'],
             ].map(([label, href]) =>
                 `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
-            ).join(' \u00b7 ');
-            bar.appendChild(copy);
-        }
-        if (camsCol && bar.parentElement !== camsCol) {
-            camsCol.appendChild(bar);
-        }
+            ).join(' · ');
+            right.appendChild(linksSpan);
 
-        // Word cloud toggle button
-        if (!document.getElementById('ichc-wc-toggle-btn')) {
+            // Cloud / word-cloud toggle button
             const wcBtn = document.createElement('button');
             wcBtn.id = 'ichc-wc-toggle-btn';
             wcBtn.type = 'button';
@@ -1248,12 +1320,15 @@
             wcBtn.textContent = '☁';
             wcBtn.className = 'ichc-wc-toggle-btn' + (_wordCloudMode ? ' ichc-wc-active' : '');
             wcBtn.addEventListener('click', () => setWordCloudMode(!_wordCloudMode));
-            bar.appendChild(wcBtn);
-        }
+            right.appendChild(wcBtn);
 
+            bar.appendChild(right);
+        }
+        if (camsCol && bar.parentElement !== camsCol) {
+            camsCol.appendChild(bar);
+        }
         return bar;
     }
-
 
     function isRoomRulesLink(link) {
         const text = normalizeText(link?.textContent || '');
@@ -1262,8 +1337,8 @@
     }
 
     function placeRoomRulesInFooter(sourceLink) {
-        const copy = document.getElementById('ichc-footer-copy');
-        if (!copy || !sourceLink) { return; }
+        const linksSpan = document.getElementById('ichc-footer-links');
+        if (!linksSpan || !sourceLink) { return; }
         let rulesLink = document.getElementById('ichc-footer-room-rules');
         if (!rulesLink) {
             rulesLink = document.createElement('a');
@@ -1271,8 +1346,8 @@
             rulesLink.target = '_blank';
             rulesLink.rel = 'noopener noreferrer';
             rulesLink.textContent = sourceLink.textContent.trim() || 'Room Rules';
-            copy.appendChild(document.createTextNode(' \u00b7 '));
-            copy.appendChild(rulesLink);
+            linksSpan.appendChild(document.createTextNode(' \u00b7 '));
+            linksSpan.appendChild(rulesLink);
         }
         rulesLink.href = sourceLink.href || sourceLink.getAttribute('href') || '#';
         rulesLink.textContent = sourceLink.textContent.trim() || 'Room Rules';
@@ -1334,15 +1409,12 @@
             submenu.appendChild(toggleBtn);
             submenu.appendChild(panel);
             panel.appendChild(siteLinksDiv);
+        }
 
-            // Room button lives in the footer bar
-            if (!footerBar.contains(submenu)) {
-                footerBar.appendChild(submenu);
-            }
-        } else {
-            if (!footerBar.contains(submenu)) {
-                footerBar.appendChild(submenu);
-            }
+        // More button lives in the right section of the footer bar
+        const footerRight = document.getElementById('ichc-footer-right') || footerBar;
+        if (!footerRight.contains(submenu)) {
+            footerRight.appendChild(submenu);
         }
 
         const panel = document.getElementById('ichc-room-links');
@@ -1799,6 +1871,9 @@
             state.width = Math.round(nextWidth);
             camLayoutState.sideWidthOverride = state.width;
             document.documentElement.style.setProperty('--ichc-stage-side-width', `${state.width}px`);
+            // CSS now sizes #ichc-chat-shell via --ichc-chat-width + --ichc-userlist-width
+            const _ulW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ichc-userlist-width')) || 200;
+            document.documentElement.style.setProperty('--ichc-chat-width', `${Math.max(280, state.width - _ulW)}px`);
             updateCamDensity();
             layoutChat();
         }, true);
@@ -2422,7 +2497,7 @@
     // ── Cam decoration via dynamic stylesheet ────────────────────────────────
     // Never touches .rounded_square attributes or its subtree — uses :has() in
     // a <style> element so the site's MutationObserver is never triggered.
-    const _camDecorMap = new Map(); // camId → { tier, year }
+    const _camDecorMap = new Map(); // camId → { tier, year, bgUrl }
     let _camDecorStyleEl = null;
     let _camDecorLastCSS = '';
     const _CAM_TIER_CSS = [
@@ -2449,11 +2524,16 @@
     }
     function _updateCamDecorStyles() {
         const rules = [];
-        for (const [camId, { tier, year }] of _camDecorMap) {
+        for (const [camId, { tier, year, bgUrl }] of _camDecorMap) {
             const eid = CSS.escape('id-' + camId);
             const cardSel = `#cams .rounded_square:has(#${eid})`;
             if (tier >= 0 && tier < _CAM_TIER_CSS.length) {
                 rules.push(`${cardSel}{${_CAM_TIER_CSS[tier]}!important}`);
+            }
+            if (bgUrl) {
+                // Profile background fills behind the video as a subtle wash.
+                // z-index:0 keeps it below the video; videocontainer sits on top.
+                rules.push(`${cardSel}::before{content:'';position:absolute;inset:0;background:url("${bgUrl}") center 30%/cover no-repeat;opacity:0.22;z-index:0;pointer-events:none;border-radius:11px;transition:opacity 0.3s}`);
             }
             if (year != null) {
                 const nameSel = `${cardSel} .name-on-cam`;
@@ -2472,11 +2552,13 @@
         _camDecorLastCSS = css;
         _getCamDecorStyle().textContent = css;
     }
-    function _applyCamDecor(camId, karma, year) {
+    function _applyCamDecor(camId, karma, year, bgUrl) {
         if (!camId) { return; }
         const tier = _karmaToTier(karma ?? null);
-        if (tier < 0 && year == null) { _camDecorMap.delete(camId); }
-        else { _camDecorMap.set(camId, { tier, year: year ?? null }); }
+        const prev = _camDecorMap.get(camId);
+        const resolvedBg = bgUrl ?? prev?.bgUrl ?? null;
+        if (tier < 0 && year == null && !resolvedBg) { _camDecorMap.delete(camId); }
+        else { _camDecorMap.set(camId, { tier, year: year ?? null, bgUrl: resolvedBg }); }
         _updateCamDecorStyles();
     }
 
@@ -2488,7 +2570,7 @@
         if (!card) { return; }
         const camId = getCamId(card);
         if (!camId) { return; }
-        _applyCamDecor(camId, profileKarmaCache.get(nick) ?? null, profileYearCache.get(nick) ?? null);
+        _applyCamDecor(camId, profileKarmaCache.get(nick) ?? null, profileYearCache.get(nick) ?? null, profileBgCache.get(nick) ?? null);
         if (!profileYearCache.has(nick)) {
             fetchProfileImage(nick).then(() => {
                 _updateChatBadgesForUser(nick);
@@ -2500,11 +2582,12 @@
     function _updateCamBadgesForUser(key) {
         const karma = profileKarmaCache.get(key);
         const year  = profileYearCache.get(key);
+        const bgUrl = profileBgCache.get(key) ?? null;
         document.querySelectorAll('#cams .name-on-cam').forEach(nameEl => {
             if (nameEl.textContent.trim().toLowerCase() !== key) { return; }
             const card = nameEl.closest('.rounded_square');
             const camId = card ? getCamId(card) : null;
-            if (camId) { _applyCamDecor(camId, karma ?? null, year ?? null); }
+            if (camId) { _applyCamDecor(camId, karma ?? null, year ?? null, bgUrl); }
         });
     }
 
@@ -2748,8 +2831,8 @@
         item.className = 'ichc-pm-avatar-item';
         item.dataset.nick = nick;
         item.title = nick;
-        // Force size + positioning context inline so CSS caching can't break the badge
-        item.style.cssText = 'position:relative!important;width:28px!important;height:28px!important;flex-shrink:0!important;cursor:pointer!important;';
+        // Inline positioning context; width is controlled by CSS (expands when active)
+        item.style.cssText = 'position:relative!important;height:28px!important;flex-shrink:0!important;cursor:pointer!important;';
 
         const inner = document.createElement('div');
         inner.className = 'ichc-pm-avatar-inner';
@@ -2766,11 +2849,32 @@
         // All positioning inline — left side, above avatar, red glow
         badge.style.cssText = 'position:absolute!important;top:-4px!important;left:-2px!important;right:auto!important;min-width:16px!important;height:16px!important;padding:0 3px!important;border-radius:8px!important;background:#ff1111!important;color:#fff!important;font-size:10px!important;font-weight:800!important;line-height:16px!important;text-align:center!important;pointer-events:none!important;display:none!important;z-index:3!important;border:1.5px solid #1e2024!important;box-sizing:border-box!important;box-shadow:0 0 5px 1px rgba(255,0,0,.55)!important;';
 
+        const statusDot = document.createElement('span');
+        statusDot.className = 'ichc-pm-status-dot ichc-pm-status-offline';
+
+        const nameLabel = document.createElement('span');
+        nameLabel.className = 'ichc-pm-avatar-name';
+        nameLabel.textContent = nick;
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'ichc-pm-avatar-close';
+        closeBtn.title = `Close ${nick}`;
+        closeBtn.textContent = '×';
+        closeBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent('ichc-pm-close-nick', { detail: { nick } }));
+        });
+
         item.appendChild(inner);
         item.appendChild(badge);
+        item.appendChild(statusDot);
+        item.appendChild(nameLabel);
+        item.appendChild(closeBtn);
 
         item.addEventListener('click', () => {
             window.dispatchEvent(new CustomEvent('ichc-pm-open', { detail: { nick, forceShow: true } }));
+            window.dispatchEvent(new CustomEvent('ichc-pm-active', { detail: { nick } }));
             _clearPmAvatarBadge(nick);
         });
 
@@ -2788,6 +2892,18 @@
         return item;
     }
 
+    function _syncPmAvatarStatuses(users) {
+        const byNick = new Map((users || []).map(u => [u.name.toLowerCase(), u]));
+        document.querySelectorAll('#ichc-pm-avatars [data-nick]').forEach(item => {
+            const key = (item.dataset.nick || '').toLowerCase();
+            const u = byNick.get(key);
+            let status = 'offline';
+            if (u) { status = u.cammed ? 'broadcasting' : u.idle ? 'idle' : 'online'; }
+            const dot = item.querySelector('.ichc-pm-status-dot');
+            if (dot) { dot.className = `ichc-pm-status-dot ichc-pm-status-${status}`; }
+        });
+    }
+
     function _syncSidebarUnread() {
         const hasUnread = !!document.querySelector('#ichc-pm-avatars .ichc-pm-avatar-unread');
         if (hasUnread) {
@@ -2798,7 +2914,7 @@
             if (pmBtn) {
                 pmBtn.dataset.pmUnread = '0';
                 pmBtn.classList.remove('ichc-pm-toggle-alert');
-                pmBtn.title = 'Toggle PM window';
+                pmBtn.title = pmBtn.classList.contains('ichc-pm-open') ? 'Pop in PM' : 'Pop out PM';
                 const pmBadge = pmBtn.querySelector('.ichc-pm-toggle-badge');
                 if (pmBadge) { pmBadge.hidden = true; pmBadge.textContent = ''; }
             }
@@ -2837,11 +2953,6 @@
         (document.head || document.documentElement).appendChild(s);
     }
 
-    // JS-driven pulse — CSS animations can't override !important author declarations,
-    // but inline styles set via setProperty(..., 'important') can.
-    let _sidebarPulseTimer = null;
-    let _sidebarPulseT = 0;
-
     function _isPmTabFocused(nick) {
         if (!nick || typeof nick !== 'string') { return false; }
         const pmRoot = document.getElementById('tabs');
@@ -2851,35 +2962,14 @@
     }
 
     function _startSidebarPulse() {
-        if (_sidebarPulseTimer) { return; }
-        _sidebarPulseT = 0;
-        _sidebarPulseTimer = setInterval(() => {
-            const strip = document.getElementById('ichc-ul-toggle-btn');
-            if (!strip || !document.querySelector('#ichc-pm-avatars .ichc-pm-avatar-unread, #ichc-pm-toggle-btn.ichc-pm-toggle-alert')) {
-                _stopSidebarPulse();
-                return;
-            }
-            _sidebarPulseT = (_sidebarPulseT + 1) % 28;
-            const t = Math.sin((_sidebarPulseT / 28) * Math.PI); // smooth 0→1→0
-            strip.classList.add('ichc-has-pm-unread');
-            strip.style.setProperty('background', `rgba(190,18,60,${(0.18 + t * 0.24).toFixed(3)})`, 'important');
-            strip.style.setProperty('box-shadow', `inset -8px 0 24px rgba(239,68,68,${(0.26 + t * 0.36).toFixed(3)}), 0 0 18px rgba(239,68,68,${(t * 0.34).toFixed(3)})`, 'important');
-            strip.style.setProperty('border-left-color', `rgba(248,113,113,${(0.35 + t * 0.55).toFixed(3)})`, 'important');
-            strip.style.setProperty('transform', `translateX(-${(1.5 + t * 4.5).toFixed(1)}px)`, 'important');
-        }, 50);
+        // PM moved out of sidebar — mark the more-btn as having unread PMs
+        const moreBtn = document.querySelector('.ichc-ul-more-btn');
+        if (moreBtn) { moreBtn.classList.add('ichc-has-pm-unread'); }
     }
 
     function _stopSidebarPulse() {
-        if (_sidebarPulseTimer) { clearInterval(_sidebarPulseTimer); _sidebarPulseTimer = null; }
-        const strip = document.getElementById('ichc-ul-toggle-btn');
-        if (strip) {
-            strip.style.removeProperty('background');
-            strip.style.removeProperty('box-shadow');
-            strip.style.removeProperty('border-left-color');
-            strip.style.removeProperty('animation');
-            strip.style.removeProperty('transform');
-            strip.classList.remove('ichc-has-pm-unread');
-        }
+        const moreBtn = document.querySelector('.ichc-ul-more-btn');
+        if (moreBtn) { moreBtn.classList.remove('ichc-has-pm-unread'); }
     }
 
     let _pmAvObsDone = false;
@@ -2915,17 +3005,21 @@
                 }, 0);
             const pmBtn = document.getElementById('ichc-pm-toggle-btn');
             const pmBadge = pmBtn?.querySelector('.ichc-pm-toggle-badge');
+            const remainingAvatars = document.querySelectorAll('#ichc-pm-avatars [data-nick]').length;
             if (remaining === 0) {
                 if (pmBtn) {
                     pmBtn.dataset.pmUnread = '0';
                     pmBtn.classList.remove('ichc-pm-toggle-alert');
-                    document.getElementById('ichc-ul-toggle-btn')?.classList.remove('ichc-has-pm-unread');
                 }
                 if (pmBadge) { pmBadge.hidden = true; pmBadge.textContent = ''; }
                 _stopSidebarPulse();
             } else if (pmBtn && pmBadge) {
                 pmBtn.dataset.pmUnread = String(remaining);
                 pmBadge.textContent = remaining > 9 ? '9+' : String(remaining);
+            }
+            if (remainingAvatars === 0 && pmBtn) {
+                pmBtn.classList.remove('ichc-pm-open');
+                pmBtn.title = 'Pop out PM';
             }
         });
 
@@ -2939,6 +3033,14 @@
             }
         });
 
+        // Active PM conversation changed — mark corresponding avatar as active.
+        window.addEventListener('ichc-pm-active', e => {
+            const activeNick = (e.detail?.nick || '').toLowerCase();
+            document.querySelectorAll('#ichc-pm-avatars [data-nick]').forEach(item => {
+                item.classList.toggle('ichc-pm-avatar-active', (item.dataset.nick || '').toLowerCase() === activeNick);
+            });
+        });
+
         // PM toggle button clicked — clear all avatar badges.
         window.addEventListener('ichc-pm-user-toggle', () => {
             document.querySelectorAll('#ichc-pm-avatars [data-nick]').forEach(item => {
@@ -2946,6 +3048,24 @@
                 if (nick) { _clearPmAvatarBadge(nick); }
             });
         });
+
+        // Clicking the empty background of the strip opens the PM window.
+        document.addEventListener('click', e => {
+            const strip = document.getElementById('ichc-pm-avatars');
+            if (!strip || e.target !== strip) { return; }
+            const pmBtn = document.getElementById('ichc-pm-toggle-btn');
+            if (pmBtn && pmBtn.classList.contains('ichc-pm-open')) { return; }
+            // No active PM: open the most-recently-active tab, or just toggle.
+            const activeItem = strip.querySelector('.ichc-pm-avatar-active[data-nick]');
+            const firstItem = strip.querySelector('[data-nick]');
+            const targetNick = (activeItem || firstItem)?.dataset?.nick;
+            if (targetNick) {
+                window.dispatchEvent(new CustomEvent('ichc-pm-open', { detail: { nick: targetNick, forceShow: true } }));
+                window.dispatchEvent(new CustomEvent('ichc-pm-active', { detail: { nick: targetNick } }));
+            } else {
+                window.dispatchEvent(new CustomEvent('ichc-pm-user-toggle'));
+            }
+        }, true);
 
         // Watch #tab_list for tabs being added or removed.
         let _tabListObs = null;
@@ -3594,18 +3714,19 @@
         window.setTimeout(() => requestCamRelayout(40), 5000);
     }
 
-    const _STRIP_ALLOWED_IDS = new Set([
-        'ichc-ul-toggle-badge', 'ichc-pm-avatars', 'ichc-theme-toggle-btn',
-        'ichc-pm-toggle-btn', 'ichc-cog-wrapper', 'ichc-ul-sidebar-avatars',
-    ]);
-    const _STRIP_ALLOWED_CLASSES = new Set(['ichc-ul-toggle-chevron']);
+    let _ulCollapsed = false;
 
-    function _purgeStrayStripChildren(strip) {
-        [...strip.children].forEach(child => {
-            if (_STRIP_ALLOWED_IDS.has(child.id)) { return; }
-            if ([...child.classList].some(c => _STRIP_ALLOWED_CLASSES.has(c))) { return; }
-            child.remove();
-        });
+    function _toggleUserListCollapse() {
+        _ulCollapsed = !_ulCollapsed;
+        const shell = document.getElementById('ichc-chat-shell');
+        shell?.classList.toggle('ichc-ul-collapsed', _ulCollapsed);
+        document.documentElement.classList.toggle('ichc-ul-collapsed', _ulCollapsed);
+        // Sync the collapse button label inside the userlist header
+        const collapseBtn = document.getElementById('ichc-ul-collapse-btn');
+        if (collapseBtn) {
+            collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronLeft : ICONS.chevronRight;
+            collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
+        }
     }
 
     function transformCommandBar() {
@@ -3649,22 +3770,32 @@
 
         // If pm/cog/gif buttons already exist, ensure correct placement and return.
         if (document.getElementById('ichc-cog-wrapper')) {
-            const sidebarStrip = document.getElementById('ichc-ul-toggle-btn');
-            if (sidebarStrip) {
-                [
-                    document.getElementById('ichc-pm-toggle-btn'),
-                    document.getElementById('ichc-cog-wrapper'),
-                ].forEach(el => {
-                    if (el && !sidebarStrip.contains(el)) {
-                        sidebarStrip.appendChild(el);
-                    }
-                });
-                const pmAvStrip = document.getElementById('ichc-pm-avatars');
-                if (pmAvStrip && !sidebarStrip.contains(pmAvStrip)) {
-                    const tb = document.getElementById('ichc-theme-toggle-btn');
-                    sidebarStrip.insertBefore(pmAvStrip, tb || sidebarStrip.firstChild);
-                }
-                _purgeStrayStripChildren(sidebarStrip);
+            // Cog lives in the header, left of the hamburger
+            const cogWrapper = document.getElementById('ichc-cog-wrapper');
+            const actions = document.getElementById('ichc-header-actions');
+            const hamburgerWrapper = document.getElementById('ichc-nav-hamburger-wrapper');
+            if (cogWrapper && actions && !actions.contains(cogWrapper)) {
+                if (hamburgerWrapper) { actions.insertBefore(cogWrapper, hamburgerWrapper); }
+                else { actions.appendChild(cogWrapper); }
+            }
+            // Theme btn lives in the left section of the footer
+            const footerBar = document.getElementById('ichc-footer-bar');
+            const themeBtn = document.getElementById('ichc-theme-toggle-btn');
+            const _footerLeft = document.getElementById('ichc-footer-left') || footerBar;
+            if (themeBtn && _footerLeft && !_footerLeft.contains(themeBtn)) {
+                _footerLeft.appendChild(themeBtn);
+            }
+            // PM button lives inside the pm-avatar strip
+            const _er_pmBtn = document.getElementById('ichc-pm-toggle-btn');
+            const _er_pmAvStrip = document.getElementById('ichc-pm-avatars');
+            if (_er_pmBtn && _er_pmAvStrip && !_er_pmAvStrip.contains(_er_pmBtn)) {
+                _er_pmAvStrip.insertBefore(_er_pmBtn, _er_pmAvStrip.firstChild || null);
+            }
+            // PM avatars live at the top of #ichc-userlist panel
+            const userlistPanel = document.getElementById('ichc-userlist');
+            const pmAvStrip = document.getElementById('ichc-pm-avatars');
+            if (pmAvStrip && userlistPanel && !userlistPanel.contains(pmAvStrip)) {
+                userlistPanel.insertBefore(pmAvStrip, userlistPanel.firstChild);
             }
             // gif lives directly in inputRow, between txtMsg and sendBtn
             const gifWrap = document.getElementById('ichc-gif-wrapper');
@@ -3780,11 +3911,11 @@
         const portalMenu = () => {
             const root = document.getElementById('ichc-room-root') || document.body;
             if (!root.contains(menu)) { root.appendChild(menu); }
-            // Reposition menu above the cog button
+            // Reposition menu below the cog button (cog is now in the header)
             const rect = cogBtn.getBoundingClientRect();
-            menu.style.setProperty('bottom', (window.innerHeight - rect.top + 4) + 'px', 'important');
+            menu.style.setProperty('top', (rect.bottom + 4) + 'px', 'important');
             menu.style.setProperty('right', (window.innerWidth - rect.right - 2) + 'px', 'important');
-            menu.style.removeProperty('top');
+            menu.style.removeProperty('bottom');
             menu.style.removeProperty('left');
         };
         const toggle = () => {
@@ -3817,41 +3948,56 @@
         const pmBtn = document.createElement('button');
         pmBtn.type = 'button';
         pmBtn.id = 'ichc-pm-toggle-btn';
-        pmBtn.title = 'Toggle PM window';
-        pmBtn.innerHTML = ICONS.chat;
+        pmBtn.title = 'Pop out PM';
         pmBtn.dataset.pmUnread = '0';
+        const pmIconOut = document.createElement('span');
+        pmIconOut.dataset.pmState = 'out';
+        pmIconOut.innerHTML = ICONS.popOut;
+        const pmIconIn = document.createElement('span');
+        pmIconIn.dataset.pmState = 'in';
+        pmIconIn.innerHTML = ICONS.popIn;
         const pmBadge = document.createElement('span');
         pmBadge.className = 'ichc-pm-toggle-badge';
         pmBadge.setAttribute('aria-hidden', 'true');
+        pmBtn.appendChild(pmIconOut);
+        pmBtn.appendChild(pmIconIn);
         pmBtn.appendChild(pmBadge);
 
         const clearPmButtonAlert = () => {
             pmBtn.dataset.pmUnread = '0';
             pmBtn.classList.remove('ichc-pm-toggle-alert');
-            document.getElementById('ichc-ul-toggle-btn')?.classList.remove('ichc-has-pm-unread');
             _stopSidebarPulse();
             pmBadge.textContent = '';
             pmBadge.hidden = true;
-            pmBtn.title = 'Toggle PM window';
+            pmBtn.title = pmBtn.classList.contains('ichc-pm-open') ? 'Pop in PM' : 'Pop out PM';
         };
         const markPmButtonAlert = detail => {
             const count = Math.min(99, (parseInt(pmBtn.dataset.pmUnread, 10) || 0) + 1);
             const nick = typeof detail?.nick === 'string' ? detail.nick.trim() : '';
             pmBtn.dataset.pmUnread = String(count);
             pmBtn.classList.add('ichc-pm-toggle-alert');
-            document.getElementById('ichc-ul-toggle-btn')?.classList.add('ichc-has-pm-unread');
             _startSidebarPulse();
             pmBadge.hidden = false;
             pmBadge.textContent = count > 9 ? '9+' : String(count);
             pmBtn.title = nick ? `New PM from ${nick}` : `${count} unread PM${count === 1 ? '' : 's'}`;
         };
 
-        let _pmVisible = true;
         pmBtn.addEventListener('click', () => {
-            _pmVisible = !_pmVisible;
             window.dispatchEvent(new CustomEvent('ichc-pm-user-toggle'));
-            pmBtn.classList.toggle('ichc-pm-toggle-hidden', !_pmVisible);
             clearPmButtonAlert();
+        });
+        // pm.js broadcasts these after handling ichc-pm-user-toggle so all sources stay in sync
+        window.addEventListener('ichc-pm-shown', () => {
+            pmBtn.classList.add('ichc-pm-open');
+            pmBtn.title = 'Pop in PM';
+        });
+        window.addEventListener('ichc-pm-hidden', () => {
+            pmBtn.classList.remove('ichc-pm-open');
+            pmBtn.title = 'Pop out PM';
+        });
+        window.addEventListener('ichc-pm-active', () => {
+            pmBtn.classList.add('ichc-pm-open');
+            pmBtn.title = 'Pop in PM';
         });
         window.addEventListener('ichc-pm-alert', e => {
             if (_isPmTabFocused(e.detail?.nick)) { return; }
@@ -3888,7 +4034,9 @@
             tabGif.type = 'button'; tabGif.className = 'ichc-gif-tab active'; tabGif.textContent = 'GIFs';
             const tabEmote = document.createElement('button');
             tabEmote.type = 'button'; tabEmote.className = 'ichc-gif-tab'; tabEmote.textContent = 'Emoji';
-            tabBar.appendChild(tabGif); tabBar.appendChild(tabEmote);
+            const tabBlocked = document.createElement('button');
+            tabBlocked.type = 'button'; tabBlocked.className = 'ichc-gif-tab'; tabBlocked.textContent = 'Blocked';
+            tabBar.appendChild(tabGif); tabBar.appendChild(tabEmote); tabBar.appendChild(tabBlocked);
 
             // Search
             const searchWrap = document.createElement('div');
@@ -3901,8 +4049,22 @@
             const grid = document.createElement('div');
             grid.id = 'ichc-gif-grid';
 
+            const blockAddWrap = document.createElement('div');
+            blockAddWrap.id = 'ichc-gif-block-add';
+            blockAddWrap.hidden = true;
+            const blockAddInput = document.createElement('input');
+            blockAddInput.type = 'url';
+            blockAddInput.placeholder = 'Image URL to block…';
+            blockAddInput.autocomplete = 'off';
+            const blockAddBtn = document.createElement('button');
+            blockAddBtn.type = 'button';
+            blockAddBtn.textContent = 'Block';
+            blockAddWrap.appendChild(blockAddInput);
+            blockAddWrap.appendChild(blockAddBtn);
+
             gifPanel.appendChild(tabBar);
             gifPanel.appendChild(searchWrap);
+            gifPanel.appendChild(blockAddWrap);
             gifPanel.appendChild(grid);
             gifWrapper.appendChild(gifBtn);
 
@@ -3927,6 +4089,53 @@
 
             const renderGrid = () => {
                 grid.innerHTML = '';
+                if (_activeTab === 'blocked') {
+                    grid.classList.remove('ichc-emoji-grid');
+                    grid.classList.add('ichc-blocked-list');
+                    let disabled;
+                    try { disabled = new Set(JSON.parse(localStorage.getItem('ichc_disabled_emotes') || '[]')); }
+                    catch { disabled = new Set(); }
+                    if (disabled.size === 0) {
+                        const empty = document.createElement('div');
+                        empty.className = 'ichc-blocked-empty';
+                        empty.textContent = 'No blocked emotes. Hover any image in chat and click × to block it.';
+                        grid.appendChild(empty);
+                    } else {
+                        disabled.forEach(url => {
+                            const row = document.createElement('div');
+                            row.className = 'ichc-blocked-row';
+                            const thumb = document.createElement('img');
+                            thumb.className = 'ichc-blocked-thumb';
+                            thumb.src = url;
+                            thumb.alt = '';
+                            thumb.loading = 'lazy';
+                            thumb.referrerPolicy = 'no-referrer';
+                            thumb.onerror = () => { thumb.style.display = 'none'; };
+                            const lbl = document.createElement('span');
+                            lbl.className = 'ichc-blocked-label';
+                            try { lbl.textContent = new URL(url).pathname.split('/').pop() || url; } catch { lbl.textContent = url; }
+                            lbl.title = url;
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'ichc-blocked-unblock-btn';
+                            btn.title = 'Unblock';
+                            btn.textContent = '×';
+                            btn.addEventListener('click', () => {
+                                const s = new Set(JSON.parse(localStorage.getItem('ichc_disabled_emotes') || '[]'));
+                                s.delete(url);
+                                localStorage.setItem('ichc_disabled_emotes', JSON.stringify([...s]));
+                                window.dispatchEvent(new CustomEvent('ichc-emote-unblocked', { detail: { url } }));
+                                renderGrid();
+                            });
+                            row.appendChild(thumb);
+                            row.appendChild(lbl);
+                            row.appendChild(btn);
+                            grid.appendChild(row);
+                        });
+                    }
+                    return;
+                }
+                grid.classList.remove('ichc-blocked-list');
                 if (!_gifData) {
                     grid.textContent = 'Loading…';
                     return;
@@ -4014,15 +4223,40 @@
 
             tabGif.addEventListener('click', () => {
                 _activeTab = 'gif';
-                tabGif.classList.add('active'); tabEmote.classList.remove('active');
+                tabGif.classList.add('active'); tabEmote.classList.remove('active'); tabBlocked.classList.remove('active');
                 grid.classList.remove('ichc-emoji-grid');
+                searchWrap.hidden = false;
+                blockAddWrap.hidden = true;
                 renderGrid();
             });
             tabEmote.addEventListener('click', () => {
                 _activeTab = 'emote';
-                tabEmote.classList.add('active'); tabGif.classList.remove('active');
+                tabEmote.classList.add('active'); tabGif.classList.remove('active'); tabBlocked.classList.remove('active');
                 grid.classList.add('ichc-emoji-grid');
+                searchWrap.hidden = false;
+                blockAddWrap.hidden = true;
                 renderGrid();
+            });
+            tabBlocked.addEventListener('click', () => {
+                _activeTab = 'blocked';
+                tabBlocked.classList.add('active'); tabGif.classList.remove('active'); tabEmote.classList.remove('active');
+                searchWrap.hidden = true;
+                blockAddWrap.hidden = false;
+                renderGrid();
+            });
+            blockAddBtn.addEventListener('click', () => {
+                const url = blockAddInput.value.trim();
+                if (!url) { return; }
+                try { new URL(url); } catch { return; }
+                const s = new Set(JSON.parse(localStorage.getItem('ichc_disabled_emotes') || '[]'));
+                s.add(url);
+                localStorage.setItem('ichc_disabled_emotes', JSON.stringify([...s]));
+                window.dispatchEvent(new CustomEvent('ichc-emote-blocked', { detail: { url } }));
+                blockAddInput.value = '';
+                renderGrid();
+            });
+            blockAddInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { blockAddBtn.click(); }
             });
             searchInput.addEventListener('input', () => {
                 _gifQuery = searchInput.value.trim();
@@ -4031,54 +4265,55 @@
 
             }
 
-        // pm/cog live in the sidebar strip; gif floats in the input row on the right
-        pmBtn.classList.add('ichc-sidebar-btn');
-        const cogBtnEl = wrapper.querySelector('button');
-        if (cogBtnEl) { cogBtnEl.classList.add('ichc-sidebar-btn'); }
-
-        const sidebarStrip = document.getElementById('ichc-ul-toggle-btn');
-        if (sidebarStrip) {
-            // Theme toggle button (above PM button)
-            let themeBtn = document.getElementById('ichc-theme-toggle-btn');
-            if (!themeBtn) {
-                themeBtn = document.createElement('button');
-                themeBtn.id = 'ichc-theme-toggle-btn';
-                themeBtn.className = 'ichc-sidebar-btn';
-                themeBtn.title = 'Toggle light/dark theme';
-                const isLight = document.documentElement.classList.contains('ichc-light-theme');
-                themeBtn.innerHTML = isLight ? ICONS.moon : ICONS.sun;
-                themeBtn.addEventListener('click', () => {
-                    const nowLight = document.documentElement.classList.toggle('ichc-light-theme');
-                    themeBtn.innerHTML = nowLight ? ICONS.moon : ICONS.sun;
-                    localStorage.setItem('ichc_theme', nowLight ? 'light' : 'dark');
-                    document.dispatchEvent(new CustomEvent('ichc-theme-change'));
-                });
-            }
-
-            [pmBtn, wrapper].forEach(el => {
-                if (el && !sidebarStrip.contains(el)) {
-                    sidebarStrip.appendChild(el);
-                }
-            });
-            if (!sidebarStrip.contains(themeBtn)) {
-                sidebarStrip.insertBefore(themeBtn, pmBtn);
-            }
-
-            // PM avatar strip — sits above the theme button
-            let pmAvatarStrip = document.getElementById('ichc-pm-avatars');
-            if (!pmAvatarStrip) {
-                pmAvatarStrip = document.createElement('div');
-                pmAvatarStrip.id = 'ichc-pm-avatars';
-            }
-            if (!sidebarStrip.contains(pmAvatarStrip)) {
-                sidebarStrip.insertBefore(pmAvatarStrip, themeBtn);
-            }
-            initPmAvatarObserver();
-            _purgeStrayStripChildren(sidebarStrip);
+        // Cog goes in the header, left of the hamburger menu
+        const actions = document.getElementById('ichc-header-actions');
+        const hamburgerWrapper = document.getElementById('ichc-nav-hamburger-wrapper');
+        if (actions) {
+            if (hamburgerWrapper) { actions.insertBefore(wrapper, hamburgerWrapper); }
+            else { actions.appendChild(wrapper); }
         } else {
-            // Strip not built yet — retry after buildUserList creates it.
+            // Header not ready yet — retry
             [200, 600, 1400].forEach(d => window.setTimeout(transformCommandBar, d));
+            return;
         }
+
+        // Theme button goes in the footer
+        const footerBar = ensureFooterBar();
+        let themeBtn = document.getElementById('ichc-theme-toggle-btn');
+        if (!themeBtn) {
+            themeBtn = document.createElement('button');
+            themeBtn.id = 'ichc-theme-toggle-btn';
+            themeBtn.type = 'button';
+            themeBtn.className = 'ichc-footer-icon-btn';
+            themeBtn.title = 'Toggle light/dark theme';
+            const isLight = document.documentElement.classList.contains('ichc-light-theme');
+            themeBtn.innerHTML = isLight ? ICONS.moon : ICONS.sun;
+            themeBtn.addEventListener('click', () => {
+                const nowLight = document.documentElement.classList.toggle('ichc-light-theme');
+                themeBtn.innerHTML = nowLight ? ICONS.moon : ICONS.sun;
+                localStorage.setItem('ichc_theme', nowLight ? 'light' : 'dark');
+                document.dispatchEvent(new CustomEvent('ichc-theme-change'));
+            });
+        }
+        const footerLeft = footerBar?.querySelector('#ichc-footer-left') || footerBar;
+        if (footerLeft && !footerLeft.contains(themeBtn)) {
+            footerLeft.appendChild(themeBtn);
+        }
+
+        // PM button lives inside the pm-avatar strip as its first child
+        let pmAvatarStrip = document.getElementById('ichc-pm-avatars');
+        if (!pmAvatarStrip) {
+            pmAvatarStrip = document.createElement('div');
+            pmAvatarStrip.id = 'ichc-pm-avatars';
+        }
+        if (!pmAvatarStrip.contains(pmBtn)) {
+            pmAvatarStrip.insertBefore(pmBtn, pmAvatarStrip.firstChild || null);
+        }
+        const userlistPanel = document.getElementById('ichc-userlist');
+        if (userlistPanel && !userlistPanel.contains(pmAvatarStrip)) {
+            userlistPanel.insertBefore(pmAvatarStrip, userlistPanel.firstChild);
+        }
+        initPmAvatarObserver();
 
         // gif lives directly in inputRow between txtMsg and sendBtn
         if (gifWrapper && inputRow && !inputRow.contains(gifWrapper)) {
@@ -4528,7 +4763,7 @@
                 mod:     modSet.has(key),
                 cammed:  cammed.has(key) || hasCamLogo || liveKeys.has(key),
                 hidden:  blocked.has(key),
-                karma:   extractKarmaFromUserAnchor(a),
+                karma:   extractKarmaFromUserAnchor(a) ?? profileKarmaCache.get(key) ?? null,
                 trigger: a,
                 icon:      smicon ? { src: smicon.src, title: smicon.title || smicon.alt || '' } : null,
                 supporter: supporterNames.has(key) ||
@@ -4602,9 +4837,13 @@
         const prevQuery = panel.querySelector('.ichc-ul-search-input')?.value || '';
         const prevSearchOpen = panel.classList.contains('ichc-ul-search-open');
         const prevOfflineOpen = panel.querySelector('.ichc-ul-offline-hidden.is-open') !== null;
-        // Detach the more-btn before innerHTML='' so its DOM (listeners + open state) survives the clear
+        // Detach persistent elements before the panel clear so they survive the rebuild.
         const savedMoreBtn = panel.querySelector('.ichc-ul-more-btn');
         savedMoreBtn?.remove();
+        const savedPmAvatars = document.getElementById('ichc-pm-avatars');
+        if (savedPmAvatars && panel.contains(savedPmAvatars)) { savedPmAvatars.remove(); }
+        const savedPmBtn = document.getElementById('ichc-pm-toggle-btn');
+        if (savedPmBtn && panel.contains(savedPmBtn)) { savedPmBtn.remove(); }
 
         userListState.avatarObserver?.disconnect();
         // Remove only non-user-row children (header, offline section, etc.) so that
@@ -4616,104 +4855,18 @@
         });
         userListState._suppressBlur = false;
         if (prevSearchOpen) { panel.classList.add('ichc-ul-search-open'); }
+        panel.classList.toggle('ichc-ul-no-avatars', !userListState.showAvatars);
 
-        const activeCount = users.filter(u => !u.idle).length;
-        const idleCount   = users.filter(u => u.idle).length;
-        const cammedCount = users.filter(u => u.cammed).length;
-
-        // Add toggle button to chat-shell if not already there (placed BEFORE userlist)
+        const activeCount    = users.filter(u => !u.idle).length;
+        const idleCount      = users.filter(u => u.idle).length;
+        const cammedCount    = users.filter(u => u.cammed).length;
+        const hiddenCamCount = users.filter(u => u.hidden && u.cammed).length;
 
         const chatShell = document.getElementById('ichc-chat-shell');
-        if (chatShell && !document.getElementById('ichc-ul-toggle-btn')) {
-            // Must be a <div> not <button> — PM/cog/gif buttons will be inserted
-            // inside it, and nesting interactive elements in a <button> is invalid.
-            const sidebarDiv = document.createElement('div');
-            sidebarDiv.id = 'ichc-ul-toggle-btn';
 
-            const badge = document.createElement('span');
-            badge.id = 'ichc-ul-toggle-badge';
-            badge.innerHTML = `${ICONS.videoCam2}<span id="ichc-ul-badge-cams">0</span>${ICONS.users}<span id="ichc-ul-badge-users">0</span>`;
-            sidebarDiv.appendChild(badge);
-
-            // Strip appended after userlist (grid-column 3)
-            chatShell.appendChild(sidebarDiv);
-
-            // Collapse chevron — lives inside the sidebar strip, above the badge.
-            const chevronBtn = document.createElement('button');
-            chevronBtn.type = 'button';
-            chevronBtn.className = 'ichc-ul-toggle-chevron';
-            chevronBtn.title = 'Hide user list';
-            chevronBtn.innerHTML = ICONS.chevronRight;
-            let _ulCollapsed = false;
-            chevronBtn.addEventListener('click', () => {
-                _ulCollapsed = !_ulCollapsed;
-                chatShell.classList.toggle('ichc-ul-collapsed', _ulCollapsed);
-                chevronBtn.title = _ulCollapsed ? 'Show user list' : 'Hide user list';
-                chevronBtn.innerHTML = _ulCollapsed ? ICONS.chevronLeft : ICONS.chevronRight;
-            });
-            sidebarDiv.insertBefore(chevronBtn, sidebarDiv.firstChild);
-
-            // Guard: remove any foreign elements the site injects into the strip.
-            const _stripGuard = new MutationObserver(() => _purgeStrayStripChildren(sidebarDiv));
-            _stripGuard.observe(sidebarDiv, { childList: true });
-
-            // Sidebar strip just created — give transformCommandBar a chance to place
-            // PM/cog/gif buttons into it (they may already exist but not placed yet).
+        // First build — schedule transformCommandBar for cog/theme placement
+        if (chatShell && !document.getElementById('ichc-ul-collapse-btn')) {
             window.setTimeout(transformCommandBar, 0);
-        }
-        // Update badge counts
-        const badgeUsers = document.getElementById('ichc-ul-badge-users');
-        const badgeCams  = document.getElementById('ichc-ul-badge-cams');
-        const hiddenCamCount = users.filter(u => u.hidden && u.cammed).length;
-        if (badgeUsers) { badgeUsers.textContent = String(activeCount + idleCount); }
-        if (badgeCams)  { badgeCams.textContent  = String(cammedCount); }
-
-        // Sidebar broadcasting avatars — visible only when userlist is collapsed
-        const sidebarStrip = document.getElementById('ichc-ul-toggle-btn');
-        if (sidebarStrip) {
-            let sidebarAvatars = document.getElementById('ichc-ul-sidebar-avatars');
-            if (!sidebarAvatars) {
-                sidebarAvatars = document.createElement('div');
-                sidebarAvatars.id = 'ichc-ul-sidebar-avatars';
-                sidebarStrip.appendChild(sidebarAvatars);
-            }
-            sidebarAvatars.innerHTML = '';
-
-            // Shared tooltip element for sidebar avatar names
-            let _sidebarTip = document.getElementById('ichc-sidebar-tip');
-            if (!_sidebarTip) {
-                _sidebarTip = document.createElement('div');
-                _sidebarTip.id = 'ichc-sidebar-tip';
-                document.body.appendChild(_sidebarTip);
-            }
-
-            users.filter(u => u.cammed && !u.hidden).forEach(u => {
-                const key = u.name.toLowerCase();
-                const av = document.createElement('span');
-                av.className = 'ichc-ul-sidebar-avatar';
-                av.textContent = (u.name[0] || '?').toUpperCase();
-                av.style.setProperty('--ichc-av-bg', userAvatarColor(u.name));
-                // Use real profile image if already fetched for this session
-                const cachedUrl = profileImageCache.has(key) ? profileImageCache.get(key) : null;
-                if (cachedUrl) {
-                    const img = document.createElement('img');
-                    img.src = cachedUrl;
-                    img.alt = '';
-                    img.className = 'ichc-ul-sidebar-avatar-img';
-                    av.appendChild(img);
-                }
-                av.addEventListener('mouseenter', () => {
-                    _sidebarTip.textContent = u.name;
-                    const rect = av.getBoundingClientRect();
-                    _sidebarTip.style.top = (rect.top + rect.height / 2) + 'px';
-                    _sidebarTip.style.right = (window.innerWidth - rect.left + 6) + 'px';
-                    _sidebarTip.classList.add('ichc-sidebar-tip-visible');
-                });
-                av.addEventListener('mouseleave', () => {
-                    _sidebarTip.classList.remove('ichc-sidebar-tip-visible');
-                });
-                sidebarAvatars.appendChild(av);
-            });
         }
 
         // ── Header ──
@@ -4728,10 +4881,16 @@
         badge.className = 'ichc-ul-count';
         badge.innerHTML = `<span class="ichc-ul-count-cams">${cammedCount}</span><span class="ichc-ul-count-cam-label"> LIVE${camMeta}</span>`;
 
-        // Users row — count + search + 3-dot menu
+        // Users row — count + PM toggle + search + 3-dot menu
         const titleRow = document.createElement('div');
         titleRow.className = 'ichc-ul-title-row';
         titleRow.innerHTML = `<span class="ichc-ul-count-users">${activeCount + idleCount}</span><span class="ichc-ul-count-user-label"> VIEWERS${userMeta}</span>`;
+
+        // Restore saved PM button (or it will be placed here by transformCommandBar on first build)
+        if (savedPmBtn) {
+            savedPmBtn.style.removeProperty('display');
+            titleRow.appendChild(savedPmBtn);
+        }
 
         const searchBtn = document.createElement('button');
         searchBtn.type = 'button';
@@ -4760,11 +4919,27 @@
         });
         searchRow.appendChild(searchInput);
 
+        // Collapse button — left-edge handle of the userlist header
+        const collapseBtn = document.createElement('button');
+        collapseBtn.type = 'button';
+        collapseBtn.id = 'ichc-ul-collapse-btn';
+        collapseBtn.innerHTML = ICONS.chevronRight;
+        collapseBtn.title = 'Collapse user list';
+        collapseBtn.addEventListener('click', e => { e.stopPropagation(); _toggleUserListCollapse(); });
+
         header.appendChild(badge);
         header.appendChild(titleRow);
         header.appendChild(searchRow);
         // Insert header before existing user rows (which were kept in the DOM).
         panel.insertBefore(header, panel.firstChild || null);
+
+        // Reattach PM avatars above the header
+        if (savedPmAvatars) {
+            panel.insertBefore(savedPmAvatars, panel.firstChild);
+        }
+
+        // Collapse button sits at the very top of the panel, above the PM avatar strip
+        panel.insertBefore(collapseBtn, panel.firstChild || null);
 
         // Reattach the saved more-btn (preserves open/closed state and all listeners).
         // Refresh sort-active class in case sortMode changed since last build.
@@ -5248,16 +5423,90 @@
 
                 moreMenu.appendChild(exportItem);
                 moreMenu.appendChild(importLabel);
+
+                // ── Divider ──
+                const divider2 = document.createElement('div');
+                divider2.className = 'ichc-ul-more-divider';
+                moreMenu.appendChild(divider2);
+
+                // ── View section label ──
+                const viewLabel = document.createElement('div');
+                viewLabel.className = 'ichc-ul-more-section-label';
+                viewLabel.textContent = 'View';
+                moreMenu.appendChild(viewLabel);
+
+                // PM panel toggle
+                const pmItem = document.createElement('button');
+                pmItem.type = 'button';
+                pmItem.className = 'ichc-ul-more-item';
+                pmItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.chat}</span><span>Toggle PM panel</span>`;
+                pmItem.addEventListener('click', e => {
+                    e.stopPropagation();
+                    moreMenu.hidden = true;
+                    window.dispatchEvent(new CustomEvent('ichc-pm-user-toggle'));
+                });
+                moreMenu.appendChild(pmItem);
+
+                // Toggle userlist avatars
+                const avatarItem = document.createElement('button');
+                avatarItem.type = 'button';
+                avatarItem.className = 'ichc-ul-more-item';
+                const _refreshAvatarItem = () => {
+                    const icon = userListState.showAvatars ? ICONS.eyeSlash : ICONS.eye;
+                    const label = userListState.showAvatars ? 'Hide avatars' : 'Show avatars';
+                    avatarItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+                };
+                _refreshAvatarItem();
+                avatarItem.addEventListener('click', e => {
+                    e.stopPropagation();
+                    moreMenu.hidden = true;
+                    userListState.showAvatars = !userListState.showAvatars;
+                    localStorage.setItem('ichc_ul_show_avatars', String(userListState.showAvatars));
+                    const _p = document.getElementById('ichc-userlist');
+                    if (_p) { _p.classList.toggle('ichc-ul-no-avatars', !userListState.showAvatars); }
+                    _refreshAvatarItem();
+                });
+                moreMenu.appendChild(avatarItem);
+
+                // Collapse/expand user list
+                const collapseItem = document.createElement('button');
+                collapseItem.type = 'button';
+                collapseItem.className = 'ichc-ul-more-item';
+                collapseItem.dataset.ichcCollapseItem = '1';
+                const _refreshCollapseItem = () => {
+                    const icon = _ulCollapsed ? ICONS.chevronLeft : ICONS.chevronRight;
+                    const label = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
+                    collapseItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+                };
+                _refreshCollapseItem();
+                collapseItem.addEventListener('click', e => {
+                    e.stopPropagation();
+                    moreMenu.hidden = true;
+                    _toggleUserListCollapse();
+                    _refreshCollapseItem();
+                });
+                moreMenu.appendChild(collapseItem);
+
                 moreBtn.appendChild(moreMenu);
 
                 moreBtn.addEventListener('click', e => {
                     e.stopPropagation();
+                    // Refresh collapse item label in case state changed via strip click
+                    const ci = moreMenu.querySelector('[data-ichc-collapse-item]');
+                    if (ci) {
+                        const icon = _ulCollapsed ? ICONS.chevronLeft : ICONS.chevronRight;
+                        const label = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
+                        ci.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+                    }
                     moreMenu.hidden = !moreMenu.hidden;
                 });
 
                 badge.appendChild(moreBtn); // top-right of LIVE row
             }
         }
+        // Sync PM avatar status dots with current user statuses
+        _syncPmAvatarStatuses(users);
+
         // Word cloud — rebuild whenever userlist rebuilds
         if (_wordCloudMode) { buildWordCloud(users); }
 
@@ -6169,6 +6418,15 @@
             cams.style.setProperty('grid-template-columns', `repeat(${columns * 2}, minmax(0, 1fr))`, 'important');
             _applyCardSpans();
         }
+        // Persist for next page load so first paint is already correct.
+        try {
+            localStorage.setItem(CAM_LAYOUT_CACHE_KEY, JSON.stringify({
+                columns, camMin: camMinValue, aspect,
+                sideWidth: sideWidthValue, chatWidth: chatWidthValue, ulWidth: userListWidthValue,
+            }));
+        } catch (_) {}
+        // End the init window so CSS transitions are now safe to animate.
+        document.documentElement.classList.remove('ichc-cams-init');
     }
 
     function updateEmptyCamState() {

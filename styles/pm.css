@@ -21,8 +21,76 @@
         font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
         color: #dbdee1 !important;
     }
-    #tab_list {
+    /* Slim drag header — grab handle + active nick + optional profile bg */
+    #ichc-pm-header {
+        flex-shrink: 0 !important;
+        height: 30px !important;
         display: flex !important;
+        align-items: center !important;
+        padding: 0 10px !important;
+        gap: 6px !important;
+        background: #18191c !important;
+        background-size: cover !important;
+        background-position: center 30% !important;
+        position: relative !important;
+        overflow: hidden !important;
+        cursor: grab !important;
+        user-select: none !important;
+        border-radius: 12px 12px 0 0 !important;
+        border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+    }
+    #ichc-pm-header::before {
+        content: '' !important;
+        position: absolute !important;
+        inset: 0 !important;
+        background: rgba(16,18,22,0.72) !important;
+        pointer-events: none !important;
+    }
+    #ichc-pm-header.ichc-pm-has-bg::before {
+        background: rgba(10,12,18,0.62) !important;
+    }
+    #ichc-pm-header:active { cursor: grabbing !important; }
+    #ichc-pm-header-nick {
+        position: relative !important;
+        z-index: 1 !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        color: #dbdee1 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        flex: 1 !important;
+        letter-spacing: 0.01em !important;
+    }
+    #ichc-pm-minimize-btn {
+        position: relative !important;
+        z-index: 1 !important;
+        flex-shrink: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 20px !important;
+        height: 20px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 4px !important;
+        color: rgba(255,255,255,0.45) !important;
+        cursor: pointer !important;
+        outline: none !important;
+        box-shadow: none !important;
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        transition: background 0.12s, color 0.12s !important;
+    }
+    #ichc-pm-minimize-btn:hover {
+        background: rgba(255,255,255,0.10) !important;
+        color: #dbdee1 !important;
+    }
+
+    #tab_list {
+        display: none !important;
         align-items: center !important;
         gap: 8px !important;
         flex-wrap: wrap !important;

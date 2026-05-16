@@ -363,18 +363,65 @@
         }, true);
     }
 
+    function _ensurePmHeader(root) {
+        if (!root || root.querySelector('#ichc-pm-header')) { return; }
+        const header = document.createElement('div');
+        header.id = 'ichc-pm-header';
+
+        const nickEl = document.createElement('span');
+        nickEl.id = 'ichc-pm-header-nick';
+        header.appendChild(nickEl);
+
+        const minimizeBtn = document.createElement('button');
+        minimizeBtn.type = 'button';
+        minimizeBtn.id = 'ichc-pm-minimize-btn';
+        minimizeBtn.title = 'Minimize PM window';
+        minimizeBtn.innerHTML = '<svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h12.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 10z" clip-rule="evenodd"/></svg>';
+        minimizeBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent('ichc-pm-user-toggle'));
+        });
+        header.appendChild(minimizeBtn);
+
+        // Insert before the tab list (or as first child)
+        const tabList = root.querySelector('#tab_list, .ui-tabs-nav');
+        root.insertBefore(header, tabList || root.firstChild);
+    }
+
     function ensurePmShell() {
         let root = getPmRoot();
         if (root) { return root; }
         root = document.createElement('div');
         root.id = 'tabs';
         root.className = 'ui-tabs ui-corner-all ui-widget ui-widget-content';
+
         const list = document.createElement('ul');
         list.id = 'tab_list';
         list.className = 'ui-tabs-nav ui-helper-reset ui-helper-clearfix ui-widget-header ui-corner-bottom ui-corner-all';
         root.appendChild(list);
         (document.body || document.documentElement).appendChild(root);
         return root;
+    }
+
+    function _updatePmHeader(root, nick) {
+        const header = root?.querySelector('#ichc-pm-header');
+        if (!header || !nick) { return; }
+        const nickEl = header.querySelector('#ichc-pm-header-nick');
+        if (nickEl) { nickEl.textContent = nick; }
+        try {
+            const stored = localStorage.getItem('ichc_bg1_' + nick.toLowerCase());
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                const bgUrl = parsed?.bgUrl;
+                if (bgUrl && (Date.now() - (parsed?.ts || 0)) < 7 * 24 * 3600e3) {
+                    header.style.setProperty('background-image', `url("${bgUrl}")`, 'important');
+                    header.classList.add('ichc-pm-has-bg');
+                    return;
+                }
+            }
+        } catch (_) {}
+        header.style.removeProperty('background-image');
+        header.classList.remove('ichc-pm-has-bg');
     }
 
     function hasLivePmTabs(root = getPmRoot()) {
@@ -496,6 +543,8 @@
         if (!root || !key) { return; }
         _D('activatePmTab', key);
         showPmRoot(root);
+        _updatePmHeader(root, key);
+        window.dispatchEvent(new CustomEvent('ichc-pm-active', { detail: { nick: key } }));
         getPmTabItems(root).forEach(tab => {
             const active = getPmKeyFromId(tab.id, 'pm_') === key;
             tab.classList.toggle('ui-tabs-active', active);
@@ -507,7 +556,7 @@
         // then fall back to key-based id matching.
         const activeTab = getPmTabItems(root).find(t => getPmKeyFromId(t.id, 'pm_') === key);
         const targetHref = (activeTab?.querySelector('a')?.getAttribute('href') || '').replace(/^#/, '');
-        [...root.querySelectorAll('.ui-tabs-panel, [id^="from_"]')].forEach(panel => {
+        [...root.querySelectorAll('[id^="from_"]')].forEach(panel => {
             const active = (targetHref && panel.id === targetHref) ||
                 (!targetHref && getPmKeyFromId(panel.id, 'from_') === key);
             panel.classList.toggle('ichc-pm-active', active);
@@ -630,8 +679,21 @@
         }).observe(convo, { childList: true });
     }
 
+    function _hideTabList(root) {
+        // Don't hide #tab_list until #chat_container has been extracted from #tabs
+        // by installStageLayout. Before that point the main chat is still a jQuery UI
+        // panel inside root, and hiding the nav causes jQuery UI to collapse it.
+        const chatContainer = document.getElementById('chat_container');
+        if (chatContainer && root.contains(chatContainer)) { return; }
+        const tabList = root?.querySelector('#tab_list');
+        if (!tabList || tabList.dataset.ichcHidden) { return; }
+        tabList.dataset.ichcHidden = '1';
+        tabList.style.setProperty('display', 'none', 'important');
+    }
+
     function applyPmTheme(root = getPmRoot()) {
         if (!root) { return; }
+        _hideTabList(root);
         root.querySelectorAll('.pm_convo').forEach(convo => {
             watchPmConvo(convo);
             convo.querySelectorAll('a:not([data-ichc-pm-nick])').forEach(anchor => {
@@ -727,6 +789,7 @@
         if (!root || root.dataset.ichcPmBound === '1') { return; }
         root.dataset.ichcPmBound = '1';
         root.classList.remove('ui-tabs-collapsible');
+        _ensurePmHeader(root);
 
         installPmFocusGuard();
         window.setTimeout(installPmFocusGuard, 500);
@@ -811,20 +874,18 @@
             }
         }, true);
 
-        // Drag — pointerdown on #tab_list
-        const tabList = root.querySelector('#tab_list');
-        if (tabList) {
-            // Block jQuery UI draggable (which listens on mousedown) from competing
-            // with our pointer-based drag handler.
-            tabList.addEventListener('mousedown', event => {
+        // Drag — pointerdown on slim #ichc-pm-header (tab_list is now hidden)
+        const dragHandle = root.querySelector('#ichc-pm-header');
+        if (dragHandle) {
+            dragHandle.addEventListener('mousedown', event => {
                 if (event.button !== 0) { return; }
-                if (event.target.closest('.ui-icon-close, .ui-tabs-anchor, input, button, textarea, a')) { return; }
+                if (event.target.closest('input, button, textarea, a')) { return; }
                 event.stopImmediatePropagation();
             }, true);
 
-            tabList.addEventListener('pointerdown', event => {
+            dragHandle.addEventListener('pointerdown', event => {
                 if (event.button !== 0) { return; }
-                if (event.target.closest('.ui-icon-close, .ui-tabs-anchor, input, button, textarea, a')) { return; }
+                if (event.target.closest('input, button, textarea, a')) { return; }
 
                 const rect = root.getBoundingClientRect();
                 const offsetX = event.clientX - rect.left;
@@ -832,7 +893,7 @@
                 const startX = event.clientX;
                 const startY = event.clientY;
                 let dragging = false;
-                tabList.setPointerCapture?.(event.pointerId);
+                dragHandle.setPointerCapture?.(event.pointerId);
 
                 const move = moveEvent => {
                     if (!dragging && (Math.abs(moveEvent.clientX - startX) > 4 || Math.abs(moveEvent.clientY - startY) > 4)) {
@@ -852,7 +913,7 @@
                 };
 
                 const finish = () => {
-                    tabList.releasePointerCapture?.(event.pointerId);
+                    dragHandle.releasePointerCapture?.(event.pointerId);
                     document.removeEventListener('pointermove', move, true);
                     document.removeEventListener('pointerup', finish, true);
                     document.removeEventListener('pointercancel', finish, true);
@@ -951,23 +1012,43 @@
 
     let _userHiddenPm = _loadVisState().hidden;
 
-    // modernize.js PM toggle button dispatches this event.
+    // Avatar strip × button — close a specific PM conversation from modernize.js
+    window.addEventListener('ichc-pm-close-nick', e => {
+        const nick = e.detail?.nick;
+        if (!nick) { return; }
+        const root = getPmRoot();
+        if (root) {
+            removePmConversation(root, nick);
+        } else {
+            window.dispatchEvent(new CustomEvent('ichc-pm-tab-closed', { detail: { nick } }));
+        }
+    });
+
+    // Any source (pmBtn, header minimize, three-dot menu) dispatches this event.
     window.addEventListener('ichc-pm-user-toggle', () => {
         _userHiddenPm = !_userHiddenPm;
         const root = getPmRoot();
         if (_userHiddenPm) {
             // Snapshot geometry while the window is still visible, then hide.
             _saveVisState(true, root);
-            if (!root) { return; }
+            if (!root) {
+                window.dispatchEvent(new CustomEvent('ichc-pm-hidden'));
+                return;
+            }
             hidePmRoot(root);
+            window.dispatchEvent(new CustomEvent('ichc-pm-hidden'));
         } else {
             // Just flip the hidden flag — preserve the geo captured on last hide.
             try {
                 const prev = _loadVisState();
                 localStorage.setItem(PM_VIS_KEY, JSON.stringify({ hidden: false, geo: prev.geo }));
             } catch (_) {}
-            if (!root) { return; }
+            if (!root) {
+                window.dispatchEvent(new CustomEvent('ichc-pm-shown'));
+                return;
+            }
             syncPmVisibility(root);
+            window.dispatchEvent(new CustomEvent('ichc-pm-shown'));
         }
     });
 
@@ -1007,10 +1088,7 @@
         const activeKey = getPmKeyFromId(activeTab.id, 'pm_');
         _D('syncPmVisibility activeTab:', activeTab.id, 'targetHref:', targetHref);
 
-        const allPanels = [
-            ...root.querySelectorAll('.ui-tabs-panel'),
-            ...root.querySelectorAll('[id^="from_"]'),
-        ].filter((el, i, arr) => arr.indexOf(el) === i);
+        const allPanels = [...root.querySelectorAll('[id^="from_"]')];
 
         let shownPanel = false;
         allPanels.forEach(panel => {
@@ -1298,6 +1376,9 @@
             }
         }
 
+        // Update slim header with active nick and profile bg
+        _updatePmHeader(root, nick);
+
         // Activate the correct tab and panel.
         getPmTabItems(root).forEach(tab => {
             const active = getPmKeyFromId(tab.id, 'pm_') === nick;
@@ -1306,8 +1387,7 @@
             tab.setAttribute('aria-selected', String(active));
             tab.setAttribute('aria-expanded', String(active));
         });
-        const allPanels = [...root.querySelectorAll('.ui-tabs-panel, [id^="from_"]')]
-            .filter((el, i, arr) => arr.indexOf(el) === i);
+        const allPanels = [...root.querySelectorAll('[id^="from_"]')];
         let shownAny = false;
         allPanels.forEach(panel => {
             const active = panel.id === `from_${nick}`;

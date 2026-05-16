@@ -490,6 +490,9 @@
             if (insertParent) { insertParent.insertBefore(insertEl, insertBefore || null); }
         });
 
+        // Wrap native site emote <img> elements (e.g. id="emot-1") so the × block button appears
+        _wrapNativeSiteEmotes(root);
+
         // Also embed image URLs that weren't wrapped in <a> tags by the site
         _embedPlainImageUrls(root);
 
@@ -869,6 +872,8 @@
         boundTargets: new WeakSet(),
         pauseCheckTimer: null,
         lastMessageAt: 0,
+        newMessageCount: 0,
+        savedScrollTop: null,
     };
 
     const chatEventCollector = {
@@ -939,6 +944,42 @@
         return getChatLog();
     }
 
+    // ── Scroll pause indicator ─────────────────────────────────────────────────
+    let _scrollIndicator = null;
+
+    function _ensureScrollIndicator() {
+        if (_scrollIndicator && _scrollIndicator.isConnected) { return; }
+        _scrollIndicator = document.createElement('div');
+        _scrollIndicator.id = 'ichc-scroll-indicator';
+        _scrollIndicator.hidden = true;
+        document.body.appendChild(_scrollIndicator);
+        _scrollIndicator.addEventListener('click', () => {
+            chatScrollState.newMessageCount = 0;
+            chatScrollState.savedScrollTop = null;
+            chatScrollState.auto = true;
+            chatScrollState.nativePaused = false;
+            _scrollIndicator.hidden = true;
+            scheduleChatFollow(true);
+            clearNativeChatPause();
+        });
+    }
+
+    function _updateScrollIndicator() {
+        if (!document.body) { return; }
+        _ensureScrollIndicator();
+        const log = getChatLog();
+        if (!log || chatScrollState.auto) {
+            if (_scrollIndicator) { _scrollIndicator.hidden = true; }
+            return;
+        }
+        const rect = log.getBoundingClientRect();
+        _scrollIndicator.style.setProperty('bottom', (window.innerHeight - rect.bottom + 10) + 'px', 'important');
+        _scrollIndicator.style.setProperty('left', (rect.left + rect.width / 2) + 'px', 'important');
+        const count = chatScrollState.newMessageCount;
+        _scrollIndicator.textContent = count > 0 ? `↓ ${count} new` : '↓ latest';
+        _scrollIndicator.hidden = false;
+    }
+
     function bindChatScrollTargets() {
         const target = getChatScrollTarget();
         if (!target || chatScrollState.boundTargets.has(target)) { return; }
@@ -958,16 +999,28 @@
             hideChatPauseNotice();
 
             if (isNearChatBottom(target, 56)) {
-                chatScrollState.auto = true;
-                chatScrollState.nativePaused = false;
-                scheduleChatFollow(false);
+                const userInitiated = (Date.now() - chatScrollState.userScrollAt) < 400;
+                if (chatScrollState.auto || userInitiated) {
+                    chatScrollState.auto = true;
+                    chatScrollState.nativePaused = false;
+                    chatScrollState.newMessageCount = 0;
+                    chatScrollState.savedScrollTop = null;
+                    scheduleChatFollow(false);
+                    _updateScrollIndicator();
+                } else if (chatScrollState.savedScrollTop != null) {
+                    // Site scrolled us back to bottom while user is reading — restore position
+                    chatScrollState.programmaticUntil = Date.now() + 300;
+                    target.scrollTop = chatScrollState.savedScrollTop;
+                }
                 return;
             }
 
+            chatScrollState.savedScrollTop = target.scrollTop;
             chatScrollState.auto = false;
             chatScrollState.nativePaused = true;
             chatScrollState.followTicket += 1;
             cancelScheduledChatFollow();
+            _updateScrollIndicator();
         }, { passive: true });
     }
 
@@ -1074,6 +1127,26 @@
         span.title = 'Click to re-enable';
         span.textContent = code;
         return span;
+    }
+
+    function _wrapNativeSiteEmotes(scope) {
+        if (!scope) { return; }
+        scope.querySelectorAll('img[id^="emot-"]:not([data-ichc-wrapped])').forEach(img => {
+            if (img.closest('.ichc-emote-wrap') || img.closest('.ichc-emote-disabled-label')) { return; }
+            const url = img.src;
+            if (!url) { return; }
+            img.dataset.ichcWrapped = '1';
+            const code = (img.alt || img.title || '').trim() || url.split('/').pop().replace(/\.\w+$/, '');
+            const parent = img.parentNode;
+            const nextSib = img.nextSibling;
+            if (!parent) { return; }
+            if (_getDisabledEmotes().has(url)) {
+                img.replaceWith(_makeEmoteLabel(url, code, 'img'));
+            } else {
+                const wrap = _makeEmoteWrap(url, code, 'img', img);
+                parent.insertBefore(wrap, nextSib || null);
+            }
+        });
     }
 
     function getChatPauseNotice() {
@@ -1326,7 +1399,11 @@
                 if (!sawNewRows) { return; }
                 chatScrollState.lastMessageAt = Date.now();
                 bindChatScrollTargets();
-                if (!chatScrollState.auto) { return; }
+                if (!chatScrollState.auto) {
+                    chatScrollState.newMessageCount++;
+                    _updateScrollIndicator();
+                    return;
+                }
                 clearNativeChatPause();
                 scheduleChatFollow(false);
             });
@@ -1352,13 +1429,22 @@
             if (currentLog && currentLog !== chatScrollState.observedRoot) {
                 initChatScrollSync();
             }
-            // Heartbeat: nudge cR() if no new messages for 12s regardless of scroll
-            // state — the long-poll can silently time out even when auto=false (user
-            // scrolled up), which previously blocked this check entirely.
+            // Heartbeat: nudge cR() if no new messages for 12s to keep long-poll alive.
+            // When paused, restore scroll position after cR() runs to prevent it jumping to bottom.
             if (chatScrollState.lastMessageAt > 0 &&
                     Date.now() - chatScrollState.lastMessageAt > 12_000) {
                 chatScrollState.lastMessageAt = Date.now();
                 runInPageContext(`if (typeof window.cR === 'function') { window.cR(); }`);
+                if (!chatScrollState.auto && chatScrollState.savedScrollTop != null) {
+                    const log = getChatLog();
+                    const savedTop = chatScrollState.savedScrollTop;
+                    window.setTimeout(() => {
+                        if (!chatScrollState.auto && log && log.isConnected) {
+                            chatScrollState.programmaticUntil = Date.now() + 300;
+                            log.scrollTop = savedTop;
+                        }
+                    }, 80);
+                }
             }
             if (!chatScrollState.auto) { return; }
             // Skip if focus is inside the PM window or on any non-chat input
@@ -1395,5 +1481,27 @@
         });
         obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
     })();
+
+    window.addEventListener('ichc-emote-unblocked', e => {
+        const url = e.detail?.url;
+        if (!url) { return; }
+        _toggleEmoteDisabled(url, false);
+        document.querySelectorAll(`#txt .ichc-emote-disabled-label[data-ichc-emote-url="${CSS.escape(url)}"]`).forEach(lbl => {
+            const code = lbl.dataset.ichcEmoteCode || url;
+            const type = lbl.dataset.ichcEmoteType || 'img';
+            lbl.replaceWith(_makeEmoteWrap(url, code, type, _buildMediaEl(url, type)));
+        });
+    });
+
+    window.addEventListener('ichc-emote-blocked', e => {
+        const url = e.detail?.url;
+        if (!url) { return; }
+        _toggleEmoteDisabled(url, true);
+        document.querySelectorAll(`#txt .ichc-emote-wrap[data-ichc-emote-url="${CSS.escape(url)}"]`).forEach(w => {
+            const code = w.dataset.ichcEmoteCode || url;
+            const type = w.dataset.ichcEmoteType || 'img';
+            w.replaceWith(_makeEmoteLabel(url, code, type));
+        });
+    });
 
 })();
