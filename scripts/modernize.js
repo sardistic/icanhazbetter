@@ -739,9 +739,10 @@
         _wrapRefreshCams();
         window.setTimeout(_wrapRefreshCams, 2000);
         window.setTimeout(_wrapRefreshCams, 5000);
-        // Remove the init veil immediately if layout is already measurable,
-        // bypassing guards in initCamLayout/layoutChat that require #cams/#chat_container.
-        updateCamDensity();
+        // Clear the init transition-suppression class unconditionally.
+        // CSS vars are already set from the localStorage cache, so no layout reflow needed here.
+        // The initDynamicLayout retries will refine the layout once the DOM is measurable.
+        document.documentElement.classList.remove('ichc-cams-init');
     });
 
     // ── Dialog center + drag ──────────────────────────────────────────────────────

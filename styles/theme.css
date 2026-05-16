@@ -1978,20 +1978,6 @@
         order: 1 !important;
         position: relative !important;
     }
-    /* Loading veil — covers cam panel while layout settles on initial page load */
-    html.ichc-cams-init #ichc-cams-panel::after {
-        content: '' !important;
-        position: absolute !important;
-        inset: 0 !important;
-        z-index: 20 !important;
-        background: #12141a !important;
-        pointer-events: none !important;
-        animation: ichc-cams-veil-fade 0.45s ease 0.35s forwards !important;
-    }
-    @keyframes ichc-cams-veil-fade {
-        from { opacity: 1; }
-        to   { opacity: 0; }
-    }
     #ichc-hidden-cams {
         position: relative !important;
         display: flex !important;
