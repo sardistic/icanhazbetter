@@ -146,7 +146,7 @@
 
         const style = node.getAttribute('style') || '';
         const styleMatch = style.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
-        if (styleMatch?.[1]) { return styleMatch[1].trim(); }
+        if (styleMatch?.[1]) { return styleMatch[1].replace(/\s*!important\s*$/i, '').trim(); }
 
         const colorAttr = node.getAttribute('color');
         if (colorAttr) { return colorAttr.trim(); }

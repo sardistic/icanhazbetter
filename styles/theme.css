@@ -88,11 +88,15 @@
         border: 1px solid rgba(255,255,255,0.06) !important;
         border-radius: 8px !important;
         overflow: hidden !important;
+        position: relative !important;
         background: #111214 !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
     }
     .videocontainer { background: #111214 !important; }
+    /* Name label and cam controls must stay above the ::before profile-bg overlay */
     .name-on-cam {
+        position: relative !important;
+        z-index: 2 !important;
         background: rgba(0,0,0,0.7) !important;
         color: #dbdee1 !important;
         padding: 2px 5px !important;
@@ -100,6 +104,8 @@
         font-weight: 500 !important;
     }
     .cam-button {
+        position: relative !important;
+        z-index: 2 !important;
         background: rgba(17,18,20,0.9) !important;
         color: #dbdee1 !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
@@ -1792,8 +1798,8 @@
         box-shadow: none !important;
         z-index: 2147483001 !important;
     }
-    /* Hide all userlist children except the collapse handle and pm avatar strip */
-    #ichc-chat-shell.ichc-ul-collapsed #ichc-userlist > *:not(#ichc-ul-collapse-btn):not(#ichc-pm-avatars) {
+    /* Hide all userlist children except the collapse handle, pm avatar strip, and sidebar stats */
+    #ichc-chat-shell.ichc-ul-collapsed #ichc-userlist > *:not(#ichc-ul-collapse-btn):not(#ichc-pm-avatars):not(#ichc-sidebar-stats) {
         display: none !important;
     }
     #ichc-chat-shell.ichc-ul-collapsed #ichc-ul-collapse-btn {
@@ -1806,7 +1812,45 @@
         background: #18191c !important;
         border-left: 1px solid rgba(255,255,255,0.10) !important;
         border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+        border-radius: 0 !important;
+    }
+    /* Sidebar stats bar — hidden when expanded, shown when collapsed */
+    #ichc-sidebar-stats {
+        display: none !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 10px !important;
+        padding: 5px 6px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        background: #18191c !important;
+        border-left: 1px solid rgba(255,255,255,0.10) !important;
+        border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+        border-top: 1px solid rgba(255,255,255,0.05) !important;
         border-radius: 0 0 0 8px !important;
+        flex-shrink: 0 !important;
+    }
+    #ichc-chat-shell.ichc-ul-collapsed #ichc-sidebar-stats {
+        display: flex !important;
+    }
+    .ichc-sidebar-stat {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 3px !important;
+        font-size: 10px !important;
+        font-weight: 600 !important;
+        color: #4e5058 !important;
+        white-space: nowrap !important;
+        line-height: 1 !important;
+    }
+    .ichc-sidebar-stat svg {
+        width: 10px !important;
+        height: 10px !important;
+        flex-shrink: 0 !important;
+    }
+    .ichc-sidebar-stat-value {
+        color: #80848e !important;
     }
     /* When userlist is collapsed, input spans all columns */
     #ichc-chat-shell.ichc-ul-collapsed #ichc-input-row {
@@ -3997,6 +4041,22 @@
         border-color: #ef4444 !important;
         box-shadow: 0 0 0 2px rgba(239,68,68,0.55), 0 2px 10px rgba(239,68,68,0.4) !important;
     }
+    html.ichc-light-theme #ichc-pm-avatars {
+        background: #e3e5e8 !important;
+        border-bottom-color: rgba(0,0,0,0.08) !important;
+    }
+    html.ichc-light-theme #ichc-chat-shell.ichc-ul-collapsed #ichc-pm-avatars,
+    html.ichc-light-theme #ichc-chat-shell.ichc-ul-collapsed #ichc-ul-collapse-btn {
+        background: #e3e5e8 !important;
+        border-color: rgba(0,0,0,0.10) !important;
+    }
+    html.ichc-light-theme #ichc-sidebar-stats {
+        background: #e3e5e8 !important;
+        color: #4e5058 !important;
+        border-color: rgba(0,0,0,0.08) !important;
+    }
+    html.ichc-light-theme .ichc-sidebar-stat { color: #80848e !important; }
+    html.ichc-light-theme .ichc-sidebar-stat-value { color: #4e5058 !important; }
     html.ichc-light-theme .ichc-pm-avatar-badge { border-color: #dde0e4 !important; }
 
     /* Status dot — absolute so it never disrupts layout */

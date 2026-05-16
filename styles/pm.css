@@ -318,3 +318,74 @@
         margin-left: 4px !important;
         pointer-events: none !important;
     }
+
+    /* ── Light theme overrides ── */
+    html.ichc-light-theme #tabs {
+        background: #f2f3f5 !important;
+        border-color: rgba(0,0,0,0.12) !important;
+        color: #313338 !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18) !important;
+    }
+    html.ichc-light-theme #ichc-pm-header {
+        background: #e3e5e8 !important;
+        border-bottom-color: rgba(0,0,0,0.08) !important;
+    }
+    html.ichc-light-theme #ichc-pm-header-nick { color: #313338 !important; }
+    html.ichc-light-theme #ichc-pm-minimize-btn { color: rgba(0,0,0,0.4) !important; }
+    html.ichc-light-theme #ichc-pm-minimize-btn:hover {
+        background: rgba(0,0,0,0.08) !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #tab_list {
+        background: #e3e5e8 !important;
+        border-bottom-color: rgba(0,0,0,0.08) !important;
+    }
+    html.ichc-light-theme #tabs .ui-tabs-tab {
+        background: #d4d7dc !important;
+        color: #4e5058 !important;
+        border-color: rgba(0,0,0,0.08) !important;
+    }
+    html.ichc-light-theme #tabs .ui-tabs-tab.ui-tabs-active {
+        background: rgba(88,101,242,0.12) !important;
+        border-color: rgba(88,101,242,0.30) !important;
+    }
+    html.ichc-light-theme #tabs .ui-tabs-anchor { color: #313338 !important; }
+    html.ichc-light-theme #tabs .pm_convo {
+        background: #f2f3f5 !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #tabs .pm_convo > div,
+    html.ichc-light-theme #tabs .pm_convo > p,
+    html.ichc-light-theme #tabs .pm_convo .line {
+        background: #e3e5e8 !important;
+        border-color: rgba(0,0,0,0.06) !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme #tabs .pm_convo .line.ichc-pm-event { color: #80848e !important; }
+    html.ichc-light-theme .ichc-pm-ts { color: #96989d !important; }
+    html.ichc-light-theme #tabs .pm_convo a { color: #5865f2 !important; }
+    html.ichc-light-theme #tabs .pm_convo font,
+    html.ichc-light-theme #tabs .pm_convo span,
+    html.ichc-light-theme #tabs .pm_convo div,
+    html.ichc-light-theme #tabs .pm_convo td,
+    html.ichc-light-theme #tabs .pm_convo p { color: #313338 !important; }
+    html.ichc-light-theme #tabs .pm_outgoing {
+        background: #e3e5e8 !important;
+        border-top-color: rgba(0,0,0,0.08) !important;
+    }
+    html.ichc-light-theme #tabs .pm_outgoing input[type="text"] {
+        background: #f2f3f5 !important;
+        color: #313338 !important;
+        border-color: rgba(0,0,0,0.12) !important;
+    }
+    html.ichc-light-theme #tabs .pm_outgoing input[type="text"]:focus {
+        border-color: #5865f2 !important;
+        box-shadow: 0 0 0 3px rgba(88,101,242,0.15) !important;
+    }
+    html.ichc-light-theme #tabs .pm_convo .ichc-pm-date-sep {
+        color: rgba(79,84,92,0.65) !important;
+    }
+    html.ichc-light-theme #tabs .pm_convo .ichc-pm-date-sep::before,
+    html.ichc-light-theme #tabs .pm_convo .ichc-pm-date-sep::after {
+        background: rgba(79,84,92,0.18) !important;
+    }

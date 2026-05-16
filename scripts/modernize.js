@@ -2904,6 +2904,23 @@
         });
     }
 
+    function _updateSidebarStats(panel, cammedCount, viewerCount) {
+        let el = document.getElementById('ichc-sidebar-stats');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'ichc-sidebar-stats';
+        }
+        el.innerHTML =
+            `<span class="ichc-sidebar-stat">${ICONS.broadcast}<span class="ichc-sidebar-stat-value">${cammedCount}</span></span>` +
+            `<span class="ichc-sidebar-stat">${ICONS.eye}<span class="ichc-sidebar-stat-value">${viewerCount}</span></span>`;
+        const pmAv = document.getElementById('ichc-pm-avatars');
+        if (pmAv && panel.contains(pmAv)) {
+            pmAv.insertAdjacentElement('afterend', el);
+        } else {
+            panel.appendChild(el);
+        }
+    }
+
     function _syncSidebarUnread() {
         const hasUnread = !!document.querySelector('#ichc-pm-avatars .ichc-pm-avatar-unread');
         if (hasUnread) {
@@ -4937,6 +4954,9 @@
         if (savedPmAvatars) {
             panel.insertBefore(savedPmAvatars, panel.firstChild);
         }
+
+        // Sidebar cam/viewer stats (visible only when collapsed)
+        _updateSidebarStats(panel, cammedCount, activeCount + idleCount);
 
         // Collapse button sits at the very top of the panel, above the PM avatar strip
         panel.insertBefore(collapseBtn, panel.firstChild || null);
