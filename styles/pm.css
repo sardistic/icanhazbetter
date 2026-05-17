@@ -286,9 +286,9 @@
         box-sizing: border-box !important;
     }
     #tabs .pm_outgoing input[type="text"]:focus {
-        border-color: #5865f2 !important;
+        border-color: var(--ichc-input-border, #5865f2) !important;
         outline: none !important;
-        box-shadow: 0 0 0 3px rgba(88,101,242,0.18) !important;
+        box-shadow: 0 0 0 3px var(--ichc-input-glow, rgba(88,101,242,0.18)) !important;
     }
     #tabs .ui-resizable-handle {
         opacity: 0.22 !important;

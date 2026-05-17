@@ -22,6 +22,7 @@
         question:    `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zM8.94 6.94a.75.75 0 1 1-1.061-1.061 3 3 0 1 1 2.871 5.026v.345a.75.75 0 0 1-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 1 0 8.94 6.94zM10 15a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>`,
         dotsH:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M3 10a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm5.5 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm5.5 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z"/></svg>`,
         chevronDown: `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z" clip-rule="evenodd"/></svg>`,
+        chevronUp:   `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M14.77 12.79a.75.75 0 0 1-1.06-.02L10 8.832 6.29 12.77a.75.75 0 0 1-1.08-1.04l4.25-4.5a.75.75 0 0 1 1.08 0l4.25 4.5a.75.75 0 0 1-.02 1.06z" clip-rule="evenodd"/></svg>`,
         chat:        `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902.848.137 1.705.248 2.57.331v3.443a.75.75 0 0 0 1.28.53l3.58-3.579A13.95 13.95 0 0 0 12 14c2.236 0 4.43-.18 6.57-.524C20.007 13.245 21 11.986 21 10.574V5.426c0-1.413-.993-2.67-2.43-2.902A41.112 41.112 0 0 0 12 2h-2zm0 1.5c2.188 0 4.33.175 6.395.512.97.157 1.605.944 1.605 1.814v5.148c0 .87-.636 1.657-1.605 1.814A39.614 39.614 0 0 1 10 13a12.45 12.45 0 0 1-1.57-.1.75.75 0 0 0-.557.16L5.5 15.702v-2.537a.75.75 0 0 0-.676-.744 39.61 39.61 0 0 1-2.344-.303C1.636 11.915 1 11.128 1 10.258V5.426c0-.87.636-1.657 1.605-1.814A39.614 39.614 0 0 1 10 3.5z" clip-rule="evenodd"/></svg>`,
         hamburger:   `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75zm0 5A.75.75 0 0 1 2.75 9h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 9.75zm0 5a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75z" clip-rule="evenodd"/></svg>`,
         gifIcon:     `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M1 5.25A2.25 2.25 0 0 1 3.25 3h13.5A2.25 2.25 0 0 1 19 5.25v9.5A2.25 2.25 0 0 1 16.75 17H3.25A2.25 2.25 0 0 1 1 14.75v-9.5zm4.049 3.49A.75.75 0 0 0 4.25 9.5v1A.75.75 0 0 0 5 11.25h1.25a.75.75 0 0 0 0-1.5H5.75V9.5a.75.75 0 0 0-.701-.76zm2.551-.74a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75zm2 0a.75.75 0 0 1 .673.418L11 10.108l.727-1.69A.75.75 0 0 1 13.25 8v3.75a.75.75 0 0 1-1.5 0v-1.608l-.227.529a.75.75 0 0 1-1.046 0l-.227-.53v1.609a.75.75 0 0 1-1.5 0V8.75a.75.75 0 0 1 .75-.75z" clip-rule="evenodd"/></svg>`,
@@ -35,6 +36,8 @@
         moon:        `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M7.455 2.004a.75.75 0 0 1 .26.77 7 7 0 0 0 9.958 7.967.75.75 0 0 1 1.067.853A8.5 8.5 0 1 1 6.647 1.921a.75.75 0 0 1 .808.083z" clip-rule="evenodd"/></svg>`,
         popOut:      `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06z" clip-rule="evenodd"/></svg>`,
         popIn:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M14.78 5.22a.75.75 0 0 0-1.06 0L6 12.94V7.5a.75.75 0 0 0-1.5 0v6.75c0 .414.336.75.75.75H12a.75.75 0 0 0 0-1.5H6.56l7.72-7.72a.75.75 0 0 0 0-1.06z" clip-rule="evenodd"/></svg>`,
+        terminal:    `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M3.25 3A2.25 2.25 0 0 0 1 5.25v9.5A2.25 2.25 0 0 0 3.25 17h13.5A2.25 2.25 0 0 0 19 14.75v-9.5A2.25 2.25 0 0 0 16.75 3H3.25zm.896 3.97a.75.75 0 0 0-1.06 1.06l1.72 1.72-1.72 1.72a.75.75 0 0 0 1.06 1.06l2.25-2.25a.75.75 0 0 0 0-1.06l-2.25-2.25zm4.729 1.28a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 0-1.5h-3.5z" clip-rule="evenodd"/></svg>`,
+        cloud:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M1 12.5A4.5 4.5 0 0 0 5.5 17H15a4 4 0 0 0 1.866-7.539 3.504 3.504 0 0 0-4.504-4.272A4.5 4.5 0 0 0 4.5 8H4a3 3 0 0 0-3 3v1.5z"/></svg>`,
     };
 
     const PREF_KEY = 'ichc_layout_prefs';
@@ -78,6 +81,7 @@
         moreMenuDismissBound: false,
         sortMode: localStorage.getItem('ichc_ul_sort') || 'karma',  // 'alpha' | 'karma' | 'age'
         showAvatars: localStorage.getItem('ichc_ul_show_avatars') === 'true',
+        lastBuildSig: null,  // content signature — skip rebuild when source data unchanged
     };
     const lurkState = {
         pollTimer: null,
@@ -192,17 +196,81 @@
         }
         return 0; // <1 yr
     }
+    const _KT_STOPS = [
+        [1,      [110,  70, 185]],
+        [100,    [125,  80, 205]],
+        [500,    [ 85, 105, 215]],
+        [1000,   [ 65, 145, 215]],
+        [5000,   [ 55, 185, 200]],
+        [10000,  [ 72, 198, 145]],
+        [20000,  [205, 170,  55]],
+        [50000,  [200,  88, 138]],
+        [100000, [ 55, 185, 200]],
+    ];
+    function _karmaToSpectral(karma) {
+        if (!karma || karma <= 0) { return null; }
+        const k = Math.max(1, karma);
+        const n = _KT_STOPS.length - 1;
+        let loIdx = 0;
+        for (let i = 1; i < _KT_STOPS.length; i++) {
+            if (k < _KT_STOPS[i][0]) { break; }
+            loIdx = i;
+        }
+        const hiIdx = Math.min(loIdx + 1, n);
+        const [kLo, cLo] = _KT_STOPS[loIdx];
+        const [kHi, cHi] = _KT_STOPS[hiIdx];
+        let f = 0;
+        if (loIdx < hiIdx) {
+            const logLo = Math.log10(Math.max(1, kLo));
+            const logHi = Math.log10(kHi);
+            f = logHi > logLo ? Math.min(1, (Math.log10(k) - logLo) / (logHi - logLo)) : 0;
+        }
+        const r = Math.round(cLo[0] + (cHi[0] - cLo[0]) * f);
+        const g = Math.round(cLo[1] + (cHi[1] - cLo[1]) * f);
+        const b = Math.round(cLo[2] + (cHi[2] - cLo[2]) * f);
+        const t = (loIdx + f) / n;
+        return [`${r},${g},${b}`, +(0.42 + t * 0.58).toFixed(3)];
+    }
     function _setKarmaTierClass(el, karma) {
         if (!el) { return; }
         for (let i = 0; i <= 8; i++) { el.classList.remove(`ichc-kt${i}`); }
         const t = _karmaToTier(karma);
         if (t >= 0) { el.classList.add(`ichc-kt${t}`); }
+        const spectral = _karmaToSpectral(karma);
+        if (spectral) {
+            el.style.setProperty('--ichc-kt-color', spectral[0]);
+            el.style.setProperty('--ichc-kt-i', String(spectral[1]));
+        } else {
+            el.style.removeProperty('--ichc-kt-color');
+            el.style.removeProperty('--ichc-kt-i');
+        }
     }
     function _setYearTierClass(el, year) {
         if (!el) { return; }
         for (let i = 0; i <= 5; i++) { el.classList.remove(`ichc-yt${i}`); }
         const t = _yearToTier(year);
         if (t >= 0) { el.classList.add(`ichc-yt${t}`); }
+    }
+
+    // ── Input typing gradient (spectral palette, same stops as karma tiers) ──────
+    const _INPUT_SPECTRAL = [
+        [110,  70, 185],  // dim violet
+        [125,  80, 205],  // violet
+        [ 85, 105, 215],  // periwinkle
+        [ 65, 145, 215],  // cornflower blue
+        [ 55, 185, 200],  // teal
+        [ 72, 198, 145],  // mint green
+        [205, 170,  55],  // warm amber
+        [200,  88, 138],  // dusty rose  (near-limit warning)
+    ];
+    function _spectralInputColor(t) {
+        const n = _INPUT_SPECTRAL.length - 1;
+        const s = Math.min(Math.max(t, 0), 1) * n;
+        const i = Math.min(Math.floor(s), n - 1);
+        const f = s - i;
+        const [r1, g1, b1] = _INPUT_SPECTRAL[i];
+        const [r2, g2, b2] = _INPUT_SPECTRAL[i + 1];
+        return [Math.round(r1 + (r2 - r1) * f), Math.round(g1 + (g2 - g1) * f), Math.round(b1 + (b2 - b1) * f)];
     }
 
     function _setBadgeYear(badgeEl, year) {
@@ -701,12 +769,23 @@
             `<div id="ichc-loading-sub">connecting…</div>`;
         document.documentElement.appendChild(overlay);
 
+        const fill = overlay.querySelector('#ichc-loading-bar-fill');
+
         let _gone = false;
         const dismiss = () => {
             if (_gone) { return; }
             _gone = true;
-            overlay.classList.add('ichc-loading-out');
-            setTimeout(() => { overlay.remove(); }, 620);
+            // Freeze scaleX at its current animated value, then ease to scaleX(1).
+            const frozen = getComputedStyle(fill).transform;
+            fill.style.setProperty('animation', 'none', 'important');
+            fill.style.setProperty('transform', frozen, 'important');
+            fill.style.setProperty('transition', 'transform 0.35s ease-out', 'important');
+            fill.offsetWidth; // force reflow before transition starts
+            fill.style.setProperty('transform', 'scaleX(1)', 'important');
+            setTimeout(() => {
+                overlay.classList.add('ichc-loading-out');
+                setTimeout(() => { overlay.remove(); }, 620);
+            }, 380);
         };
 
         // If scripts already ran (e.g. extension reloaded mid-session), dismiss instantly.
@@ -725,8 +804,8 @@
             }, 60);
         });
 
-        // Hard cap: never block longer than 12 s regardless of script state.
-        setTimeout(dismiss, 12000);
+        // Hard cap: never show longer than 10 s regardless of script state.
+        setTimeout(dismiss, 10000);
     }());
 
     installBroadcastQualityPatch();
@@ -782,6 +861,22 @@
         // CSS vars are already set from the localStorage cache, so no layout reflow needed here.
         // The initDynamicLayout retries will refine the layout once the DOM is measurable.
         document.documentElement.classList.remove('ichc-cams-init');
+
+        // Spectral border gradient: colour shifts through the karma palette as user types.
+        document.addEventListener('input', e => {
+            const el = e.target;
+            if (el.id !== 'txtMsg' && !el.matches('.pm_outgoing input[type="text"]')) { return; }
+            const maxLen = el.maxLength > 0 ? el.maxLength : 500;
+            const t = el.value.length / maxLen;
+            if (t === 0) {
+                el.style.removeProperty('--ichc-input-border');
+                el.style.removeProperty('--ichc-input-glow');
+            } else {
+                const [r, g, b] = _spectralInputColor(Math.min(t, 1));
+                el.style.setProperty('--ichc-input-border', `rgba(${r},${g},${b},0.85)`);
+                el.style.setProperty('--ichc-input-glow',   `rgba(${r},${g},${b},0.20)`);
+            }
+        });
     });
 
     // ── Dialog center + drag ──────────────────────────────────────────────────────
@@ -1352,15 +1447,6 @@
             ).join(' · ');
             right.appendChild(linksSpan);
 
-            // Cloud / word-cloud toggle button
-            const wcBtn = document.createElement('button');
-            wcBtn.id = 'ichc-wc-toggle-btn';
-            wcBtn.type = 'button';
-            wcBtn.title = _wordCloudMode ? 'Switch to user list' : 'Switch to word cloud';
-            wcBtn.textContent = '☁';
-            wcBtn.className = 'ichc-wc-toggle-btn' + (_wordCloudMode ? ' ichc-wc-active' : '');
-            wcBtn.addEventListener('click', () => setWordCloudMode(!_wordCloudMode));
-            right.appendChild(wcBtn);
 
             bar.appendChild(right);
         }
@@ -1683,19 +1769,7 @@
         }
         primaryLinks.push(reloadBtn);
 
-        let camTestBtn = document.getElementById('ichc-cam-test-btn');
-        if (!camTestBtn) {
-            camTestBtn = document.createElement('button');
-            camTestBtn.id = 'ichc-cam-test-btn';
-            camTestBtn.type = 'button';
-            camTestBtn.className = 'ichc-cam-test-btn';
-            camTestBtn.title = 'Cam diagnostics';
-            camTestBtn.innerHTML = ICONS.shield;
-            camTestBtn.addEventListener('click', () => {
-                openCamDiagnostics();
-            });
-        }
-        primaryLinks.push(camTestBtn);
+
 
         // Find leave button: may already be in primaryActions or still in signout element.
         const leaveBtn = primaryActions.querySelector('a.ichc-leave-btn') ||
@@ -2872,7 +2946,7 @@
         item.dataset.nick = nick;
         item.title = nick;
         // Inline positioning context; width is controlled by CSS (expands when active)
-        item.style.cssText = 'position:relative!important;height:28px!important;flex-shrink:0!important;cursor:pointer!important;';
+        item.style.cssText = 'position:relative!important;flex-shrink:0!important;cursor:pointer!important;';
 
         const inner = document.createElement('div');
         inner.className = 'ichc-pm-avatar-inner';
@@ -3234,21 +3308,6 @@
 
     function saveBlockedUsers(set) {
         localStorage.setItem('ichc_blocked', JSON.stringify([...set]));
-    }
-
-    function getBlockedUserDisplayName(key) {
-        const wanted = (key || '').trim().toLowerCase();
-        if (!wanted) { return ''; }
-
-        const sources = [
-            ...getLiveCamEntries().map(entry => ({ textContent: entry.name || '' })),
-            ...document.querySelectorAll('#cams .name-on-cam'),
-            ...document.querySelectorAll('#activeUserList a.userlink'),
-            ...document.querySelectorAll('#txt a.userlink'),
-        ];
-
-        const match = sources.find(node => node.textContent.trim().toLowerCase() === wanted);
-        return match?.textContent.trim() || key;
     }
 
     function getLiveCamEntries() {
@@ -3791,7 +3850,7 @@
         // Sync the collapse button label inside the userlist header
         const collapseBtn = document.getElementById('ichc-ul-collapse-btn');
         if (collapseBtn) {
-            collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronLeft : ICONS.chevronRight;
+            collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
             collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
         }
     }
@@ -3851,6 +3910,10 @@
             const _footerLeft = document.getElementById('ichc-footer-left') || footerBar;
             if (themeBtn && _footerLeft && !_footerLeft.contains(themeBtn)) {
                 _footerLeft.appendChild(themeBtn);
+            }
+            const _camDiagBtn = document.getElementById('ichc-cam-test-btn');
+            if (_camDiagBtn && _footerLeft && !_footerLeft.contains(_camDiagBtn)) {
+                _footerLeft.appendChild(_camDiagBtn);
             }
             // PM button lives inside the pm-avatar strip
             const _er_pmBtn = document.getElementById('ichc-pm-toggle-btn');
@@ -3937,6 +4000,22 @@
             },
             { label: 'Image viewing',   icon: ICONS.imageIcon, fn: 'toggleImages()' },
             { label: 'PM preferences',  icon: ICONS.phone,     fn: 'togglePMPrefs()' },
+            {
+                label: document.documentElement.classList.contains('ichc-light-theme') ? 'Dark mode' : 'Light mode',
+                icon:  document.documentElement.classList.contains('ichc-light-theme') ? ICONS.moon  : ICONS.sun,
+                action(labelEl) {
+                    const nowLight = document.documentElement.classList.toggle('ichc-light-theme');
+                    localStorage.setItem('ichc_theme', nowLight ? 'light' : 'dark');
+                    document.dispatchEvent(new CustomEvent('ichc-theme-change'));
+                    const footerBtn = document.getElementById('ichc-theme-toggle-btn');
+                    if (footerBtn) { footerBtn.innerHTML = nowLight ? ICONS.moon : ICONS.sun; }
+                    if (labelEl) {
+                        labelEl.textContent = nowLight ? 'Dark mode' : 'Light mode';
+                        const iconEl = labelEl.previousElementSibling;
+                        if (iconEl) { iconEl.innerHTML = nowLight ? ICONS.moon : ICONS.sun; }
+                    }
+                },
+            },
             { label: 'Help',            icon: ICONS.question,  href: 'help' },
         ];
         items.forEach(item => {
@@ -4367,6 +4446,21 @@
             footerLeft.appendChild(themeBtn);
         }
 
+        // Cam diagnostics — footer, right of theme toggle, console icon, no border
+        let camTestBtn = document.getElementById('ichc-cam-test-btn');
+        if (!camTestBtn) {
+            camTestBtn = document.createElement('button');
+            camTestBtn.id = 'ichc-cam-test-btn';
+            camTestBtn.type = 'button';
+            camTestBtn.className = 'ichc-cam-test-btn';
+            camTestBtn.title = 'Cam diagnostics';
+            camTestBtn.innerHTML = ICONS.terminal;
+            camTestBtn.addEventListener('click', () => { openCamDiagnostics(); });
+        }
+        if (footerLeft && !footerLeft.contains(camTestBtn)) {
+            footerLeft.appendChild(camTestBtn);
+        }
+
         // PM button lives inside the pm-avatar strip as its first child
         let pmAvatarStrip = document.getElementById('ichc-pm-avatars');
         if (!pmAvatarStrip) {
@@ -4645,21 +4739,22 @@
         if (wc) { wc.classList.toggle('ichc-wc-visible', on); }
         const btn = document.getElementById('ichc-wc-toggle-btn');
         if (btn) {
-            btn.classList.toggle('ichc-wc-active', on);
-            btn.title = on ? 'Hide word cloud' : 'Show word cloud';
+            const label = on ? 'Hide word cloud' : 'Show word cloud';
+            btn.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.cloud}</span><span>${label}</span>`;
         }
         if (on) { buildUserList({ force: true }); }
+        updateCamDensity();
     }
 
     function bindUserListMoreMenuDismiss() {
         if (userListState.moreMenuDismissBound) { return; }
         userListState.moreMenuDismissBound = true;
         document.addEventListener('click', event => {
-            document.querySelectorAll('#ichc-userlist .ichc-ul-more-menu').forEach(menu => {
-                if (!menu.closest('.ichc-ul-more-btn')?.contains(event.target)) {
-                    menu.hidden = true;
-                }
-            });
+            const menu = document.getElementById('ichc-ul-more-menu');
+            if (!menu || menu.hidden) { return; }
+            if (menu.contains(event.target)) { return; }
+            if (document.querySelector('.ichc-ul-more-btn')?.contains(event.target)) { return; }
+            menu.hidden = true;
         }, true);
     }
 
@@ -4674,8 +4769,17 @@
             return;
         }
         // Don't rebuild while the ⋮ more menu is open — removing the header causes visible flicker
-        if (!force && document.querySelector('#ichc-userlist .ichc-ul-more-menu:not([hidden])')) {
+        if (!force && document.getElementById('ichc-ul-more-menu')?.hidden === false) {
             return;
+        }
+        // Skip full DOM rebuild when source data hasn't meaningfully changed.
+        // Signature: textContent length + first 100 chars + cam element count + blocked-list length.
+        // Any user join/leave, name change, or cam/block state change will shift at least one value.
+        if (!force) {
+            const _tc = src.textContent;
+            const _sig = `${_tc.length}|${_tc.slice(0, 100)}|${document.getElementById('cams')?.childElementCount ?? 0}|${(localStorage.getItem('ichc_blocked') || '').length}`;
+            if (_sig === userListState.lastBuildSig) { return; }
+            userListState.lastBuildSig = _sig;
         }
         userListState.rebuildPendingAfterSearch = false;
         // Track focus — panel.innerHTML='' blurs anything focused inside the panel.
@@ -4940,24 +5044,15 @@
         const header = document.createElement('div');
         header.className = 'ichc-ul-header';
 
-        const userMeta = idleCount > 0 ? ` (${idleCount} inactive)` : '';
-        const camMeta  = hiddenCamCount > 0 ? ` (${hiddenCamCount} hidden)` : '';
+        const userMeta = idleCount > 0 ? `<span class="ichc-ul-count-meta"> (${idleCount} inactive)</span>` : '';
+        const camMeta  = hiddenCamCount > 0 ? `<span class="ichc-ul-count-meta"> (${hiddenCamCount} hidden)</span>` : '';
 
-        // Cams row — sits above users row
-        const badge = document.createElement('div');
-        badge.className = 'ichc-ul-count';
-        badge.innerHTML = `<span class="ichc-ul-count-cams">${cammedCount}</span><span class="ichc-ul-count-cam-label"> LIVE${camMeta}</span>`;
-
-        // Users row — count + PM toggle + search + 3-dot menu
+        // Single stats row — cam + viewer counts with 3-dot menu on the right
         const titleRow = document.createElement('div');
         titleRow.className = 'ichc-ul-title-row';
-        titleRow.innerHTML = `<span class="ichc-ul-count-users">${activeCount + idleCount}</span><span class="ichc-ul-count-user-label"> VIEWERS${userMeta}</span>`;
+        titleRow.innerHTML = `<span class="ichc-ul-count-cams">${cammedCount}</span><span class="ichc-ul-count-cam-label">${ICONS.broadcast}${camMeta}</span><span class="ichc-ul-stat-sep">·</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span><span class="ichc-ul-count-user-label">${ICONS.eye}${userMeta}</span>`;
 
-        // Restore saved PM button (or it will be placed here by transformCommandBar on first build)
-        if (savedPmBtn) {
-            savedPmBtn.style.removeProperty('display');
-            titleRow.appendChild(savedPmBtn);
-        }
+        // PM button lives in the avatar strip (hidden by CSS); keep it there, not the title row
 
         const searchBtn = document.createElement('button');
         searchBtn.type = 'button';
@@ -4990,26 +5085,25 @@
         const collapseBtn = document.createElement('button');
         collapseBtn.type = 'button';
         collapseBtn.id = 'ichc-ul-collapse-btn';
-        collapseBtn.innerHTML = ICONS.chevronRight;
-        collapseBtn.title = 'Collapse user list';
+        collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
+        collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
         collapseBtn.addEventListener('click', e => { e.stopPropagation(); _toggleUserListCollapse(); });
 
-        header.appendChild(badge);
         header.appendChild(titleRow);
         header.appendChild(searchRow);
         // Insert header before existing user rows (which were kept in the DOM).
         panel.insertBefore(header, panel.firstChild || null);
 
-        // Reattach PM avatars above the header
+        // Reattach PM avatars above the header, with PM button back inside it
         if (savedPmAvatars) {
             panel.insertBefore(savedPmAvatars, panel.firstChild);
+            if (savedPmBtn && !savedPmAvatars.contains(savedPmBtn)) {
+                savedPmAvatars.insertBefore(savedPmBtn, savedPmAvatars.firstChild || null);
+            }
         }
 
         // Sidebar cam/viewer stats (visible only when collapsed)
         _updateSidebarStats(panel, cammedCount, activeCount + idleCount);
-
-        // Collapse button sits at the very top of the panel, above the PM avatar strip
-        panel.insertBefore(collapseBtn, panel.firstChild || null);
 
         // Reattach the saved more-btn (preserves open/closed state and all listeners).
         // Refresh sort-active class in case sortMode changed since last build.
@@ -5017,8 +5111,11 @@
             savedMoreBtn.querySelectorAll('[data-sort]').forEach(btn => {
                 btn.classList.toggle('ichc-ul-sort-active', btn.dataset.sort === userListState.sortMode);
             });
-            badge.appendChild(savedMoreBtn);
+            titleRow.appendChild(savedMoreBtn);
         }
+
+        // Collapse button — far right of the stats row
+        titleRow.appendChild(collapseBtn);
 
         // ── User rows ──
         const _buildNewRow = (u, imgKey) => {
@@ -5365,12 +5462,19 @@
 
                 const list = document.createElement('div');
                 list.className = 'ichc-ul-offline-hidden-list';
+                // Build display-name lookup once — getBlockedUserDisplayName does 4+ querySelectorAll
+                // calls per key, making it O(n×m) when called inside the forEach loop.
+                const _dnMap = new Map();
+                const _dnAdd = t => { const s = (t || '').trim(); if (s) { _dnMap.set(s.toLowerCase(), s); } };
+                getLiveCamEntries().forEach(e => _dnAdd(e.name));
+                document.querySelectorAll('#cams .name-on-cam, #activeUserList a.userlink, #txt a.userlink')
+                    .forEach(el => _dnAdd(el.textContent));
                 offlineHiddenKeys.forEach(key => {
                     const row = document.createElement('div');
                     row.className = 'ichc-ul-offline-hidden-row';
                     const name = document.createElement('span');
                     name.className = 'ichc-ul-offline-hidden-name';
-                    name.textContent = getBlockedUserDisplayName(key);
+                    name.textContent = _dnMap.get((key || '').trim().toLowerCase()) || key;
                     const removeBtn = document.createElement('button');
                     removeBtn.type = 'button';
                     removeBtn.className = 'ichc-ul-offline-remove-btn';
@@ -5396,6 +5500,7 @@
 
                 const moreMenu = document.createElement('div');
                 moreMenu.className = 'ichc-ul-more-menu';
+                moreMenu.id = 'ichc-ul-more-menu';
                 moreMenu.hidden = true;
 
                 // ── Sort section ──
@@ -5557,7 +5662,25 @@
                 });
                 moreMenu.appendChild(collapseItem);
 
-                moreBtn.appendChild(moreMenu);
+                // Word cloud toggle
+                const wcItem = document.createElement('button');
+                wcItem.type = 'button';
+                wcItem.id = 'ichc-wc-toggle-btn';
+                wcItem.className = 'ichc-ul-more-item';
+                const _refreshWcItem = () => {
+                    const label = _wordCloudMode ? 'Hide word cloud' : 'Show word cloud';
+                    wcItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.cloud}</span><span>${label}</span>`;
+                };
+                _refreshWcItem();
+                wcItem.addEventListener('click', e => {
+                    e.stopPropagation();
+                    moreMenu.hidden = true;
+                    setWordCloudMode(!_wordCloudMode);
+                    _refreshWcItem();
+                });
+                moreMenu.appendChild(wcItem);
+
+                document.body.appendChild(moreMenu);
 
                 moreBtn.addEventListener('click', e => {
                     e.stopPropagation();
@@ -5568,10 +5691,20 @@
                         const label = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
                         ci.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
                     }
-                    moreMenu.hidden = !moreMenu.hidden;
+                    if (moreMenu.hidden) {
+                        const rect = moreBtn.getBoundingClientRect();
+                        moreMenu.style.top = `${rect.bottom + 4}px`;
+                        moreMenu.style.right = `${window.innerWidth - rect.right}px`;
+                        moreMenu.style.left = 'auto';
+                        moreMenu.hidden = false;
+                    } else {
+                        moreMenu.hidden = true;
+                    }
                 });
 
-                badge.appendChild(moreBtn); // top-right of LIVE row
+                // Insert before collapseBtn so the order is: [stats] [search] [more] [collapse]
+                const _collapseBtn = titleRow.querySelector('#ichc-ul-collapse-btn');
+                titleRow.insertBefore(moreBtn, _collapseBtn || null);
             }
         }
         // Sync PM avatar status dots with current user statuses
@@ -5622,7 +5755,7 @@
         const src = document.getElementById('activeUserList');
         if (src && userListState.srcObservedEl !== src) {
             userListState.srcObserver?.disconnect();
-            userListState.srcObserver = new MutationObserver(() => scheduleUserListBuild(180));
+            userListState.srcObserver = new MutationObserver(() => scheduleUserListBuild(350));
             userListState.srcObserver.observe(src, { childList: true, subtree: true });
             userListState.srcObservedEl = src;
         }
@@ -6317,9 +6450,9 @@
 
         let userListWidth = window.innerWidth <= 780
             ? 0
-            : densityCount >= 12 ? 168
-            : densityCount >= 7 ? 182
-            : 198;
+            : densityCount >= 12 ? 164
+            : densityCount >= 7 ? 176
+            : 188;
 
         const autoChatWidth = window.innerWidth <= 1100
             ? Math.min(430, stageWidth)
@@ -6416,17 +6549,17 @@
                 if (featuredActive && densityCount > 1) {
                     const remaining = densityCount - 1;
                     const rowsBelow = Math.ceil(remaining / candidateColumns);
-                    // Featured card uses 16/9 with max-height clamp(180px, 46vh, 520px).
+                    // Featured card uses 16/9 with max-height clamp(240px, 60vh, 680px).
                     const featuredHeight = Math.min(
-                        Math.max(180, Math.floor(availableWidth / (16 / 9))),
-                        Math.round(availableHeight * 0.46),
+                        Math.max(240, Math.floor(availableWidth / (16 / 9))),
+                        Math.round(availableHeight * 0.60),
                     );
-                    // Thumbnail cards use max-height clamp(90px, 22vh, 220px).
+                    // Thumbnail cards use max-height clamp(120px, 28vh, 300px).
                     const thumbH = Math.min(
-                        Math.max(90, Math.floor(
+                        Math.max(120, Math.floor(
                             Math.max(120, Math.floor((availableWidth - gap * (candidateColumns - 1)) / candidateColumns)) / (4 / 3),
                         )),
-                        Math.round(availableHeight * 0.22),
+                        Math.round(availableHeight * 0.28),
                     );
                     return featuredHeight +
                         (rowsBelow > 0 ? gap : 0) +
@@ -6472,6 +6605,7 @@
             densityCount,
             measuredCamLane,
             availableHeight,
+            _wordCloudMode ? '1' : '0',
         ].join('|');
 
         if (camLayoutState.lastDensitySignature === nextSignature) { return; }
@@ -6483,9 +6617,27 @@
         document.documentElement.style.setProperty('--ichc-cam-min', `${camMinValue}px`);
         document.documentElement.style.setProperty('--ichc-cam-aspect', aspect);
         document.documentElement.style.setProperty('--ichc-cam-columns', String(columns));
+        // Height-fill mode: expand rows to fill panel height when word cloud is hidden
+        const _fillNumRows = densityCount > 0 ? Math.ceil(densityCount / columns) : 0;
+        const _fillAspect = aspect === '16 / 9' ? 16 / 9 : 4 / 3;
+        let fillRowH = 0;
+        if (!_wordCloudMode && !featuredActive && _fillNumRows > 0 && availableHeight > 200 && availableWidth > 200) {
+            const rowH = Math.floor((availableHeight - gap * Math.max(0, _fillNumRows - 1)) / _fillNumRows);
+            const impliedW = Math.floor(rowH * _fillAspect);
+            if (rowH >= 80 && impliedW * columns + gap * Math.max(0, columns - 1) <= availableWidth + 100) {
+                fillRowH = rowH;
+            }
+        }
+
         const cams = document.getElementById('cams');
         if (cams) {
             cams.style.setProperty('grid-template-columns', `repeat(${columns * 2}, minmax(0, 1fr))`, 'important');
+            if (fillRowH > 0) {
+                cams.style.setProperty('grid-auto-rows', `${fillRowH}px`, 'important');
+            } else {
+                cams.style.removeProperty('grid-auto-rows');
+            }
+            cams.classList.toggle('ichc-cam-fill-mode', fillRowH > 0);
             _applyCardSpans();
         }
         // Persist for next page load so first paint is already correct.
@@ -6567,8 +6719,8 @@
                 }
                 // Use a wide aspect for the featured card so it doesn't eat all vertical space.
                 card.style.setProperty('aspect-ratio', '16 / 9', 'important');
-                card.style.setProperty('min-height', 'clamp(180px, 36vh, 420px)', 'important');
-                card.style.setProperty('max-height', 'clamp(180px, 46vh, 520px)', 'important');
+                card.style.setProperty('min-height', 'clamp(240px, 48vh, 560px)', 'important');
+                card.style.setProperty('max-height', 'clamp(240px, 60vh, 680px)', 'important');
                 card.style.removeProperty('min-width');
             } else {
                 card.style.removeProperty('grid-column');
@@ -6576,7 +6728,7 @@
                 if (featured) {
                     // Thumbnail row when another cam is focused.
                     card.style.setProperty('aspect-ratio', '4 / 3', 'important');
-                    card.style.setProperty('max-height', 'clamp(90px, 22vh, 220px)', 'important');
+                    card.style.setProperty('max-height', 'clamp(120px, 28vh, 300px)', 'important');
                 } else {
                     card.style.removeProperty('aspect-ratio');
                     card.style.removeProperty('max-height');
@@ -6652,15 +6804,14 @@
                 .map(card => getCardName(card)?.trim().toLowerCase())
                 .filter(Boolean)
         );
-        const stale = [];
         try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key?.startsWith(_BCAST_LS) && !liveNames.has(key.slice(_BCAST_LS.length))) {
-                    stale.push(key);
+            // Object.keys() fetches all keys in one call (O(n)) — localStorage.key(i)
+            // in a for-loop is O(n²) in Firefox when localStorage is large.
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith(_BCAST_LS) && !liveNames.has(key.slice(_BCAST_LS.length))) {
+                    localStorage.removeItem(key);
                 }
-            }
-            stale.forEach(k => localStorage.removeItem(k));
+            });
         } catch (_) {}
     }
 

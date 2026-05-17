@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     'use strict';
 
     // ─── Shared utilities (duplicated from ichc-theme) ───────────────────────────
@@ -472,22 +472,7 @@
                 ? _makeEmoteLabel(emoteUrl, emoteCode, emoteType)
                 : _makeEmoteWrap(emoteUrl, emoteCode, emoteType, _buildMediaEl(emoteUrl, emoteType));
 
-            // Insert after the full chat row (direct #txt child) so the image
-            // appears cleanly below the message rather than crammed inside a <td>.
-            const log = getChatLog();
-            let insertParent = anchor.parentNode;
-            let insertBefore = anchor.nextSibling;
-            if (log && anchor.parentNode !== log) {
-                let node = anchor;
-                while (node.parentElement && node.parentElement !== log) {
-                    node = node.parentElement;
-                }
-                if (node.parentElement === log) {
-                    insertParent = log;
-                    insertBefore = node.nextSibling;
-                }
-            }
-            if (insertParent) { insertParent.insertBefore(insertEl, insertBefore || null); }
+            anchor.replaceWith(insertEl);
         });
 
         // Wrap native site emote <img> elements (e.g. id="emot-1") so the × block button appears
@@ -874,18 +859,19 @@
         lastMessageAt: 0,
         newMessageCount: 0,
         savedScrollTop: null,
+        scrollbarHideTimer: null,
     };
 
     const chatEventCollector = {
-        joinRow:    null,
-        leaveRow:   null,
+        row:        null,
         joinNames:  [],
         leaveNames: [],
     };
 
     function _sealChatEvents() {
-        chatEventCollector.joinRow    = null;
-        chatEventCollector.leaveRow   = null;
+        // Called when a real chat message appears — always start a fresh batch.
+        chatEventCollector.batchStart = 0;
+        chatEventCollector.row        = null;
         chatEventCollector.joinNames  = [];
         chatEventCollector.leaveNames = [];
     }
@@ -906,32 +892,50 @@
         return m ? m[1].trim() : '';
     }
 
-    function _renderEventRow(row, label, names) {
-        const count = document.createElement('b');
-        count.textContent = names.length;
-        row.replaceChildren(count, document.createTextNode(' ' + label + ': ' + names.join(', ')));
+    function _renderEventCollector(row) {
+        const { joinNames, leaveNames } = chatEventCollector;
+        const frag = document.createDocumentFragment();
+        if (joinNames.length) {
+            const span = document.createElement('span');
+            span.className = 'ichc-event-join-part';
+            const b = document.createElement('b');
+            b.textContent = String(joinNames.length);
+            span.appendChild(b);
+            span.appendChild(document.createTextNode(' Joined: ' + joinNames.join(', ')));
+            frag.appendChild(span);
+        }
+        if (joinNames.length && leaveNames.length) {
+            frag.appendChild(document.createTextNode(' · '));
+        }
+        if (leaveNames.length) {
+            const span = document.createElement('span');
+            span.className = 'ichc-event-leave-part';
+            const b = document.createElement('b');
+            b.textContent = String(leaveNames.length);
+            span.appendChild(b);
+            span.appendChild(document.createTextNode(' Left: ' + leaveNames.join(', ')));
+            frag.appendChild(span);
+        }
+        row.replaceChildren(frag);
     }
 
     function _addToEventCollector(type, nick, refRow) {
         refRow.dataset.ichcEventProcessed = '1';
         refRow.style.setProperty('display', 'none', 'important');
+        const chatLog = refRow.parentElement;
         if (type === 'join') {
             chatEventCollector.joinNames.push(nick);
-            if (!chatEventCollector.joinRow?.isConnected) {
-                chatEventCollector.joinRow = document.createElement('div');
-                chatEventCollector.joinRow.className = 'ichc-event-collector ichc-event-join';
-                refRow.after(chatEventCollector.joinRow);
-            }
-            _renderEventRow(chatEventCollector.joinRow, 'Joined', chatEventCollector.joinNames);
         } else {
             chatEventCollector.leaveNames.push(nick);
-            if (!chatEventCollector.leaveRow?.isConnected) {
-                chatEventCollector.leaveRow = document.createElement('div');
-                chatEventCollector.leaveRow.className = 'ichc-event-collector ichc-event-leave';
-                (chatEventCollector.joinRow?.isConnected ? chatEventCollector.joinRow : refRow).after(chatEventCollector.leaveRow);
-            }
-            _renderEventRow(chatEventCollector.leaveRow, 'Left', chatEventCollector.leaveNames);
         }
+        // Single combined row — always moved to bottom so it stays visible.
+        if (!chatEventCollector.row?.isConnected) {
+            chatEventCollector.row = document.createElement('div');
+            chatEventCollector.row.className = 'ichc-event-collector';
+        }
+        if (chatLog) { chatLog.appendChild(chatEventCollector.row); }
+        _renderEventCollector(chatEventCollector.row);
+        // Batch stays open until a real chat message seals it — no time cap.
         chatScrollState.lastMessageAt = Date.now();
         if (chatScrollState.auto) { scheduleChatFollow(false); }
     }
@@ -996,19 +1000,41 @@
 
         target.addEventListener('scroll', () => {
             if (Date.now() < chatScrollState.programmaticUntil) { return; }
+
+            // Rainbow scrollbar hue: violet(300) at bottom → red(0) at top — full spectrum
+            const _max = target.scrollHeight - target.clientHeight;
+            const _up = _max > 0 ? 1 - (target.scrollTop / _max) : 0;
+            target.style.setProperty('--ichc-scroll-hue', Math.round(300 * (1 - _up)));
+
+            const userInitiated = (Date.now() - chatScrollState.userScrollAt) < 600;
+            if (userInitiated) {
+                target.classList.add('ichc-user-scrolling');
+                if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
+                chatScrollState.scrollbarHideTimer = setTimeout(() => {
+                    chatScrollState.scrollbarHideTimer = null;
+                    target.classList.remove('ichc-user-scrolling');
+                }, 1500);
+            }
+
             hideChatPauseNotice();
 
             if (isNearChatBottom(target, 56)) {
-                const userInitiated = (Date.now() - chatScrollState.userScrollAt) < 400;
-                if (chatScrollState.auto || userInitiated) {
+                if (chatScrollState.auto) {
+                    chatScrollState.nativePaused = false;
+                    chatScrollState.newMessageCount = 0;
+                    chatScrollState.savedScrollTop = null;
+                    scheduleChatFollow(false);
+                    _updateScrollIndicator();
+                } else if (userInitiated && isNearChatBottom(target, 8)) {
+                    // User scrolled all the way back to live — re-enable auto
                     chatScrollState.auto = true;
                     chatScrollState.nativePaused = false;
                     chatScrollState.newMessageCount = 0;
                     chatScrollState.savedScrollTop = null;
                     scheduleChatFollow(false);
                     _updateScrollIndicator();
-                } else if (chatScrollState.savedScrollTop != null) {
-                    // Site scrolled us back to bottom while user is reading — restore position
+                } else if (!userInitiated && chatScrollState.savedScrollTop != null) {
+                    // Site scrolled us to bottom while reading — restore position
                     chatScrollState.programmaticUntil = Date.now() + 300;
                     target.scrollTop = chatScrollState.savedScrollTop;
                 }
@@ -1503,5 +1529,91 @@
             w.replaceWith(_makeEmoteLabel(url, code, type));
         });
     });
+
+    // ── Cam-slot offer: intercept native toasts → inline actionable chat row ──
+    const _CAM_OFFER_RE = /offer your cam slot to\s+([^\s,\.!?]+)/i;
+    const _seenOfferNodes = new WeakSet();
+    const _recentOfferNicks = new Set();
+
+    function _injectCamOfferRow(nick) {
+        const key = nick.toLowerCase();
+        if (_recentOfferNicks.has(key)) { return; }
+        _recentOfferNicks.add(key);
+        window.setTimeout(() => _recentOfferNicks.delete(key), 30000);
+
+        const log = getChatLog();
+        if (!log) { return; }
+
+        const row = document.createElement('div');
+        row.className = 'ichc-slot-offer-row';
+        row.dataset.ichcInserted = '1';
+
+        const title = document.createElement('div');
+        title.className = 'ichc-slot-offer-title';
+        title.textContent = 'Cam slot offer';
+
+        const msg = document.createElement('div');
+        msg.className = 'ichc-slot-offer-msg';
+        msg.textContent = `Cams are full — offer your slot to ${nick}?`;
+
+        const btns = document.createElement('div');
+        btns.className = 'ichc-slot-offer-btns';
+
+        const offerBtn = document.createElement('button');
+        offerBtn.type = 'button';
+        offerBtn.className = 'ichc-slot-offer-btn ichc-slot-offer-btn-primary';
+        offerBtn.textContent = `Offer slot to ${nick}`;
+        offerBtn.addEventListener('click', () => {
+            runInPageContext(`
+                const inp = document.getElementById('txtMsg');
+                const snd = document.getElementById('btn');
+                if (inp && snd) {
+                    inp.value = ${JSON.stringify('/cam offer ' + nick)};
+                    snd.click();
+                }
+            `);
+            row.remove();
+        });
+
+        const dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'ichc-slot-offer-btn';
+        dismissBtn.textContent = 'Dismiss';
+        dismissBtn.addEventListener('click', () => row.remove());
+
+        btns.appendChild(offerBtn);
+        btns.appendChild(dismissBtn);
+        row.appendChild(title);
+        row.appendChild(msg);
+        row.appendChild(btns);
+        log.appendChild(row);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function _tryCamOfferIntercept(node) {
+        if (_seenOfferNodes.has(node) || node.nodeType !== 1) { return; }
+        // Skip if an ancestor was already handled (avoids duplicate injections for child nodes)
+        for (let p = node.parentElement; p; p = p.parentElement) {
+            if (_seenOfferNodes.has(p)) { return; }
+        }
+        const text = node.textContent || '';
+        if (!_CAM_OFFER_RE.test(text)) { return; }
+        _seenOfferNodes.add(node);
+        const match = _CAM_OFFER_RE.exec(text);
+        if (!match) { return; }
+        node.style.setProperty('display', 'none', 'important');
+        _injectCamOfferRow(match[1].trim());
+    }
+
+    (function initCamOfferInterceptor() {
+        const obs = new MutationObserver(muts => {
+            for (const mut of muts) {
+                for (const node of mut.addedNodes) {
+                    _tryCamOfferIntercept(node);
+                }
+            }
+        });
+        obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    })();
 
 })();
