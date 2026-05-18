@@ -529,7 +529,8 @@
         let lastNick = null;
         const nickOf = new Map();
         allRows.forEach(row => {
-            if (row.classList.contains('ichc-chat-event') || row.classList.contains('ichc-bcast-event')) {
+            if (row.classList.contains('ichc-chat-event') || row.classList.contains('ichc-bcast-event') ||
+                row.classList.contains('ichc-event-collector')) {
                 lastNick = null;
                 nickOf.set(row, null);
                 return;

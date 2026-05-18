@@ -1623,6 +1623,8 @@
             topbar.id = 'ichc-topbar';
             topbar.innerHTML = `
                 <div id="ichc-header-brand"></div>
+                <div id="ichc-header-room"></div>
+                <div id="ichc-header-leave"></div>
                 <div id="ichc-header-topic"></div>
                 <div id="ichc-header-actions">
                     <div id="ichc-header-userinfo"></div>
@@ -1640,10 +1642,34 @@
         const actions = document.getElementById('ichc-header-actions');
         const primaryActions = document.getElementById('ichc-primary-actions');
         const userInfoSlot = document.getElementById('ichc-header-userinfo');
+        const roomSlot  = document.getElementById('ichc-header-room');
+        const leaveSlot = document.getElementById('ichc-header-leave');
         if (!brand || !topicSlot || !actions || !primaryActions) { return; }
 
         if (logoBlock && !brand.contains(logoBlock)) { brand.replaceChildren(logoBlock); }
         if (!topicSlot.contains(topic)) { topicSlot.replaceChildren(topic); }
+
+        // Room name box — populate once (pathname like /roomname)
+        if (roomSlot && !roomSlot.dataset.ichcRoomDone) {
+            const rawRoom = window.location.pathname.replace(/^\/+/, '').split('/')[0];
+            if (rawRoom) {
+                const slashEl = document.createElement('span');
+                slashEl.className = 'ichc-room-slash';
+                slashEl.textContent = '/';
+                const nameEl = document.createElement('span');
+                nameEl.className = 'ichc-room-name-text';
+                nameEl.textContent = rawRoom;
+                roomSlot.replaceChildren(slashEl, nameEl);
+                for (const el of [document.getElementById('chat_container'), document.body]) {
+                    if (!el) { continue; }
+                    const bg = el.style.backgroundColor;
+                    if (bg && bg !== 'transparent' && bg !== '') { roomSlot.style.setProperty('--ichc-room-accent', bg); break; }
+                    const bgImg = el.style.backgroundImage;
+                    if (bgImg && bgImg !== 'none' && bgImg !== '') { roomSlot.style.setProperty('--ichc-room-bg-img', bgImg); break; }
+                }
+                roomSlot.dataset.ichcRoomDone = '1';
+            }
+        }
 
         // Populate user info — structured: greeting | username (large) + karma (small).
         // Re-attempt on every call until we get non-trivial text (handles late-loading).
@@ -1771,15 +1797,16 @@
 
 
 
-        // Find leave button: may already be in primaryActions or still in signout element.
-        const leaveBtn = primaryActions.querySelector('a.ichc-leave-btn') ||
+        // Find leave button: may already be in leaveSlot/primaryActions or still in signout element.
+        const leaveBtn = leaveSlot?.querySelector('a.ichc-leave-btn') ||
+            primaryActions.querySelector('a.ichc-leave-btn') ||
             [...leaveControl.querySelectorAll('a')][0];
-        if (leaveBtn) {
+        if (leaveBtn && leaveSlot) {
             if (!leaveBtn.classList.contains('ichc-leave-btn')) {
                 leaveBtn.innerHTML = ICONS.leave;
                 leaveBtn.classList.add('ichc-leave-btn');
             }
-            primaryLinks.push(leaveBtn);
+            if (!leaveSlot.contains(leaveBtn)) { leaveSlot.appendChild(leaveBtn); }
         }
 
         primaryActions.replaceChildren(...primaryLinks);
@@ -1827,7 +1854,7 @@
                 hamburgerMenu.appendChild(link);
             });
         }
-        if (!actions.contains(hamburgerWrapper)) { actions.appendChild(hamburgerWrapper); }
+        if (!topbar.contains(hamburgerWrapper)) { topbar.prepend(hamburgerWrapper); }
 
         pageHeader.classList.add('ichc-source-header');
         roomHeader.classList.add('ichc-merged-header');
@@ -2611,20 +2638,9 @@
     // ── Cam decoration via dynamic stylesheet ────────────────────────────────
     // Never touches .rounded_square attributes or its subtree — uses :has() in
     // a <style> element so the site's MutationObserver is never triggered.
-    const _camDecorMap = new Map(); // camId → { tier, year, bgUrl }
+    const _camDecorMap = new Map(); // camId → { karma, year, bgUrl }
     let _camDecorStyleEl = null;
     let _camDecorLastCSS = '';
-    const _CAM_TIER_CSS = [
-        'outline:1px solid rgba(94,96,96,.35)',
-        'outline:1px solid rgba(101,104,104,.45)',
-        'outline:1px solid rgba(111,114,114,.55)',
-        'outline:1px solid rgba(117,121,122,.65)',
-        'outline:2px solid rgba(124,128,129,.78);box-shadow:0 0 7px rgba(120,124,125,.28)',
-        'outline:2px solid rgba(127,133,133,.88);box-shadow:0 0 10px rgba(125,129,130,.35)',
-        'outline:2px solid #7e8484;box-shadow:0 0 13px rgba(128,134,134,.45),0 0 30px rgba(121,125,126,.18)',
-        'outline:2px solid #858b8b;animation:ichc-cam-aura 2.2s ease-in-out infinite',
-        'outline:3px solid #a5a8a8;animation:ichc-cam-legend 1.5s ease-in-out infinite',
-    ];
     function _getCamDecorStyle() {
         if (!_camDecorStyleEl?.isConnected) {
             _camDecorStyleEl = document.getElementById('ichc-cam-decor');
@@ -2638,11 +2654,20 @@
     }
     function _updateCamDecorStyles() {
         const rules = [];
-        for (const [camId, { tier, year, bgUrl }] of _camDecorMap) {
+        for (const [camId, { karma, year, bgUrl }] of _camDecorMap) {
             const eid = CSS.escape('id-' + camId);
             const cardSel = `#cams .rounded_square:has(#${eid})`;
-            if (tier >= 0 && tier < _CAM_TIER_CSS.length) {
-                rules.push(`${cardSel}{${_CAM_TIER_CSS[tier]}!important}`);
+            const spectral = _karmaToSpectral(karma);
+            if (spectral) {
+                const [rgb, i] = spectral;
+                const w  = i < 0.65 ? 1 : 2;
+                const oA = (0.22 + i * 0.42).toFixed(2); // 0.22→0.64, subtle
+                const gA = (i * 0.16).toFixed(2);        // 0→0.16 glow
+                const gPx = Math.round(4 + i * 14);
+                let decl = `outline:${w}px solid rgba(${rgb},${oA})`;
+                if (i > 0.52) { decl += `;box-shadow:0 0 ${gPx}px rgba(${rgb},${gA})`; }
+                if (i >= 0.9)  { decl += ';animation:ichc-cam-aura 2.2s ease-in-out infinite'; }
+                rules.push(`${cardSel}{${decl}!important}`);
             }
             if (bgUrl) {
                 // Profile background fills behind the video as a subtle wash.
@@ -2668,11 +2693,11 @@
     }
     function _applyCamDecor(camId, karma, year, bgUrl) {
         if (!camId) { return; }
-        const tier = _karmaToTier(karma ?? null);
         const prev = _camDecorMap.get(camId);
         const resolvedBg = bgUrl ?? prev?.bgUrl ?? null;
-        if (tier < 0 && year == null && !resolvedBg) { _camDecorMap.delete(camId); }
-        else { _camDecorMap.set(camId, { tier, year: year ?? null, bgUrl: resolvedBg }); }
+        const resolvedKarma = karma ?? null;
+        if (resolvedKarma == null && year == null && !resolvedBg) { _camDecorMap.delete(camId); }
+        else { _camDecorMap.set(camId, { karma: resolvedKarma, year: year ?? null, bgUrl: resolvedBg }); }
         _updateCamDecorStyles();
     }
 
@@ -3896,13 +3921,11 @@
 
         // If pm/cog/gif buttons already exist, ensure correct placement and return.
         if (document.getElementById('ichc-cog-wrapper')) {
-            // Cog lives in the header, left of the hamburger
+            // Cog lives in #ichc-header-actions
             const cogWrapper = document.getElementById('ichc-cog-wrapper');
             const actions = document.getElementById('ichc-header-actions');
-            const hamburgerWrapper = document.getElementById('ichc-nav-hamburger-wrapper');
             if (cogWrapper && actions && !actions.contains(cogWrapper)) {
-                if (hamburgerWrapper) { actions.insertBefore(cogWrapper, hamburgerWrapper); }
-                else { actions.appendChild(cogWrapper); }
+                actions.appendChild(cogWrapper);
             }
             // Theme btn lives in the left section of the footer
             const footerBar = document.getElementById('ichc-footer-bar');
@@ -3921,11 +3944,12 @@
             if (_er_pmBtn && _er_pmAvStrip && !_er_pmAvStrip.contains(_er_pmBtn)) {
                 _er_pmAvStrip.insertBefore(_er_pmBtn, _er_pmAvStrip.firstChild || null);
             }
-            // PM avatars live at the top of #ichc-userlist panel
+            // PM avatars live below the header in #ichc-userlist panel
             const userlistPanel = document.getElementById('ichc-userlist');
             const pmAvStrip = document.getElementById('ichc-pm-avatars');
             if (pmAvStrip && userlistPanel && !userlistPanel.contains(pmAvStrip)) {
-                userlistPanel.insertBefore(pmAvStrip, userlistPanel.firstChild);
+                const _ulHdr = userlistPanel.querySelector('.ichc-ul-header');
+                if (_ulHdr) { _ulHdr.after(pmAvStrip); } else { userlistPanel.insertBefore(pmAvStrip, userlistPanel.firstChild); }
             }
             // gif lives directly in inputRow, between txtMsg and sendBtn
             const gifWrap = document.getElementById('ichc-gif-wrapper');
@@ -4411,13 +4435,9 @@
 
             }
 
-        // Cog goes in the header, left of the hamburger menu
+        // Cog goes in #ichc-header-actions
         const actions = document.getElementById('ichc-header-actions');
-        const hamburgerWrapper = document.getElementById('ichc-nav-hamburger-wrapper');
-        if (actions) {
-            if (hamburgerWrapper) { actions.insertBefore(wrapper, hamburgerWrapper); }
-            else { actions.appendChild(wrapper); }
-        } else {
+        if (actions && !actions.contains(wrapper)) { actions.appendChild(wrapper); } else {
             // Header not ready yet — retry
             [200, 600, 1400].forEach(d => window.setTimeout(transformCommandBar, d));
             return;
@@ -4472,7 +4492,8 @@
         }
         const userlistPanel = document.getElementById('ichc-userlist');
         if (userlistPanel && !userlistPanel.contains(pmAvatarStrip)) {
-            userlistPanel.insertBefore(pmAvatarStrip, userlistPanel.firstChild);
+            const _ulHdr2 = userlistPanel.querySelector('.ichc-ul-header');
+            if (_ulHdr2) { _ulHdr2.after(pmAvatarStrip); } else { userlistPanel.insertBefore(pmAvatarStrip, userlistPanel.firstChild); }
         }
         initPmAvatarObserver();
 
@@ -5044,15 +5065,22 @@
         const header = document.createElement('div');
         header.className = 'ichc-ul-header';
 
-        const userMeta = idleCount > 0 ? `<span class="ichc-ul-count-meta"> (${idleCount} inactive)</span>` : '';
+        const userMeta = idleCount > 0 ? `<span class="ichc-ul-count-meta"> (${idleCount} idle)</span>` : '';
         const camMeta  = hiddenCamCount > 0 ? `<span class="ichc-ul-count-meta"> (${hiddenCamCount} hidden)</span>` : '';
 
-        // Single stats row — cam + viewer counts with 3-dot menu on the right
+        // Single stats row — collapse btn at far left, then cam + viewer metric groups, buttons at right
         const titleRow = document.createElement('div');
         titleRow.className = 'ichc-ul-title-row';
-        titleRow.innerHTML = `<span class="ichc-ul-count-cams">${cammedCount}</span><span class="ichc-ul-count-cam-label">${ICONS.broadcast}${camMeta}</span><span class="ichc-ul-stat-sep">·</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span><span class="ichc-ul-count-user-label">${ICONS.eye}${userMeta}</span>`;
+        titleRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams">${cammedCount}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span>${userMeta}</span><span class="ichc-ul-metric-spacer"></span>`;
 
-        // PM button lives in the avatar strip (hidden by CSS); keep it there, not the title row
+        // Collapse button — far LEFT of the stats row
+        const collapseBtn = document.createElement('button');
+        collapseBtn.type = 'button';
+        collapseBtn.id = 'ichc-ul-collapse-btn';
+        collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
+        collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
+        collapseBtn.addEventListener('click', e => { e.stopPropagation(); _toggleUserListCollapse(); });
+        titleRow.prepend(collapseBtn);
 
         const searchBtn = document.createElement('button');
         searchBtn.type = 'button';
@@ -5081,22 +5109,14 @@
         });
         searchRow.appendChild(searchInput);
 
-        // Collapse button — left-edge handle of the userlist header
-        const collapseBtn = document.createElement('button');
-        collapseBtn.type = 'button';
-        collapseBtn.id = 'ichc-ul-collapse-btn';
-        collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
-        collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
-        collapseBtn.addEventListener('click', e => { e.stopPropagation(); _toggleUserListCollapse(); });
-
         header.appendChild(titleRow);
         header.appendChild(searchRow);
         // Insert header before existing user rows (which were kept in the DOM).
         panel.insertBefore(header, panel.firstChild || null);
 
-        // Reattach PM avatars above the header, with PM button back inside it
+        // Reattach PM avatars below the header/title row
         if (savedPmAvatars) {
-            panel.insertBefore(savedPmAvatars, panel.firstChild);
+            header.after(savedPmAvatars);
             if (savedPmBtn && !savedPmAvatars.contains(savedPmBtn)) {
                 savedPmAvatars.insertBefore(savedPmBtn, savedPmAvatars.firstChild || null);
             }
@@ -5113,9 +5133,6 @@
             });
             titleRow.appendChild(savedMoreBtn);
         }
-
-        // Collapse button — far right of the stats row
-        titleRow.appendChild(collapseBtn);
 
         // ── User rows ──
         const _buildNewRow = (u, imgKey) => {
@@ -5702,9 +5719,8 @@
                     }
                 });
 
-                // Insert before collapseBtn so the order is: [stats] [search] [more] [collapse]
-                const _collapseBtn = titleRow.querySelector('#ichc-ul-collapse-btn');
-                titleRow.insertBefore(moreBtn, _collapseBtn || null);
+                // Order: [collapse] [metrics] [search] [more]
+                titleRow.appendChild(moreBtn);
             }
         }
         // Sync PM avatar status dots with current user statuses
