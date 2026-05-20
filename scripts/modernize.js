@@ -44,6 +44,7 @@
     const ORDER_KEY = 'ichc_cam_order';
     const FEATURED_KEY = 'ichc_featured_cam';
     const SIDE_WIDTH_KEY = 'ichc_stage_side_width';
+    const UL_WIDTH_KEY   = 'ichc_ul_width';
     const CAM_SPAN_KEY = 'ichc_cam_spans_v1';
     const CAM_LAYOUT_CACHE_KEY = 'ichc_cam_layout_v2';
     const DEFAULT_PREFS = { camMin: 360, chatWidth: 430, chatSide: 'right' };
@@ -91,6 +92,7 @@
         resizeObserver: null,
         panelObserver: null,
         sideWidthOverride: null,
+        ulWidthOverride: null,
         suppressUntil: 0,
         lastDensitySignature: '',
         syncRetryTimer: null,
@@ -867,8 +869,8 @@
             const el = e.target;
             if (el.id !== 'txtMsg' && !el.matches('.pm_outgoing input[type="text"]')) { return; }
             const maxLen = el.maxLength > 0 ? el.maxLength : 500;
-            const t = el.value.length / maxLen;
-            if (t === 0) {
+            const t = Math.pow(el.value.length / maxLen, 0.4);
+            if (el.value.length === 0) {
                 el.style.removeProperty('--ichc-input-border');
                 el.style.removeProperty('--ichc-input-glow');
             } else {
@@ -1947,13 +1949,6 @@
             chatShell.appendChild(userPanel);
         }
 
-        // Userlist resize handle (left edge of userlist)
-        if (userPanel && !document.getElementById('ichc-userlist-resizer')) {
-            const ulResizer = document.createElement('div');
-            ulResizer.id = 'ichc-userlist-resizer';
-            userPanel.appendChild(ulResizer);
-            initUserlistResizer(ulResizer);
-        }
 
         ensureWordCloud();
         if (_wordCloudMode) { setWordCloudMode(true); }
@@ -2027,41 +2022,51 @@
         if (!handle || handle.dataset.ichcBound === '1') { return; }
         handle.dataset.ichcBound = '1';
 
-        const state = { active: false, startX: 0, startWidth: 0 };
+        let active = false;
+        let startX = 0;
+        let startWidth = 0;
+        let startSideWidth = 0;
 
         const finish = () => {
-            if (!state.active) { return; }
-            state.active = false;
+            if (!active) { return; }
+            active = false;
             handle.classList.remove('ichc-resizing');
             document.body.style.removeProperty('cursor');
             document.body.style.removeProperty('user-select');
-            handle.releasePointerCapture?.(state.pointerId);
+            const ulW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ichc-userlist-width')) || 188;
+            saveStoredUlWidth(ulW);
         };
 
         handle.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) { return; }
             const userlist = document.getElementById('ichc-userlist');
             if (!userlist) { return; }
-            state.active = true;
-            state.startX = e.clientX;
-            state.startWidth = userlist.getBoundingClientRect().width;
-            state.pointerId = e.pointerId;
-            handle.setPointerCapture?.(e.pointerId);
+            active = true;
+            startX = e.clientX;
+            startWidth = userlist.getBoundingClientRect().width;
+            startSideWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ichc-stage-side-width')) || 600;
+            handle.setPointerCapture(e.pointerId);
             handle.classList.add('ichc-resizing');
             document.body.style.setProperty('cursor', 'col-resize');
             document.body.style.setProperty('user-select', 'none');
             e.preventDefault();
         });
 
-        document.addEventListener('pointermove', (e) => {
-            if (!state.active) { return; }
-            // Dragging left edge of userlist: moving LEFT = wider userlist
-            const delta = state.startX - e.clientX;
-            const newWidth = Math.max(140, Math.min(500, state.startWidth + delta));
-            document.documentElement.style.setProperty('--ichc-userlist-width', `${newWidth}px`);
-        }, true);
+        // With setPointerCapture, pointermove/pointerup fire on the handle even
+        // when the pointer moves outside it — no global document listeners needed.
+        handle.addEventListener('pointermove', (e) => {
+            if (!active) { return; }
+            const delta = startX - e.clientX;
+            const newUlWidth = Math.max(120, Math.min(400, startWidth + delta));
+            const newChatWidth = Math.max(280, startSideWidth - newUlWidth - 12);
+            camLayoutState.ulWidthOverride = Math.round(newUlWidth);
+            document.documentElement.style.setProperty('--ichc-userlist-width', `${newUlWidth}px`);
+            document.documentElement.style.setProperty('--ichc-chat-width', `${newChatWidth}px`);
+        });
 
-        document.addEventListener('pointerup', finish, true);
-        document.addEventListener('pointercancel', finish, true);
+        handle.addEventListener('pointerup', finish);
+        handle.addEventListener('pointercancel', finish);
+        handle.addEventListener('lostpointercapture', finish);
     }
 
     // Public entry point: checks in-memory cache -> localStorage -> throttled HTTP fetch.
@@ -3319,6 +3324,19 @@
             localStorage.setItem(SIDE_WIDTH_KEY, String(Math.round(value)));
         } else {
             localStorage.removeItem(SIDE_WIDTH_KEY);
+        }
+    }
+
+    function loadStoredUlWidth() {
+        const value = Number(localStorage.getItem(UL_WIDTH_KEY) || '');
+        return Number.isFinite(value) && value >= 120 ? value : null;
+    }
+
+    function saveStoredUlWidth(value) {
+        if (Number.isFinite(value) && value >= 120) {
+            localStorage.setItem(UL_WIDTH_KEY, String(Math.round(value)));
+        } else {
+            localStorage.removeItem(UL_WIDTH_KEY);
         }
     }
 
@@ -5030,6 +5048,8 @@
         const prevSearchOpen = panel.classList.contains('ichc-ul-search-open');
         const prevOfflineOpen = panel.querySelector('.ichc-ul-offline-hidden.is-open') !== null;
         // Detach persistent elements before the panel clear so they survive the rebuild.
+        const savedResizer = panel.querySelector('#ichc-userlist-resizer');
+        savedResizer?.remove();
         const savedMoreBtn = panel.querySelector('.ichc-ul-more-btn');
         savedMoreBtn?.remove();
         const savedPmAvatars = document.getElementById('ichc-pm-avatars');
@@ -5068,19 +5088,25 @@
         const userMeta = idleCount > 0 ? `<span class="ichc-ul-count-meta"> (${idleCount} idle)</span>` : '';
         const camMeta  = hiddenCamCount > 0 ? `<span class="ichc-ul-count-meta"> (${hiddenCamCount} hidden)</span>` : '';
 
-        // Single stats row — collapse btn at far left, then cam + viewer metric groups, buttons at right
+        // Two-row header: [collapse | → | search | more] on top, [metrics] below
         const titleRow = document.createElement('div');
         titleRow.className = 'ichc-ul-title-row';
-        titleRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams">${cammedCount}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span>${userMeta}</span><span class="ichc-ul-metric-spacer"></span>`;
 
-        // Collapse button — far LEFT of the stats row
+        // Row 1 — controls
+        const controlsRow = document.createElement('div');
+        controlsRow.className = 'ichc-ul-controls-row';
+
         const collapseBtn = document.createElement('button');
         collapseBtn.type = 'button';
         collapseBtn.id = 'ichc-ul-collapse-btn';
         collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
         collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
         collapseBtn.addEventListener('click', e => { e.stopPropagation(); _toggleUserListCollapse(); });
-        titleRow.prepend(collapseBtn);
+        controlsRow.appendChild(collapseBtn);
+
+        const ctrlSpacer = document.createElement('span');
+        ctrlSpacer.className = 'ichc-ul-ctrl-spacer';
+        controlsRow.appendChild(ctrlSpacer);
 
         const searchBtn = document.createElement('button');
         searchBtn.type = 'button';
@@ -5088,7 +5114,14 @@
         searchBtn.setAttribute('aria-label', 'Search users');
         searchBtn.setAttribute('title', 'Search users');
         searchBtn.innerHTML = ICONS.search;
-        titleRow.appendChild(searchBtn);
+        controlsRow.appendChild(searchBtn);
+
+        // Row 2 — metrics
+        const metricsRow = document.createElement('div');
+        metricsRow.className = 'ichc-ul-metrics-row';
+        metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams">${cammedCount}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span>${userMeta}</span>`;
+
+        titleRow.append(controlsRow, metricsRow);
 
         const searchRow = document.createElement('div');
         searchRow.className = 'ichc-ul-search-row';
@@ -5111,6 +5144,13 @@
 
         header.appendChild(titleRow);
         header.appendChild(searchRow);
+
+        // Resize handle: absolute-positioned at the left edge of the header
+        const ulResizer = savedResizer || document.createElement('div');
+        ulResizer.id = 'ichc-userlist-resizer';
+        header.insertBefore(ulResizer, header.firstChild);
+        initUserlistResizer(ulResizer);
+
         // Insert header before existing user rows (which were kept in the DOM).
         panel.insertBefore(header, panel.firstChild || null);
 
@@ -5131,7 +5171,7 @@
             savedMoreBtn.querySelectorAll('[data-sort]').forEach(btn => {
                 btn.classList.toggle('ichc-ul-sort-active', btn.dataset.sort === userListState.sortMode);
             });
-            titleRow.appendChild(savedMoreBtn);
+            controlsRow.appendChild(savedMoreBtn);
         }
 
         // ── User rows ──
@@ -5140,6 +5180,7 @@
             span.className = 'ichc-ul-user userlink' +
                 (u.hidden ? ' ichc-ul-hidden-live' : '') +
                 (u.cammed && !u.hidden ? ' cammed' : '') +
+                (u.hidden && u.cammed ? ' ichc-ul-cammed-hidden' : '') +
                 (u.mod    ? ' mod'    : '') +
                 (u.idle   ? ' idle'   : '') +
                 (u.supporter ? ' ichc-ul-supporter-row' : '');
@@ -5294,6 +5335,7 @@
                     span.className = 'ichc-ul-user userlink' +
                         (u.hidden ? ' ichc-ul-hidden-live' : '') +
                         (u.cammed && !u.hidden ? ' cammed' : '') +
+                        (u.hidden && u.cammed ? ' ichc-ul-cammed-hidden' : '') +
                         (u.mod    ? ' mod'    : '') +
                         (u.idle   ? ' idle'   : '') +
                         (u.supporter ? ' ichc-ul-supporter-row' : '');
@@ -6456,16 +6498,16 @@
         const visible = getVisibleCamCards();
         const count = visible.length;
         const densityCount = visible.filter(card => !card.classList.contains('ichc-placeholder-slot')).length || count;
-        const featuredActive = visible.some(card => card.classList.contains('ichc-featured'));
-
         let columns = 1;
         let camMin = 360;
         let aspect = '4 / 3';
         const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ichc-gap')) || 18;
         const stageWidth = Math.max(320, Math.round(stage?.getBoundingClientRect().width || stage?.clientWidth || window.innerWidth - 32));
 
+        const storedUlWidth = camLayoutState.ulWidthOverride ?? loadStoredUlWidth();
         let userListWidth = window.innerWidth <= 780
             ? 0
+            : storedUlWidth != null ? storedUlWidth
             : densityCount >= 12 ? 164
             : densityCount >= 7 ? 176
             : 188;
@@ -6512,95 +6554,34 @@
         let rawPanelH = panel?.clientHeight || stage?.clientHeight || window.innerHeight * 0.72;
         const availableHeight = Math.max(
             240,
-            Math.round(rawPanelH - hiddenBarHeight - 6),
+            Math.min(window.innerHeight, Math.round(rawPanelH - hiddenBarHeight - 6)),
         );
 
         if (window.innerWidth > 760 && densityCount > 0) {
-            let targetMin = 340;
-            let maxColumns = 1;
-            let aspectValue = 4 / 3;
+            aspect = '4 / 3';
+            const aspectValue = 4 / 3;
+            const maxCols = Math.max(1, Math.min(densityCount, Math.floor((availableWidth + gap) / (160 + gap))));
 
-            if (densityCount <= 1) {
-                targetMin = Math.min(980, Math.max(availableWidth - 4, 460));
-                maxColumns = 1;
-                aspect = '4 / 3';
-                aspectValue = 4 / 3;
-            } else if (densityCount <= 2) {
-                targetMin = Math.max(300, Math.floor((availableWidth - gap) / 2));
-                maxColumns = 2;
-                aspect = '4 / 3';
-                aspectValue = 4 / 3;
-            } else if (densityCount <= 4) {
-                targetMin = Math.max(260, Math.floor((availableWidth - gap) / 2));
-                maxColumns = 3;
-                aspect = '4 / 3';
-                aspectValue = 4 / 3;
-            } else if (densityCount <= 6) {
-                targetMin = Math.max(220, Math.floor((availableWidth - gap * 2) / 3));
-                maxColumns = 3;
-                aspect = '4 / 3';
-                aspectValue = 4 / 3;
-            } else if (densityCount <= 9) {
-                targetMin = Math.max(185, Math.floor((availableWidth - gap * 2) / 3));
-                maxColumns = 4;
-                aspect = '4 / 3';
-                aspectValue = 4 / 3;
-            } else {
-                targetMin = Math.max(160, Math.floor((availableWidth - gap * 3) / 4));
-                maxColumns = 5;
-                aspect = '4 / 3';
-                aspectValue = 4 / 3;
-            }
-
-            const maxByWidth = Math.max(1, Math.floor((availableWidth + gap) / (targetMin + gap)));
-            const widthEmergencyMax = Math.max(1, Math.floor((availableWidth + gap) / (160 + gap)));
-            const maxPossibleColumns = Math.max(1, Math.min(densityCount, maxColumns, Math.max(maxByWidth, 1)));
-            const emergencyColumns = Math.max(1, Math.min(densityCount, maxColumns, widthEmergencyMax));
-            columns = maxPossibleColumns;
-
-            const estimateHeight = candidateColumns => {
-                const cardWidth = Math.max(160, Math.floor((availableWidth - gap * (candidateColumns - 1)) / candidateColumns));
-                const cardHeight = Math.max(120, Math.floor(cardWidth / aspectValue));
-
-                if (featuredActive && densityCount > 1) {
-                    const remaining = densityCount - 1;
-                    const rowsBelow = Math.ceil(remaining / candidateColumns);
-                    // Featured card uses 16/9 with max-height clamp(240px, 60vh, 680px).
-                    const featuredHeight = Math.min(
-                        Math.max(240, Math.floor(availableWidth / (16 / 9))),
-                        Math.round(availableHeight * 0.60),
-                    );
-                    // Thumbnail cards use max-height clamp(120px, 28vh, 300px).
-                    const thumbH = Math.min(
-                        Math.max(120, Math.floor(
-                            Math.max(120, Math.floor((availableWidth - gap * (candidateColumns - 1)) / candidateColumns)) / (4 / 3),
-                        )),
-                        Math.round(availableHeight * 0.28),
-                    );
-                    return featuredHeight +
-                        (rowsBelow > 0 ? gap : 0) +
-                        (rowsBelow * thumbH) +
-                        (Math.max(0, rowsBelow - 1) * gap);
+            // Prefer column counts where cams fit at natural 4:3 height (feasible = cams
+            // won't overflow vertically without fill mode). Fall back to max-area selection
+            // if no column count is feasible at natural height.
+            let bestFeasibleArea = -1;
+            let bestFallbackArea = -1;
+            let fallbackColumns = 1;
+            for (let c = 1; c <= maxCols; c++) {
+                const rows = Math.ceil(densityCount / c);
+                const slotW = (availableWidth - gap * (c - 1)) / c;
+                const naturalH = slotW / aspectValue;
+                const totalGridH = rows * naturalH + (rows - 1) * gap;
+                const area = slotW * naturalH;
+                if (totalGridH <= availableHeight) {
+                    if (area > bestFeasibleArea) { bestFeasibleArea = area; columns = c; }
+                } else if (area > bestFallbackArea) {
+                    bestFallbackArea = area;
+                    fallbackColumns = c;
                 }
-
-                const rows = Math.ceil(densityCount / candidateColumns);
-                return rows * cardHeight + Math.max(0, rows - 1) * gap;
-            };
-
-            while (columns < emergencyColumns && estimateHeight(columns) > availableHeight) {
-                const nextColumns = columns + 1;
-                columns = nextColumns;
             }
-
-            if (window.innerWidth > 1100 && measuredCamLane >= 680 && densityCount >= 2) {
-                columns = Math.max(columns, Math.min(2, emergencyColumns));
-            }
-            if (window.innerWidth > 1180 && measuredCamLane >= 1020 && densityCount >= 5) {
-                columns = Math.max(columns, Math.min(3, emergencyColumns));
-            }
-            if (window.innerWidth > 1400 && measuredCamLane >= 1320 && densityCount >= 10) {
-                columns = Math.max(columns, Math.min(4, emergencyColumns));
-            }
+            if (bestFeasibleArea < 0) { columns = fallbackColumns; }
 
             camMin = Math.max(160, Math.floor((availableWidth - gap * (columns - 1)) / columns));
         }
@@ -6633,27 +6614,11 @@
         document.documentElement.style.setProperty('--ichc-cam-min', `${camMinValue}px`);
         document.documentElement.style.setProperty('--ichc-cam-aspect', aspect);
         document.documentElement.style.setProperty('--ichc-cam-columns', String(columns));
-        // Height-fill mode: expand rows to fill panel height when word cloud is hidden
-        const _fillNumRows = densityCount > 0 ? Math.ceil(densityCount / columns) : 0;
-        const _fillAspect = aspect === '16 / 9' ? 16 / 9 : 4 / 3;
-        let fillRowH = 0;
-        if (!_wordCloudMode && !featuredActive && _fillNumRows > 0 && availableHeight > 200 && availableWidth > 200) {
-            const rowH = Math.floor((availableHeight - gap * Math.max(0, _fillNumRows - 1)) / _fillNumRows);
-            const impliedW = Math.floor(rowH * _fillAspect);
-            if (rowH >= 80 && impliedW * columns + gap * Math.max(0, columns - 1) <= availableWidth + 100) {
-                fillRowH = rowH;
-            }
-        }
-
         const cams = document.getElementById('cams');
         if (cams) {
             cams.style.setProperty('grid-template-columns', `repeat(${columns * 2}, minmax(0, 1fr))`, 'important');
-            if (fillRowH > 0) {
-                cams.style.setProperty('grid-auto-rows', `${fillRowH}px`, 'important');
-            } else {
-                cams.style.removeProperty('grid-auto-rows');
-            }
-            cams.classList.toggle('ichc-cam-fill-mode', fillRowH > 0);
+            cams.style.removeProperty('grid-auto-rows');
+            cams.classList.remove('ichc-cam-fill-mode');
             _applyCardSpans();
         }
         // Persist for next page load so first paint is already correct.

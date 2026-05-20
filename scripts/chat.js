@@ -870,11 +870,8 @@
     };
 
     function _sealChatEvents() {
-        // Called when a real chat message appears — always start a fresh batch.
-        chatEventCollector.batchStart = 0;
-        chatEventCollector.row        = null;
-        chatEventCollector.joinNames  = [];
-        chatEventCollector.leaveNames = [];
+        // No-op: the collector row accumulates until it leaves the DOM (log replaced).
+        // Resetting on every chat message was the original cause of duplicate rows.
     }
 
     function _classifyEventRow(row) {
@@ -923,20 +920,27 @@
     function _addToEventCollector(type, nick, refRow) {
         refRow.dataset.ichcEventProcessed = '1';
         refRow.style.setProperty('display', 'none', 'important');
-        const chatLog = refRow.parentElement;
+        // Always use #txt directly — refRow.parentElement can be a nested tbody/container
+        // when the observer fires with subtree:true, which would place the collector row
+        // inside an invalid container and cause it to become disconnected.
+        const chatLog = getChatLog();
+
+        if (!chatEventCollector.row?.isConnected) {
+            // Row left the DOM (log was replaced) — start a fresh accumulator.
+            chatEventCollector.row        = document.createElement('div');
+            chatEventCollector.row.className = 'ichc-event-collector';
+            chatEventCollector.joinNames  = [];
+            chatEventCollector.leaveNames = [];
+        }
+
         if (type === 'join') {
             chatEventCollector.joinNames.push(nick);
         } else {
             chatEventCollector.leaveNames.push(nick);
         }
-        // Single combined row — always moved to bottom so it stays visible.
-        if (!chatEventCollector.row?.isConnected) {
-            chatEventCollector.row = document.createElement('div');
-            chatEventCollector.row.className = 'ichc-event-collector';
-        }
+        // Always move to bottom so new events stay visible.
         if (chatLog) { chatLog.appendChild(chatEventCollector.row); }
         _renderEventCollector(chatEventCollector.row);
-        // Batch stays open until a real chat message seals it — no time cap.
         chatScrollState.lastMessageAt = Date.now();
         if (chatScrollState.auto) { scheduleChatFollow(false); }
     }
