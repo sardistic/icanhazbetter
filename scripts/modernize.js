@@ -21,6 +21,7 @@
         phone:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h1.148a1.5 1.5 0 0 1 1.465 1.175l.716 3.223a1.5 1.5 0 0 1-1.052 1.767l-.933.267c-.41.117-.643.555-.48.95a11.542 11.542 0 0 0 6.254 6.254c.395.163.833-.07.95-.48l.267-.933a1.5 1.5 0 0 1 1.767-1.052l3.223.716A1.5 1.5 0 0 1 18 16.352V17.5a1.5 1.5 0 0 1-1.5 1.5H15c-1.149 0-2.263-.15-3.326-.43A13.022 13.022 0 0 1 2.43 8.326 13.019 13.019 0 0 1 2 5V3.5z" clip-rule="evenodd"/></svg>`,
         question:    `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zM8.94 6.94a.75.75 0 1 1-1.061-1.061 3 3 0 1 1 2.871 5.026v.345a.75.75 0 0 1-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 1 0 8.94 6.94zM10 15a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>`,
         dotsH:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M3 10a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm5.5 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm5.5 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z"/></svg>`,
+        dotsAnimated:`<span class="ichc-dots-wrap" aria-hidden="true"><span class="ichc-dot ichc-dot-1"></span><span class="ichc-dot ichc-dot-2"></span><span class="ichc-dot ichc-dot-3"></span><span class="ichc-dot ichc-dot-4"></span><span class="ichc-dot ichc-dot-5"></span></span>`,
         chevronDown: `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z" clip-rule="evenodd"/></svg>`,
         chevronUp:   `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M14.77 12.79a.75.75 0 0 1-1.06-.02L10 8.832 6.29 12.77a.75.75 0 0 1-1.08-1.04l4.25-4.5a.75.75 0 0 1 1.08 0l4.25 4.5a.75.75 0 0 1-.02 1.06z" clip-rule="evenodd"/></svg>`,
         chat:        `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902.848.137 1.705.248 2.57.331v3.443a.75.75 0 0 0 1.28.53l3.58-3.579A13.95 13.95 0 0 0 12 14c2.236 0 4.43-.18 6.57-.524C20.007 13.245 21 11.986 21 10.574V5.426c0-1.413-.993-2.67-2.43-2.902A41.112 41.112 0 0 0 12 2h-2zm0 1.5c2.188 0 4.33.175 6.395.512.97.157 1.605.944 1.605 1.814v5.148c0 .87-.636 1.657-1.605 1.814A39.614 39.614 0 0 1 10 13a12.45 12.45 0 0 1-1.57-.1.75.75 0 0 0-.557.16L5.5 15.702v-2.537a.75.75 0 0 0-.676-.744 39.61 39.61 0 0 1-2.344-.303C1.636 11.915 1 11.128 1 10.258V5.426c0-.87.636-1.657 1.605-1.814A39.614 39.614 0 0 1 10 3.5z" clip-rule="evenodd"/></svg>`,
@@ -1497,7 +1498,7 @@
             toggleBtn.id = 'ichc-room-submenu-btn';
             toggleBtn.className = 'ichc-room-submenu-btn';
             toggleBtn.title = 'Room options';
-            toggleBtn.innerHTML = ICONS.dotsH + '<span class="ichc-room-submenu-label">More</span>';
+            toggleBtn.innerHTML = ICONS.dotsAnimated;
 
             const panel = document.createElement('div');
             panel.id = 'ichc-room-links';
@@ -2559,12 +2560,16 @@
         _applyChatRowDecor(row, nick);
 
         if (row) {
-            const m = (anchor.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-            if (m) {
-                const tier = _karmaToTier(profileKarmaCache.get(nick) ?? null);
-                const yt   = _yearToTier(profileYearCache.get(nick) ?? null);
-                const alpha = (tier <= 0 ? 0 : tier * 0.013) + (yt <= 0 ? 0 : yt * 0.008);
-                row.style.setProperty('--ichc-nick-color', `rgba(${m[1]},${m[2]},${m[3]},${alpha})`);
+            const karma = profileKarmaCache.get(nick) ?? null;
+            const tier  = _karmaToTier(karma);
+            const yt    = _yearToTier(profileYearCache.get(nick) ?? null);
+            const alpha = (tier <= 0 ? 0 : tier * 0.013) + (yt <= 0 ? 0 : yt * 0.008);
+            if (tier > 0) {
+                const spectral = _karmaToSpectral(karma);
+                if (spectral) { row.style.setProperty('--ichc-nick-color', `rgba(${spectral[0]},${alpha})`); }
+            } else {
+                const m = (anchor.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (m) { row.style.setProperty('--ichc-nick-color', `rgba(${m[1]},${m[2]},${m[3]},${alpha})`); }
             }
             _applyChatGrouping(row, nick);
         }
@@ -2627,8 +2632,13 @@
                 else { delete row.dataset.ichcKt; }
                 row.classList.toggle('ichc-chat-oncam', active.has(key));
                 row.classList.toggle('ichc-chat-camoff', !active.has(key) && disabled.has(key));
-                const mc = (a.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-                if (mc) { row.style.setProperty('--ichc-nick-color', `rgba(${mc[1]},${mc[2]},${mc[3]},${alpha})`); }
+                if (tier > 0) {
+                    const spectral = _karmaToSpectral(karma ?? null);
+                    if (spectral) { row.style.setProperty('--ichc-nick-color', `rgba(${spectral[0]},${alpha})`); }
+                } else {
+                    const mc = (a.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    if (mc) { row.style.setProperty('--ichc-nick-color', `rgba(${mc[1]},${mc[2]},${mc[3]},${alpha})`); }
+                }
             }
         });
         document.querySelectorAll(`#txt span[data-ichc-year-badge="${CSS.escape(key)}"]`).forEach(span => {
@@ -4792,8 +4802,10 @@
             const menu = document.getElementById('ichc-ul-more-menu');
             if (!menu || menu.hidden) { return; }
             if (menu.contains(event.target)) { return; }
-            if (document.querySelector('.ichc-ul-more-btn')?.contains(event.target)) { return; }
+            const moreBtn = document.querySelector('.ichc-ul-more-btn');
+            if (moreBtn?.contains(event.target)) { return; }
             menu.hidden = true;
+            moreBtn?.classList.remove('ichc-menu-open');
         }, true);
     }
 
@@ -5088,25 +5100,18 @@
         const userMeta = idleCount > 0 ? `<span class="ichc-ul-count-meta"> (${idleCount} idle)</span>` : '';
         const camMeta  = hiddenCamCount > 0 ? `<span class="ichc-ul-count-meta"> (${hiddenCamCount} hidden)</span>` : '';
 
-        // Two-row header: [collapse | → | search | more] on top, [metrics] below
+        // Single-row header: [metrics (flex:1)] [search | more | collapse]
         const titleRow = document.createElement('div');
         titleRow.className = 'ichc-ul-title-row';
 
-        // Row 1 — controls
+        // Metrics — fills left space
+        const metricsRow = document.createElement('div');
+        metricsRow.className = 'ichc-ul-metrics-row';
+        metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams">${cammedCount}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span>${userMeta}</span>`;
+
+        // Controls: [search] [btn-stack: more(added later, top) | collapse(bottom)]
         const controlsRow = document.createElement('div');
         controlsRow.className = 'ichc-ul-controls-row';
-
-        const collapseBtn = document.createElement('button');
-        collapseBtn.type = 'button';
-        collapseBtn.id = 'ichc-ul-collapse-btn';
-        collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
-        collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
-        collapseBtn.addEventListener('click', e => { e.stopPropagation(); _toggleUserListCollapse(); });
-        controlsRow.appendChild(collapseBtn);
-
-        const ctrlSpacer = document.createElement('span');
-        ctrlSpacer.className = 'ichc-ul-ctrl-spacer';
-        controlsRow.appendChild(ctrlSpacer);
 
         const searchBtn = document.createElement('button');
         searchBtn.type = 'button';
@@ -5116,12 +5121,19 @@
         searchBtn.innerHTML = ICONS.search;
         controlsRow.appendChild(searchBtn);
 
-        // Row 2 — metrics
-        const metricsRow = document.createElement('div');
-        metricsRow.className = 'ichc-ul-metrics-row';
-        metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams">${cammedCount}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span>${userMeta}</span>`;
+        const btnStack = document.createElement('div');
+        btnStack.className = 'ichc-ul-btn-stack';
+        controlsRow.appendChild(btnStack);
 
-        titleRow.append(controlsRow, metricsRow);
+        const collapseBtn = document.createElement('button');
+        collapseBtn.type = 'button';
+        collapseBtn.id = 'ichc-ul-collapse-btn';
+        collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
+        collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
+        collapseBtn.addEventListener('click', e => { e.stopPropagation(); _toggleUserListCollapse(); });
+        btnStack.appendChild(collapseBtn);
+
+        titleRow.append(metricsRow, controlsRow);
 
         const searchRow = document.createElement('div');
         searchRow.className = 'ichc-ul-search-row';
@@ -5171,7 +5183,12 @@
             savedMoreBtn.querySelectorAll('[data-sort]').forEach(btn => {
                 btn.classList.toggle('ichc-ul-sort-active', btn.dataset.sort === userListState.sortMode);
             });
-            controlsRow.appendChild(savedMoreBtn);
+            const stack = controlsRow.querySelector('.ichc-ul-btn-stack');
+            if (stack) {
+                stack.insertBefore(savedMoreBtn, stack.firstChild);
+            } else {
+                controlsRow.appendChild(savedMoreBtn);
+            }
         }
 
         // ── User rows ──
@@ -5179,8 +5196,7 @@
             const span = document.createElement('a');
             span.className = 'ichc-ul-user userlink' +
                 (u.hidden ? ' ichc-ul-hidden-live' : '') +
-                (u.cammed && !u.hidden ? ' cammed' : '') +
-                (u.hidden && u.cammed ? ' ichc-ul-cammed-hidden' : '') +
+                (u.cammed ? ' cammed' : '') +
                 (u.mod    ? ' mod'    : '') +
                 (u.idle   ? ' idle'   : '') +
                 (u.supporter ? ' ichc-ul-supporter-row' : '');
@@ -5334,8 +5350,7 @@
                     // Update dynamic attributes on the existing row without detaching it.
                     span.className = 'ichc-ul-user userlink' +
                         (u.hidden ? ' ichc-ul-hidden-live' : '') +
-                        (u.cammed && !u.hidden ? ' cammed' : '') +
-                        (u.hidden && u.cammed ? ' ichc-ul-cammed-hidden' : '') +
+                        (u.cammed ? ' cammed' : '') +
                         (u.mod    ? ' mod'    : '') +
                         (u.idle   ? ' idle'   : '') +
                         (u.supporter ? ' ichc-ul-supporter-row' : '');
@@ -5555,7 +5570,7 @@
                 moreBtn.type = 'button';
                 moreBtn.className = 'ichc-ul-more-btn';
                 moreBtn.title = 'More options';
-                moreBtn.innerHTML = ICONS.dotsH;
+                moreBtn.innerHTML = ICONS.dotsAnimated;
 
                 const moreMenu = document.createElement('div');
                 moreMenu.className = 'ichc-ul-more-menu';
@@ -5702,25 +5717,6 @@
                 });
                 moreMenu.appendChild(avatarItem);
 
-                // Collapse/expand user list
-                const collapseItem = document.createElement('button');
-                collapseItem.type = 'button';
-                collapseItem.className = 'ichc-ul-more-item';
-                collapseItem.dataset.ichcCollapseItem = '1';
-                const _refreshCollapseItem = () => {
-                    const icon = _ulCollapsed ? ICONS.chevronLeft : ICONS.chevronRight;
-                    const label = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
-                    collapseItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
-                };
-                _refreshCollapseItem();
-                collapseItem.addEventListener('click', e => {
-                    e.stopPropagation();
-                    moreMenu.hidden = true;
-                    _toggleUserListCollapse();
-                    _refreshCollapseItem();
-                });
-                moreMenu.appendChild(collapseItem);
-
                 // Word cloud toggle
                 const wcItem = document.createElement('button');
                 wcItem.type = 'button';
@@ -5741,15 +5737,12 @@
 
                 document.body.appendChild(moreMenu);
 
+                new MutationObserver(() => {
+                    moreBtn.classList.toggle('ichc-menu-open', !moreMenu.hidden);
+                }).observe(moreMenu, { attributeFilter: ['hidden'] });
+
                 moreBtn.addEventListener('click', e => {
                     e.stopPropagation();
-                    // Refresh collapse item label in case state changed via strip click
-                    const ci = moreMenu.querySelector('[data-ichc-collapse-item]');
-                    if (ci) {
-                        const icon = _ulCollapsed ? ICONS.chevronLeft : ICONS.chevronRight;
-                        const label = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
-                        ci.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
-                    }
                     if (moreMenu.hidden) {
                         const rect = moreBtn.getBoundingClientRect();
                         moreMenu.style.top = `${rect.bottom + 4}px`;
@@ -5761,8 +5754,13 @@
                     }
                 });
 
-                // Order: [collapse] [metrics] [search] [more]
-                titleRow.appendChild(moreBtn);
+                // Insert more btn at top of btn-stack (above collapse btn)
+                const stack = titleRow.querySelector('.ichc-ul-btn-stack');
+                if (stack) {
+                    stack.insertBefore(moreBtn, stack.firstChild);
+                } else {
+                    titleRow.appendChild(moreBtn);
+                }
             }
         }
         // Sync PM avatar status dots with current user statuses

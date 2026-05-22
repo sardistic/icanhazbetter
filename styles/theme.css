@@ -2008,8 +2008,9 @@
     .ichc-room-submenu-btn {
         display: flex !important;
         align-items: center !important;
-        gap: 5px !important;
-        padding: 4px 10px !important;
+        justify-content: center !important;
+        gap: 0 !important;
+        padding: 4px 8px !important;
         background: transparent !important;
         border: 0 !important;
         color: #4e5058 !important;
@@ -2033,9 +2034,11 @@
     .ichc-room-submenu-btn svg {
         color: #7289da !important;
         flex-shrink: 0 !important;
+        width: 16px !important;
+        height: 16px !important;
     }
     .ichc-room-submenu-label {
-        letter-spacing: 0.03em !important;
+        display: none !important;
     }
     /* Dropdown panel — opens upward from footer */
     #ichc-room-links {
@@ -3114,24 +3117,33 @@
             transparent 100%) !important;
     }
     #ichc-userlist .ichc-ul-title-row {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 2px !important;
-    }
-    /* Row 1: collapse | → spacer | search | more */
-    .ichc-ul-controls-row {
-        display: flex !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
         align-items: center !important;
-        gap: 2px !important;
-        padding: 0 4px 0 2px !important;
+        gap: 0 !important;
     }
-    .ichc-ul-ctrl-spacer { flex: 1 1 0 !important; }
-    /* Row 2: cam metric + viewer metric */
+    /* Metrics: left grid column — min-width:0 lets it compress to nothing before controls are touched */
     .ichc-ul-metrics-row {
         display: flex !important;
         align-items: center !important;
+        min-width: 0 !important;
+        overflow: visible !important;
         gap: 8px !important;
-        padding: 0 6px !important;
+        padding: 0 4px 0 10px !important;
+    }
+    /* Controls: right grid column (auto) — always gets its intrinsic width */
+    .ichc-ul-controls-row {
+        display: flex !important;
+        align-items: flex-start !important;
+        gap: 2px !important;
+        padding: 0 4px 0 2px !important;
+    }
+    /* Stack: more button on top, collapse button below — both same width */
+    .ichc-ul-btn-stack {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 0 !important;
     }
     /* PM pop-out button — small, pinned to bottom-right of the pm-avatar strip */
     #ichc-pm-avatars #ichc-pm-toggle-btn {
@@ -3175,7 +3187,7 @@
     #ichc-pm-toggle-btn [data-pm-state="out"] { display: inline-flex !important; align-items: center !important; }
     #ichc-pm-toggle-btn.ichc-pm-open [data-pm-state="in"] { display: inline-flex !important; align-items: center !important; }
     #ichc-pm-toggle-btn.ichc-pm-open [data-pm-state="out"] { display: none !important; }
-    /* Collapse button — left of controls row */
+    /* Collapse button — stacked below the more button in ichc-ul-btn-stack */
     #ichc-ul-collapse-btn {
         -webkit-appearance: none !important;
         appearance: none !important;
@@ -3205,6 +3217,71 @@
         transform: rotate(0deg) !important;
     }
 
+    /* ── Animated dots icon (3 dots → 4 corner X on hover) ──
+       16×16px container, dots positioned as px coords (1 SVG unit = 0.8px).
+       left dot(1.7,6.5) center(6.5,6.5) right(11.3,6.5); corners at (0.9,0.9),(12.1,0.9),(12.1,12.1),(0.9,12.1) */
+    .ichc-dots-wrap {
+        display: inline-block !important;
+        width: 16px !important;
+        height: 16px !important;
+        position: relative !important;
+        vertical-align: -0.1em !important;
+        flex-shrink: 0 !important;
+    }
+    .ichc-dot {
+        display: block !important;
+        position: absolute !important;
+        width: 3px !important;
+        height: 3px !important;
+        border-radius: 50% !important;
+        background: currentColor !important;
+        transition: transform 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.18s !important;
+    }
+    .ichc-dot-1 { left: 1.7px !important; top: 6.5px !important; }
+    .ichc-dot-2 { left: 6.5px !important; top: 6.5px !important; }
+    .ichc-dot-3 { left: 11.3px !important; top: 6.5px !important; }
+    .ichc-dot-4 { left: 6.5px !important; top: 6.5px !important; opacity: 0 !important; }
+    .ichc-dot-5 { left: 6.5px !important; top: 6.5px !important; opacity: 0 !important; }
+    /* Hover: fan to 4 corners */
+    .ichc-ul-more-btn:hover .ichc-dot-1,
+    .ichc-room-submenu-btn:hover .ichc-dot-1 {
+        transform: translate(-0.8px, -5.6px) !important;
+    }
+    .ichc-ul-more-btn:hover .ichc-dot-2,
+    .ichc-room-submenu-btn:hover .ichc-dot-2 {
+        transform: translate(5.6px, -5.6px) !important;
+    }
+    .ichc-ul-more-btn:hover .ichc-dot-3,
+    .ichc-room-submenu-btn:hover .ichc-dot-3 {
+        transform: translate(0.8px, 5.6px) !important;
+    }
+    .ichc-ul-more-btn:hover .ichc-dot-4,
+    .ichc-room-submenu-btn:hover .ichc-dot-4 {
+        transform: translate(-5.6px, 5.6px) !important;
+        opacity: 1 !important;
+    }
+    /* Active/open: corners stay spread + center dot appears */
+    .ichc-ul-more-btn.ichc-menu-open .ichc-dot-1,
+    .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-1 {
+        transform: translate(-0.8px, -5.6px) !important;
+    }
+    .ichc-ul-more-btn.ichc-menu-open .ichc-dot-2,
+    .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-2 {
+        transform: translate(5.6px, -5.6px) !important;
+    }
+    .ichc-ul-more-btn.ichc-menu-open .ichc-dot-3,
+    .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-3 {
+        transform: translate(0.8px, 5.6px) !important;
+    }
+    .ichc-ul-more-btn.ichc-menu-open .ichc-dot-4,
+    .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-4 {
+        transform: translate(-5.6px, 5.6px) !important;
+        opacity: 1 !important;
+    }
+    .ichc-ul-more-btn.ichc-menu-open .ichc-dot-5,
+    .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-5 {
+        opacity: 1 !important;
+    }
 
     /* Shared sizing for all icon buttons in the title row */
     #ichc-userlist .ichc-ul-search-btn,
@@ -3487,14 +3564,20 @@
         color: #c8ccd2 !important;
         border-left-color: rgba(255,255,255,0.18) !important;
     }
-    /* Cammed: brighter white to distinguish broadcasters, no hue */
+    /* Cammed: brighter white + green left indicator; no green bg */
     #ichc-userlist .ichc-ul-user.cammed {
         color: #e8eaed !important;
         border-color: rgba(255,255,255,0.12) !important;
         border-left-color: rgba(52,211,100,1) !important;
-        background-color: rgba(52,211,100,0.07) !important;
         padding: 4px 6px !important;
         font-weight: 600 !important;
+    }
+    /* Hidden cammed: green indicator only — keep muted hidden appearance */
+    #ichc-userlist .ichc-ul-user.cammed.ichc-ul-hidden-live {
+        background-color: rgba(22,23,26,0.45) !important;
+        border-left-color: rgba(52,211,100,1) !important;
+        color: #6b7280 !important;
+        font-weight: 500 !important;
     }
     /* Mod: blurple */
     #ichc-userlist .ichc-ul-user.mod {
@@ -3511,20 +3594,20 @@
     }
     /* Gradient numbers */
     .ichc-ul-count-cams {
-        font-size: 18px !important;
+        font-size: 26px !important;
         font-weight: 800 !important;
-        line-height: 18px !important;
-        letter-spacing: -0.01em !important;
+        line-height: 1 !important;
+        letter-spacing: -0.02em !important;
         background: linear-gradient(135deg, rgba(65,145,215,1) 0%, rgba(55,185,200,1) 100%) !important;
         -webkit-background-clip: text !important;
         -webkit-text-fill-color: transparent !important;
         background-clip: text !important;
     }
     .ichc-ul-count-users {
-        font-size: 18px !important;
+        font-size: 26px !important;
         font-weight: 800 !important;
-        line-height: 18px !important;
-        letter-spacing: -0.01em !important;
+        line-height: 1 !important;
+        letter-spacing: -0.02em !important;
         background: linear-gradient(135deg, rgba(125,80,205,1) 0%, rgba(85,105,215,1) 100%) !important;
         -webkit-background-clip: text !important;
         -webkit-text-fill-color: transparent !important;
@@ -3910,9 +3993,6 @@
         border-color: rgba(255,255,255,0.03) !important;
         border-left-color: rgba(255,255,255,0.08) !important;
         color: #6b7280 !important;
-    }
-    #ichc-userlist .ichc-ul-hidden-live.ichc-ul-cammed-hidden {
-        border-left-color: rgba(52,211,100,1) !important;
     }
     #ichc-userlist .ichc-ul-hidden-live:hover {
         background: rgba(30,32,36,0.55) !important;

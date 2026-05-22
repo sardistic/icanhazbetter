@@ -870,8 +870,11 @@
     };
 
     function _sealChatEvents() {
-        // No-op: the collector row accumulates until it leaves the DOM (log replaced).
-        // Resetting on every chat message was the original cause of duplicate rows.
+        // Null out the reference so the next join/leave starts a fresh row at the new position.
+        // The existing collector row stays in the DOM where it already is.
+        chatEventCollector.row = null;
+        chatEventCollector.joinNames = [];
+        chatEventCollector.leaveNames = [];
     }
 
     function _classifyEventRow(row) {
