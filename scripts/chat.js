@@ -861,7 +861,9 @@
         newMessageCount: 0,
         savedScrollTop: null,
         scrollbarHideTimer: null,
-        isDraggingScrollbar: false,
+        mouseIsDown: false,
+        scrollbarFadeDeferred: false,
+        _mouseTracking: false,
     };
 
     const chatEventCollector = {
@@ -1007,22 +1009,26 @@
             target.addEventListener(type, markUserScroll, { passive: true });
         });
 
-        // Detect scrollbar thumb drags: pointerdown to the right of clientWidth = scrollbar
-        target.addEventListener('pointerdown', e => {
-            if (e.offsetX < target.clientWidth) { return; }
-            chatScrollState.isDraggingScrollbar = true;
-            target.classList.add('ichc-user-scrolling');
-            if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
-        }, { passive: true });
-        document.addEventListener('pointerup', () => {
-            if (!chatScrollState.isDraggingScrollbar) { return; }
-            chatScrollState.isDraggingScrollbar = false;
-            if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
-            chatScrollState.scrollbarHideTimer = setTimeout(() => {
-                chatScrollState.scrollbarHideTimer = null;
-                target.classList.remove('ichc-user-scrolling');
-            }, 1500);
-        }, { passive: true });
+        // Track global mouse-button state — the only reliable way to detect a scrollbar
+        // thumb hold, since Chrome doesn't fire pointer events for native scrollbar drags.
+        if (!chatScrollState._mouseTracking) {
+            chatScrollState._mouseTracking = true;
+            document.addEventListener('mousedown', () => {
+                chatScrollState.mouseIsDown = true;
+            }, { passive: true });
+            document.addEventListener('mouseup', () => {
+                chatScrollState.mouseIsDown = false;
+                // If the hide timer already fired while the button was held, fade now.
+                if (chatScrollState.scrollbarFadeDeferred) {
+                    chatScrollState.scrollbarFadeDeferred = false;
+                    if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
+                    chatScrollState.scrollbarHideTimer = setTimeout(() => {
+                        chatScrollState.scrollbarHideTimer = null;
+                        target.classList.remove('ichc-user-scrolling');
+                    }, 400);
+                }
+            }, { passive: true });
+        }
 
         target.addEventListener('scroll', () => {
             if (Date.now() < chatScrollState.programmaticUntil) { return; }
@@ -1038,7 +1044,10 @@
                 if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
                 chatScrollState.scrollbarHideTimer = setTimeout(() => {
                     chatScrollState.scrollbarHideTimer = null;
-                    if (!chatScrollState.isDraggingScrollbar) {
+                    if (chatScrollState.mouseIsDown) {
+                        // Mouse still held (e.g. dragging thumb) — defer until mouseup
+                        chatScrollState.scrollbarFadeDeferred = true;
+                    } else {
                         target.classList.remove('ichc-user-scrolling');
                     }
                 }, 1500);
