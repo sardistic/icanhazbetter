@@ -253,6 +253,11 @@
         background: hsl(var(--ichc-scroll-hue, 220) 100% 72%) !important;
         animation-duration: 0.7s !important;
     }
+    /* Keep thumb visible while actively dragging even if the scroll timer has expired */
+    #txt::-webkit-scrollbar-thumb:active {
+        background: hsl(var(--ichc-scroll-hue, 220) 100% 72%) !important;
+        animation: none !important;
+    }
     @keyframes ichc-scroll-breathe {
         0%, 100% {
             box-shadow:
