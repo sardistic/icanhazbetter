@@ -4184,6 +4184,129 @@
         margin: 4px 0 !important;
     }
 
+    /* ── User profile dropdown ── */
+    #ichc-user-dropdown {
+        position: fixed !important;
+        z-index: 2147483100 !important;
+        min-width: 210px !important;
+        max-width: 260px !important;
+        background: #1e1f22 !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 10px !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.3) !important;
+        overflow: hidden !important;
+        font-family: "Trebuchet MS","Aptos","Segoe UI",sans-serif !important;
+        font-size: 13px !important;
+        padding: 0 !important;
+    }
+    .ichc-ud-header {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        padding: 12px 14px !important;
+        background: #18191c !important;
+    }
+    .ichc-ud-avatar {
+        width: 46px !important;
+        height: 46px !important;
+        border-radius: 50% !important;
+        background: var(--av-bg, #5865f2) !important;
+        flex-shrink: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow: hidden !important;
+    }
+    .ichc-ud-avatar-img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+    .ichc-ud-avatar-letter {
+        font-size: 20px !important;
+        font-weight: 700 !important;
+        color: #fff !important;
+        line-height: 1 !important;
+        text-shadow: none !important;
+    }
+    .ichc-ud-name-col {
+        min-width: 0 !important;
+        flex: 1 !important;
+    }
+    .ichc-ud-name {
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        color: #e0e1e5 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        text-shadow: none !important;
+    }
+    .ichc-ud-badge-row {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 3px !important;
+        margin-top: 4px !important;
+    }
+    .ichc-ud-badge {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 2px !important;
+        font-size: 10px !important;
+        font-weight: 600 !important;
+        padding: 1px 5px !important;
+        border-radius: 3px !important;
+        white-space: nowrap !important;
+        line-height: 1.4 !important;
+    }
+    .ichc-ud-badge-cam  { background: rgba(52,211,100,0.14) !important; color: rgba(52,211,100,1) !important; }
+    .ichc-ud-badge-mod  { background: rgba(88,101,242,0.14) !important; color: #8891f2 !important; }
+    .ichc-ud-badge-sup  { background: rgba(237,66,69,0.14) !important; color: #f87171 !important; }
+    .ichc-ud-badge-year { background: rgba(251,191,36,0.12) !important; color: #fbbf24 !important; }
+    .ichc-ud-karma {
+        font-size: 11px !important;
+        color: #80848e !important;
+        margin-top: 3px !important;
+        text-shadow: none !important;
+    }
+    .ichc-ud-divider {
+        height: 1px !important;
+        background: rgba(255,255,255,0.06) !important;
+        margin: 0 !important;
+    }
+    .ichc-ud-btn {
+        display: flex !important;
+        align-items: center !important;
+        gap: 9px !important;
+        width: 100% !important;
+        padding: 9px 14px !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        color: #c8ccd2 !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        cursor: pointer !important;
+        text-align: left !important;
+        transition: background 0.1s !important;
+        text-shadow: none !important;
+    }
+    .ichc-ud-btn:hover { background: rgba(255,255,255,0.06) !important; }
+    .ichc-ud-btn:last-child { border-radius: 0 0 10px 10px !important; }
+    .ichc-ud-btn-icon {
+        width: 16px !important;
+        flex-shrink: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        color: #80848e !important;
+    }
+    .ichc-ud-btn-warn { color: #fbbf24 !important; }
+    .ichc-ud-btn-warn .ichc-ud-btn-icon { color: #fbbf24 !important; }
+    .ichc-ud-btn-warn:hover { background: rgba(251,191,36,0.08) !important; }
+    .ichc-ud-btn-danger { color: #f87171 !important; }
+    .ichc-ud-btn-danger .ichc-ud-btn-icon { color: #f87171 !important; }
+    .ichc-ud-btn-danger:hover { background: rgba(239,68,68,0.08) !important; }
+
     /* Site footer is now embedded in the room submenu dropdown — hide standalone */
     #ichc-site-footer { display: none !important; }
     #ctl00_panelFooter {

@@ -4686,6 +4686,156 @@
         return Number.isFinite(value) ? value : null;
     }
 
+    // ── User dropdown (replaces native profile modal for userlist clicks) ───────
+
+    let _activeUserDropdown = null;
+
+    function closeUserDropdown() {
+        if (_activeUserDropdown) {
+            _activeUserDropdown.remove();
+            _activeUserDropdown = null;
+        }
+    }
+
+    function openUserDropdown(u, rowEl) {
+        closeUserDropdown();
+
+        const key       = u.name.toLowerCase();
+        const avatarUrl = profileImageCache.get(key) || avatarImgCache.get(key)?.src || null;
+        const karma     = profileKarmaCache.get(key);
+        const year      = profileYearCache.get(key);
+
+        const dd = document.createElement('div');
+        dd.id = 'ichc-user-dropdown';
+        dd.className = 'ichc-user-dropdown';
+
+        // ── Header: avatar + name + badges ──
+        const hdr = document.createElement('div');
+        hdr.className = 'ichc-ud-header';
+
+        const avWrap = document.createElement('div');
+        avWrap.className = 'ichc-ud-avatar';
+        avWrap.style.setProperty('--av-bg', userAvatarColor(u.name));
+
+        const _setAvImg = url => {
+            if (!url || !dd.isConnected) { return; }
+            avWrap.innerHTML = '';
+            const img = new Image();
+            img.className = 'ichc-ud-avatar-img';
+            img.alt = '';
+            img.src = url;
+            avWrap.appendChild(img);
+        };
+
+        if (avatarUrl) {
+            _setAvImg(avatarUrl);
+        } else {
+            const letter = document.createElement('span');
+            letter.className = 'ichc-ud-avatar-letter';
+            letter.textContent = (u.name[0] || '?').toUpperCase();
+            avWrap.appendChild(letter);
+            fetchProfileImage(key).then(url => { if (url) { _setAvImg(url); } });
+        }
+        hdr.appendChild(avWrap);
+
+        const nameCol = document.createElement('div');
+        nameCol.className = 'ichc-ud-name-col';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'ichc-ud-name';
+        nameEl.textContent = u.name;
+        nameCol.appendChild(nameEl);
+
+        const badgeRow = document.createElement('div');
+        badgeRow.className = 'ichc-ud-badge-row';
+        const _badge = (cls, html) => {
+            const b = document.createElement('span');
+            b.className = 'ichc-ud-badge ' + cls;
+            b.innerHTML = html;
+            badgeRow.appendChild(b);
+        };
+        if (u.cammed)    { _badge('ichc-ud-badge-cam',  ICONS.broadcast + ' on cam'); }
+        if (u.mod)       { _badge('ichc-ud-badge-mod',  ICONS.shield    + ' mod'); }
+        if (u.supporter) { _badge('ichc-ud-badge-sup',  '♥ supporter'); }
+        if (year)        { _badge('ichc-ud-badge-year', year + 'yr'); }
+        if (badgeRow.children.length) { nameCol.appendChild(badgeRow); }
+
+        if (karma != null) {
+            const karmaEl = document.createElement('div');
+            karmaEl.className = 'ichc-ud-karma';
+            karmaEl.textContent = karma.toLocaleString() + ' karma';
+            nameCol.appendChild(karmaEl);
+        }
+
+        hdr.appendChild(nameCol);
+        dd.appendChild(hdr);
+
+        const hr = document.createElement('div');
+        hr.className = 'ichc-ud-divider';
+        dd.appendChild(hr);
+
+        // ── Actions ──
+        const _btn = (label, icon, cls, onClick) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'ichc-ud-btn' + (cls ? ' ' + cls : '');
+            btn.innerHTML = `<span class="ichc-ud-btn-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                closeUserDropdown();
+                onClick();
+            });
+            dd.appendChild(btn);
+        };
+
+        _btn('Send PM', ICONS.chat, '', () => {
+            window.dispatchEvent(new CustomEvent('ichc-pm-open', { detail: { nick: u.name, forceShow: true } }));
+        });
+        if (u.cammed) {
+            _btn('Hide cam', ICONS.eyeSlash, 'ichc-ud-btn-warn', () => {
+                const bl = loadBlockedUsers();
+                bl.add(key);
+                saveBlockedUsers(bl);
+                syncCamCards();
+                buildUserList();
+            });
+        }
+        _btn('View profile', ICONS.popOut, '', () => {
+            triggerUserModal(u.trigger, u.name);
+        });
+
+        // ── Position: prefer left of row, fall back to right ──
+        document.body.appendChild(dd);
+        _activeUserDropdown = dd;
+
+        const rr  = rowEl.getBoundingClientRect();
+        const ddW = dd.offsetWidth  || 210;
+        const ddH = dd.offsetHeight || 220;
+        const vw  = window.innerWidth;
+        const vh  = window.innerHeight;
+
+        let left = rr.left - ddW - 6;
+        if (left < 8) { left = rr.right + 6; }
+        left = Math.max(8, Math.min(left, vw - ddW - 8));
+
+        let top = rr.top;
+        if (top + ddH > vh - 8) { top = Math.max(8, vh - ddH - 8); }
+        dd.style.left = left + 'px';
+        dd.style.top  = top  + 'px';
+
+        // ── Dismiss ──
+        const _cleanup = () => {
+            document.removeEventListener('pointerdown', _onDown, true);
+            document.removeEventListener('keydown',    _onKey,  true);
+        };
+        const _onDown = e => { if (!dd.contains(e.target)) { closeUserDropdown(); _cleanup(); } };
+        const _onKey  = e => { if (e.key === 'Escape')      { closeUserDropdown(); _cleanup(); } };
+        setTimeout(() => {
+            document.addEventListener('pointerdown', _onDown, true);
+            document.addEventListener('keydown',    _onKey,  true);
+        }, 0);
+    }
+
     function triggerUserModal(sourceAnchor, username = '') {
         let trigger = sourceAnchor;
 
@@ -5313,13 +5463,13 @@
                 span.addEventListener('click', event => {
                     event.preventDefault();
                     event.stopPropagation();
-                    triggerUserModal(u.trigger, u.name);
+                    openUserDropdown(u, span);
                 });
                 span.addEventListener('keydown', event => {
                     if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
                         event.stopPropagation();
-                        triggerUserModal(u.trigger, u.name);
+                        openUserDropdown(u, span);
                     }
                 });
             }
