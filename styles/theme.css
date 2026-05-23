@@ -3060,7 +3060,7 @@
         flex-direction: column !important;
         align-items: stretch !important;
         gap: 4px !important;
-        padding: 0 6px 10px 0 !important;
+        padding: 0 !important;
         font-size: 11px !important;
         line-height: 1.2 !important;
         text-align: left !important;
@@ -3068,9 +3068,7 @@
         border: none !important;
         border-radius: 0 12px 0 0 !important;
         box-shadow: none !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        scrollbar-width: thin !important;
+        overflow: hidden !important;
         margin: 0 !important;
         justify-self: stretch !important;
         align-self: stretch !important;
@@ -3137,6 +3135,15 @@
         align-items: flex-start !important;
         gap: 2px !important;
         padding: 0 4px 0 2px !important;
+    }
+    /* Scrollable user-row area — fills remaining height below header and PM strip */
+    .ichc-ul-scroll-body {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scrollbar-width: thin !important;
+        padding: 0 6px 10px 0 !important;
     }
     /* Stack: more button on top, collapse button below — both same width */
     .ichc-ul-btn-stack {

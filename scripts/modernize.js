@@ -5070,13 +5070,24 @@
         if (savedPmBtn && panel.contains(savedPmBtn)) { savedPmBtn.remove(); }
 
         userListState.avatarObserver?.disconnect();
-        // Remove only non-user-row children (header, offline section, etc.) so that
-        // .ichc-ul-user rows stay connected to the document. Detaching them would reset
-        // any in-progress CSS transitions (e.g. the year-badge hover slide-out).
+        // Get or create the scroll body that holds user rows. User rows stay inside it
+        // across rebuilds so their CSS transitions (year-badge hover, etc.) are preserved.
+        let scrollBody = panel.querySelector('.ichc-ul-scroll-body');
         userListState._suppressBlur = true;
+        if (scrollBody) {
+            // Clean non-user-row content from scroll body (offline sections etc.)
+            [...scrollBody.children].forEach(el => {
+                if (!el.classList.contains('ichc-ul-user')) { el.remove(); }
+            });
+        }
+        // Remove all panel children except the scroll body (removes old header etc.)
         [...panel.children].forEach(el => {
-            if (!el.classList.contains('ichc-ul-user')) { el.remove(); }
+            if (el !== scrollBody) { el.remove(); }
         });
+        if (!scrollBody) {
+            scrollBody = document.createElement('div');
+            scrollBody.className = 'ichc-ul-scroll-body';
+        }
         userListState._suppressBlur = false;
         if (prevSearchOpen) { panel.classList.add('ichc-ul-search-open'); }
         panel.classList.toggle('ichc-ul-no-avatars', !userListState.showAvatars);
@@ -5163,7 +5174,7 @@
         header.insertBefore(ulResizer, header.firstChild);
         initUserlistResizer(ulResizer);
 
-        // Insert header before existing user rows (which were kept in the DOM).
+        // Insert header; scroll body will go at end so header lands before it.
         panel.insertBefore(header, panel.firstChild || null);
 
         // Reattach PM avatars below the header/title row
@@ -5173,6 +5184,9 @@
                 savedPmAvatars.insertBefore(savedPmBtn, savedPmAvatars.firstChild || null);
             }
         }
+
+        // Scroll body always lives at the end of the panel — below header and PM avatars.
+        panel.appendChild(scrollBody);
 
         // Sidebar cam/viewer stats (visible only when collapsed)
         _updateSidebarStats(panel, cammedCount, activeCount + idleCount);
@@ -5386,15 +5400,15 @@
             });
 
             // Pass 2: position rows in correct order with minimal DOM moves.
-            // Walk from the first row slot (right after .ichc-ul-header) and only
-            // move a span when it isn't already sitting at the cursor position.
+            // Walk from the first slot in the scroll body and only move a span when
+            // it isn't already sitting at the cursor position.
             // Rows already in order are never touched, so their CSS transitions survive.
-            let cursor = panel.querySelector('.ichc-ul-header')?.nextElementSibling ?? null;
+            let cursor = scrollBody.firstChild;
             for (const span of spans) {
                 if (span === cursor) {
                     cursor = cursor.nextElementSibling;
                 } else {
-                    panel.insertBefore(span, cursor);
+                    scrollBody.insertBefore(span, cursor);
                 }
             }
         };
@@ -5430,12 +5444,12 @@
         // When a tagged row enters the viewport the observer triggers the (throttled,
         // localStorage-cached) fetch and then stops watching that row.
         // Reset if panel was recreated so the observer's root isn't a detached element.
-        if (userListState.avatarObserver && userListState.avatarObserverRoot !== panel) {
+        if (userListState.avatarObserver && userListState.avatarObserverRoot !== scrollBody) {
             userListState.avatarObserver.disconnect();
             userListState.avatarObserver = null;
         }
         if (!userListState.avatarObserver) {
-            userListState.avatarObserverRoot = panel;
+            userListState.avatarObserverRoot = scrollBody;
             userListState.avatarObserver = new IntersectionObserver(entries => {
                 entries.forEach(entry => {
                     if (!entry.isIntersecting) { return; }
@@ -5450,7 +5464,7 @@
                         _applyProfileData(key);
                     });
                 });
-            }, { root: panel, rootMargin: '120px 0px' });
+            }, { root: scrollBody, rootMargin: '120px 0px' });
         }
 
         const observeAvatarRows = () => {
@@ -5560,7 +5574,7 @@
                     list.appendChild(row);
                 });
                 section.appendChild(list);
-                panel.appendChild(section);
+                scrollBody.appendChild(section);
             }
 
             // ⋮ export/import + sort menu in title row
