@@ -861,6 +861,7 @@
         newMessageCount: 0,
         savedScrollTop: null,
         scrollbarHideTimer: null,
+        isDraggingScrollbar: false,
     };
 
     const chatEventCollector = {
@@ -1006,6 +1007,23 @@
             target.addEventListener(type, markUserScroll, { passive: true });
         });
 
+        // Detect scrollbar thumb drags: pointerdown to the right of clientWidth = scrollbar
+        target.addEventListener('pointerdown', e => {
+            if (e.offsetX < target.clientWidth) { return; }
+            chatScrollState.isDraggingScrollbar = true;
+            target.classList.add('ichc-user-scrolling');
+            if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
+        }, { passive: true });
+        document.addEventListener('pointerup', () => {
+            if (!chatScrollState.isDraggingScrollbar) { return; }
+            chatScrollState.isDraggingScrollbar = false;
+            if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
+            chatScrollState.scrollbarHideTimer = setTimeout(() => {
+                chatScrollState.scrollbarHideTimer = null;
+                target.classList.remove('ichc-user-scrolling');
+            }, 1500);
+        }, { passive: true });
+
         target.addEventListener('scroll', () => {
             if (Date.now() < chatScrollState.programmaticUntil) { return; }
 
@@ -1020,7 +1038,9 @@
                 if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
                 chatScrollState.scrollbarHideTimer = setTimeout(() => {
                     chatScrollState.scrollbarHideTimer = null;
-                    target.classList.remove('ichc-user-scrolling');
+                    if (!chatScrollState.isDraggingScrollbar) {
+                        target.classList.remove('ichc-user-scrolling');
+                    }
                 }, 1500);
             }
 
