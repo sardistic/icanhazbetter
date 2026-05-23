@@ -3610,7 +3610,7 @@
         font-weight: 800 !important;
         line-height: 1 !important;
         letter-spacing: -0.02em !important;
-        background: linear-gradient(135deg, rgba(65,145,215,1) 0%, rgba(55,185,200,1) 100%) !important;
+        background: linear-gradient(135deg, rgba(34,195,85,1) 0%, rgba(52,211,100,1) 100%) !important;
         -webkit-background-clip: text !important;
         -webkit-text-fill-color: transparent !important;
         background-clip: text !important;
@@ -3642,6 +3642,7 @@
         color: #4e5058 !important;
         flex-shrink: 0 !important;
     }
+    .ichc-ul-metric-cam .ichc-ul-metric-icon { color: rgba(52,211,100,0.7) !important; }
     .ichc-ul-metric-icon svg { width: 14px !important; height: 14px !important; }
     /* Meta text rendered as a non-layout tooltip — doesn't affect row width */
     .ichc-ul-count-meta {
