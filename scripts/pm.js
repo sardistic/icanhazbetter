@@ -650,6 +650,18 @@
         });
     }
 
+    function _stripBracketTs(row) {
+        if (!(row instanceof HTMLElement)) { return; }
+        for (const child of row.childNodes) {
+            if (child.nodeType !== Node.TEXT_NODE) { continue; }
+            const stripped = child.textContent.replace(/^\s*\[\d{1,2}:\d{2}:\d{2}\]\s*/, '');
+            if (stripped !== child.textContent) {
+                child.textContent = stripped;
+                break;
+            }
+        }
+    }
+
     function stampPmRow(row) {
         if (!(row instanceof HTMLElement)) { return; }
         if (row.classList.contains('ichc-pm-date-sep')) { return; }
@@ -665,12 +677,13 @@
     function watchPmConvo(convo) {
         if (_watchedConvos.has(convo)) { return; }
         _watchedConvos.add(convo);
-        [...convo.children].forEach(stampPmRow);
+        [...convo.children].forEach(row => { _stripBracketTs(row); stampPmRow(row); });
         _injectDateSeparators(convo);
         new MutationObserver(mutations => {
             let needsSep = false;
             mutations.forEach(m => m.addedNodes.forEach(n => {
                 if (n instanceof HTMLElement && !n.classList.contains('ichc-pm-date-sep')) {
+                    _stripBracketTs(n);
                     stampPmRow(n);
                     needsSep = true;
                 }

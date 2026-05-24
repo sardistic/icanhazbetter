@@ -524,7 +524,11 @@
 
     function reGroupChatRows(log) {
         if (!log) { return; }
-        const allRows = getChatRowNodes(log);
+        const allRows = [...log.children].filter(node =>
+            node instanceof HTMLElement &&
+            node.matches('table, div, p, ul') &&
+            !node.dataset.ichcEventProcessed
+        );
 
         let lastNick = null;
         const nickOf = new Map();
@@ -870,14 +874,28 @@
         row:        null,
         joinNames:  [],
         leaveNames: [],
+        sealTimer:  null,
     };
 
     function _sealChatEvents() {
         // Null out the reference so the next join/leave starts a fresh row at the new position.
         // The existing collector row stays in the DOM where it already is.
+        chatEventCollector.sealTimer = null;
         chatEventCollector.row = null;
         chatEventCollector.joinNames = [];
         chatEventCollector.leaveNames = [];
+    }
+
+    function _cancelSeal() {
+        if (chatEventCollector.sealTimer !== null) {
+            clearTimeout(chatEventCollector.sealTimer);
+            chatEventCollector.sealTimer = null;
+        }
+    }
+
+    function _scheduleSeal() {
+        _cancelSeal();
+        chatEventCollector.sealTimer = setTimeout(_sealChatEvents, 500);
     }
 
     function _classifyEventRow(row) {
@@ -924,6 +942,7 @@
     }
 
     function _addToEventCollector(type, nick, refRow) {
+        _cancelSeal();
         refRow.dataset.ichcEventProcessed = '1';
         refRow.style.setProperty('display', 'none', 'important');
         // Always use #txt directly — refRow.parentElement can be a nested tbody/container
@@ -1440,7 +1459,7 @@
                                     if (a) {
                                         const next = a.nextSibling;
                                         if (next?.nodeType === Node.TEXT_NODE && /^\s*:/.test(next.textContent)) {
-                                            _sealChatEvents();
+                                            _scheduleSeal();
                                         }
                                     }
                                     applyChatTheme(node);

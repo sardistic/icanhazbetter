@@ -5164,6 +5164,32 @@
             });
         });
 
+        // Pre-warm karma/year caches from localStorage for all users so the sort
+        // has accurate values. Without this, the first build always sorts alphabetically
+        // because _fetchProfile (which warms the cache) only fires after rows are visible.
+        users.forEach(u => {
+            const k = u.name.toLowerCase();
+            if (!profileKarmaCache.has(k)) {
+                try {
+                    const ks = localStorage.getItem(_KM_LS + k);
+                    if (ks) {
+                        const { karma, ts } = JSON.parse(ks);
+                        if ((Date.now() - ts) < _KM_TTL && karma != null) { profileKarmaCache.set(k, karma); }
+                    }
+                } catch (_) {}
+            }
+            if (!profileYearCache.has(k)) {
+                try {
+                    const ys = localStorage.getItem(_YB_LS + k);
+                    if (ys) {
+                        const { year, ts } = JSON.parse(ys);
+                        if ((Date.now() - ts) < _YB_TTL) { profileYearCache.set(k, year); }
+                    }
+                } catch (_) {}
+            }
+            if (u.karma == null) { u.karma = profileKarmaCache.get(k) ?? null; }
+        });
+
         users.sort((a, b) => {
             // hidden-but-cammed: sort with cammed users (0); hidden-offline: bottom (4)
             const rank = u => (u.hidden && !u.cammed ? 4 : u.idle ? 3 : u.cammed ? 0 : u.mod ? 1 : 2);
@@ -5209,6 +5235,10 @@
         const prevQuery = panel.querySelector('.ichc-ul-search-input')?.value || '';
         const prevSearchOpen = panel.classList.contains('ichc-ul-search-open');
         const prevOfflineOpen = panel.querySelector('.ichc-ul-offline-hidden.is-open') !== null;
+        // Capture scroll position before any DOM mutations — the cleanup and header
+        // re-insertion below can cause Chrome to reset scrollTop to 0.
+        const _existingScrollBody = panel.querySelector('.ichc-ul-scroll-body');
+        const _savedScrollTop = _existingScrollBody?.scrollTop ?? 0;
         // Detach persistent elements before the panel clear so they survive the rebuild.
         const savedResizer = panel.querySelector('#ichc-userlist-resizer');
         savedResizer?.remove();
@@ -5950,6 +5980,14 @@
                     document.getElementById('txtMsg')?.focus();
                 }
             }, 50);
+        }
+
+        // Restore scroll position after all DOM mutations. Chrome resets scrollTop
+        // when children are removed/reordered inside a flex scroll container.
+        if (_savedScrollTop > 0 && scrollBody) {
+            scrollBody.scrollTop = _savedScrollTop;
+            // Second restore after layout settles — flex recalculation can re-reset after JS returns.
+            requestAnimationFrame(() => { if (scrollBody) { scrollBody.scrollTop = _savedScrollTop; } });
         }
     }
 
