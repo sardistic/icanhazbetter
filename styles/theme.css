@@ -1514,7 +1514,7 @@
         to { transform: rotate(360deg); }
     }
     /* ── Shared header button base ── */
-    #camControl a, #camControl div a, #signout a, #ichc-primary-actions > a, #ichc-header-leave > a, #ichc-reload-cams-btn {
+    #camControl a, #camControl div a, #signout a, #ichc-primary-actions > a, #ichc-header-leave > a {
         border-radius: 8px !important;
         padding: 8px 10px !important;
         font-size: 12px !important;
@@ -3150,13 +3150,6 @@
         scrollbar-width: thin !important;
         padding: 0 6px 10px 0 !important;
     }
-    /* Stack: more button on top, collapse button below — both same width */
-    .ichc-ul-btn-stack {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        gap: 0 !important;
-    }
     /* PM pop-out button — small, pinned to bottom-right of the pm-avatar strip */
     #ichc-pm-avatars #ichc-pm-toggle-btn {
         -webkit-appearance: none !important;
@@ -3199,35 +3192,71 @@
     #ichc-pm-toggle-btn [data-pm-state="out"] { display: inline-flex !important; align-items: center !important; }
     #ichc-pm-toggle-btn.ichc-pm-open [data-pm-state="in"] { display: inline-flex !important; align-items: center !important; }
     #ichc-pm-toggle-btn.ichc-pm-open [data-pm-state="out"] { display: none !important; }
-    /* Collapse button — stacked below the more button in ichc-ul-btn-stack */
+    /* Collapse tab — base styles (fallback: right edge of ichc-ul-header) */
     #ichc-ul-collapse-btn {
         -webkit-appearance: none !important;
         appearance: none !important;
         background: none !important;
         border: none !important;
+        border-left: 1px solid rgba(255,255,255,0.07) !important;
         outline: none !important;
         box-shadow: none !important;
-        width: 18px !important;
-        height: 18px !important;
+        position: absolute !important;
+        right: 0 !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        width: 22px !important;
         padding: 0 !important;
         margin: 0 !important;
         cursor: pointer !important;
-        color: rgba(255,255,255,0.52) !important;
-        display: inline-flex !important;
+        color: rgba(255,255,255,0.38) !important;
+        display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         flex-shrink: 0 !important;
-        transition: color 0.15s !important;
+        z-index: 3 !important;
+        transition: background 0.15s, color 0.15s, border-color 0.15s !important;
     }
     #ichc-ul-collapse-btn:hover {
-        background: none !important;
+        background: rgba(114,137,218,0.10) !important;
+        border-color: rgba(114,137,218,0.25) !important;
         color: #7289da !important;
     }
     #ichc-ul-collapse-btn svg {
-        width: 14px !important;
-        height: 14px !important;
-        transform: rotate(0deg) !important;
+        width: 12px !important;
+        height: 12px !important;
     }
+    /* Primary position: bottom-right corner of the PM avatar strip */
+    #ichc-pm-avatars #ichc-ul-collapse-btn {
+        top: auto !important;
+        bottom: 0 !important;
+        height: 26px !important;
+        width: 26px !important;
+        border-top: 1px solid rgba(255,255,255,0.07) !important;
+        border-radius: 0 !important;
+        pointer-events: auto !important;
+        z-index: 10 !important;
+    }
+    /* Collapse button — top-center + bottom-left + bottom-right */
+    #ichc-ul-collapse-btn .ichc-dot-1 { left: 1.7px !important; top: 11.3px !important; }
+    #ichc-ul-collapse-btn .ichc-dot-2 { left: 6.5px !important; top: 1.7px !important; }
+    #ichc-ul-collapse-btn .ichc-dot-3 { left: 11.3px !important; top: 11.3px !important; }
+    #ichc-ul-collapse-btn .ichc-dot-4 { left: 6.5px !important; top: 6.5px !important; opacity: 0 !important; }
+    #ichc-ul-collapse-btn .ichc-dot-5 { opacity: 0 !important; }
+    /* Collapse hover — fan to 4 corners from top-center + bottom-left + bottom-right */
+    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-1 { transform: translate(-0.8px, 0.8px) !important; }
+    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-2 { transform: translate(5.6px, -0.8px) !important; }
+    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-3 { transform: translate(0.8px, 0.8px) !important; }
+    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-4 { transform: translate(-5.6px, -5.6px) !important; opacity: 1 !important; }
+    /* Expand (collapsed) state — bottom-center + top-left + top-right */
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-1 { left: 1.7px !important; top: 1.7px !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-2 { left: 6.5px !important; top: 11.3px !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-3 { left: 11.3px !important; top: 1.7px !important; }
+    /* Expand hover — fan to 4 corners */
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-1 { transform: translate(-0.8px, -0.8px) !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-2 { transform: translate(5.6px, 0.8px) !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-3 { transform: translate(0.8px, -0.8px) !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-4 { transform: translate(-5.6px, 5.6px) !important; opacity: 1 !important; }
 
     /* ── Animated dots icon (3 dots → 4 corner X on hover) ──
        16×16px container, dots positioned as px coords (1 SVG unit = 0.8px).
@@ -3295,9 +3324,8 @@
         opacity: 1 !important;
     }
 
-    /* Shared sizing for all icon buttons in the title row */
-    #ichc-userlist .ichc-ul-search-btn,
-    #ichc-userlist .ichc-ul-more-btn {
+    /* Search button in the title row */
+    #ichc-userlist .ichc-ul-search-btn {
         -webkit-appearance: none !important;
         appearance: none !important;
         background: none !important;
@@ -3320,26 +3348,17 @@
         transition: opacity 0.14s, color 0.12s !important;
         position: relative !important;
     }
-    #ichc-userlist .ichc-ul-search-btn svg,
-    #ichc-userlist .ichc-ul-more-btn svg {
+    #ichc-userlist .ichc-ul-search-btn svg {
         width: 16px !important;
         height: 16px !important;
     }
-    #ichc-userlist .ichc-ul-more-btn { margin-right: 0 !important; }
-    #ichc-userlist .ichc-ul-search-btn:hover,
-    #ichc-userlist .ichc-ul-more-btn:hover {
+    #ichc-userlist .ichc-ul-search-btn:hover {
         opacity: 1 !important;
         color: #dbdee1 !important;
         background: none !important;
         border: none !important;
         outline: none !important;
         box-shadow: none !important;
-    }
-    #ichc-userlist .ichc-ul-more-btn:focus,
-    #ichc-userlist .ichc-ul-more-btn:active {
-        outline: none !important;
-        box-shadow: none !important;
-        background: none !important;
     }
     /* Search row hidden by default; revealed by clicking the search icon */
     #ichc-userlist .ichc-ul-search-row {
@@ -3685,8 +3704,8 @@
     ── */
     #ichc-input-row {
         display: grid !important;
-        grid-template-columns: 1fr 40px !important;
-        /* col1=input(flex), col2=gif(40px); send button hidden */
+        grid-template-columns: 1fr 40px 32px !important;
+        /* col1=input(flex), col2=gif(40px), col3=more-btn(32px); send button hidden */
         align-items: center !important;
         column-gap: 4px !important;
         padding: 6px 4px !important;
@@ -3718,6 +3737,42 @@
     }
     #ichc-input-row #btn {
         display: none !important;
+    }
+    /* Rotate dots container 90° to make the three dots vertical */
+    #ichc-input-row .ichc-ul-more-btn .ichc-dots-wrap { transform: rotate(90deg) !important; vertical-align: 0 !important; }
+
+    /* More-options button in the input row — col 3 */
+    #ichc-input-row .ichc-ul-more-btn {
+        grid-column: 3 !important;
+        grid-row: 1 !important;
+        align-self: center !important;
+        justify-self: center !important;
+        width: 28px !important;
+        height: 28px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        cursor: pointer !important;
+        color: #80848e !important;
+        border-radius: 6px !important;
+        flex-shrink: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        opacity: 0.8 !important;
+        transition: opacity 0.14s, color 0.12s, background 0.12s !important;
+    }
+    #ichc-input-row .ichc-ul-more-btn:hover {
+        opacity: 1 !important;
+        color: #dbdee1 !important;
+        background: rgba(255,255,255,0.06) !important;
+    }
+    #ichc-input-row .ichc-ul-more-btn.ichc-menu-open {
+        opacity: 1 !important;
+        color: #7289da !important;
     }
     /* ── Hidden chat buttons ── */
     .ichc-cmd-hidden { display: none !important; }
@@ -3833,23 +3888,30 @@
         box-shadow: 0 0 0 1px rgba(0,0,0,0.3) !important;
     }
 
-    /* ── Reload cams header button ── */
+    /* ── Reload cams footer button — bare icon, matches cam-test-btn ── */
     #ichc-reload-cams-btn {
-        background: #18191c !important;
-        color: #b5bac1 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
         box-shadow: none !important;
+        width: 24px !important;
+        height: 24px !important;
         min-width: 0 !important;
-        padding: 7px 10px !important;
+        padding: 0 !important;
+        margin: 0 !important;
         cursor: pointer !important;
-        transition: background 0.15s, border-color 0.15s, transform 0.15s !important;
+        color: #80848e !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 15px !important;
+        flex-shrink: 0 !important;
+        transition: color 0.12s !important;
     }
-    #ichc-reload-cams-btn:hover {
-        background: #25272b !important;
-        border-color: rgba(255,255,255,0.14) !important;
-        transform: translateY(-1px) !important;
-    }
-    #ichc-reload-cams-btn svg { flex-shrink: 0 !important; width: 1.2em !important; height: 1.2em !important; }
+    #ichc-reload-cams-btn:hover { color: #dbdee1 !important; }
+    #ichc-reload-cams-btn svg { width: 1em !important; height: 1em !important; flex-shrink: 0 !important; }
     #ichc-reload-cams-btn:active svg { animation: ichc-rotate-spin 0.6s linear !important; }
     #ichc-reload-cams-btn.ichc-spinning svg { animation: ichc-rotate-spin 0.7s linear infinite !important; }
 
@@ -4484,8 +4546,7 @@
         background: #e3e5e8 !important;
         border-bottom-color: rgba(0,0,0,0.08) !important;
     }
-    html.ichc-light-theme #ichc-chat-shell.ichc-ul-collapsed #ichc-pm-avatars,
-    html.ichc-light-theme #ichc-chat-shell.ichc-ul-collapsed #ichc-ul-collapse-btn {
+    html.ichc-light-theme #ichc-chat-shell.ichc-ul-collapsed #ichc-pm-avatars {
         background: #e3e5e8 !important;
         border-color: rgba(0,0,0,0.10) !important;
     }
@@ -5004,16 +5065,14 @@
     }
     html.ichc-light-theme #ichc-topbar * { color: #313338 !important; }
     html.ichc-light-theme #ichc-topbar a { color: #5865f2 !important; }
-    /* Refresh / reload-cams button */
+    /* Refresh / reload-cams button — light theme */
     html.ichc-light-theme #ichc-reload-cams-btn,
     html.ichc-light-theme .ichc-reload-cams-btn {
-        background: #c4c8ce !important;
-        border-color: #a8adb6 !important;
-        color: #313338 !important;
+        color: #4e5058 !important;
     }
     html.ichc-light-theme #ichc-reload-cams-btn:hover,
     html.ichc-light-theme .ichc-reload-cams-btn:hover {
-        background: #b8bbbe !important;
+        color: #060607 !important;
     }
     /* Hamburger button + menu */
     html.ichc-light-theme #ichc-nav-hamburger-btn {

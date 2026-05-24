@@ -1783,23 +1783,6 @@
             primaryLinks.push(broadcastBtn);
         }
 
-        // Create reload-cams button (between Go Live and Leave)
-        let reloadBtn = document.getElementById('ichc-reload-cams-btn');
-        if (!reloadBtn) {
-            reloadBtn = document.createElement('button');
-            reloadBtn.id = 'ichc-reload-cams-btn';
-            reloadBtn.type = 'button';
-            reloadBtn.className = 'ichc-reload-cams-btn';
-            reloadBtn.title = 'Reload cams';
-            reloadBtn.innerHTML = ICONS.rotate;
-            reloadBtn.addEventListener('click', () => {
-                triggerReload();
-            });
-        }
-        primaryLinks.push(reloadBtn);
-
-
-
         // Find leave button: may already be in leaveSlot/primaryActions or still in signout element.
         const leaveBtn = leaveSlot?.querySelector('a.ichc-leave-btn') ||
             primaryActions.querySelector('a.ichc-leave-btn') ||
@@ -3900,10 +3883,10 @@
         const shell = document.getElementById('ichc-chat-shell');
         shell?.classList.toggle('ichc-ul-collapsed', _ulCollapsed);
         document.documentElement.classList.toggle('ichc-ul-collapsed', _ulCollapsed);
-        // Sync the collapse button label inside the userlist header
+        // Sync the collapse button dot state
         const collapseBtn = document.getElementById('ichc-ul-collapse-btn');
         if (collapseBtn) {
-            collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
+            collapseBtn.classList.toggle('ichc-ul-is-collapsed', _ulCollapsed);
             collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
         }
     }
@@ -3966,6 +3949,10 @@
             if (_camDiagBtn && _footerLeft && !_footerLeft.contains(_camDiagBtn)) {
                 _footerLeft.appendChild(_camDiagBtn);
             }
+            const _reloadBtn = document.getElementById('ichc-reload-cams-btn');
+            if (_reloadBtn && _footerLeft && !_footerLeft.contains(_reloadBtn)) {
+                _footerLeft.appendChild(_reloadBtn);
+            }
             // PM button lives inside the pm-avatar strip
             const _er_pmBtn = document.getElementById('ichc-pm-toggle-btn');
             const _er_pmAvStrip = document.getElementById('ichc-pm-avatars');
@@ -3983,6 +3970,21 @@
             const gifWrap = document.getElementById('ichc-gif-wrapper');
             if (gifWrap && inputRow && !inputRow.contains(gifWrap)) {
                 inputRow.insertBefore(gifWrap, sendBtn);
+            }
+            // more-btn lives in inputRow, after gif and before send
+            const _er_moreBtn = document.querySelector('.ichc-ul-more-btn');
+            if (_er_moreBtn && inputRow && !inputRow.contains(_er_moreBtn)) {
+                inputRow.insertBefore(_er_moreBtn, sendBtn);
+            }
+            // collapse tab lives in bottom-right of #ichc-pm-avatars (falls back to header)
+            const _er_collapseBtn = document.getElementById('ichc-ul-collapse-btn');
+            const _er_pmAv = document.getElementById('ichc-pm-avatars');
+            const _er_ulHeader = document.querySelector('#ichc-userlist .ichc-ul-header');
+            if (_er_collapseBtn) {
+                const _target = _er_pmAv || _er_ulHeader;
+                if (_target && !_target.contains(_er_collapseBtn)) {
+                    _target.appendChild(_er_collapseBtn);
+                }
             }
             return;
         }
@@ -4507,6 +4509,19 @@
         }
         if (footerLeft && !footerLeft.contains(camTestBtn)) {
             footerLeft.appendChild(camTestBtn);
+        }
+        let reloadCamsBtn = document.getElementById('ichc-reload-cams-btn');
+        if (!reloadCamsBtn) {
+            reloadCamsBtn = document.createElement('button');
+            reloadCamsBtn.id = 'ichc-reload-cams-btn';
+            reloadCamsBtn.type = 'button';
+            reloadCamsBtn.className = 'ichc-reload-cams-btn';
+            reloadCamsBtn.title = 'Reload cams';
+            reloadCamsBtn.innerHTML = ICONS.rotate;
+            reloadCamsBtn.addEventListener('click', () => { triggerReload(); });
+        }
+        if (footerLeft && !footerLeft.contains(reloadCamsBtn)) {
+            footerLeft.appendChild(reloadCamsBtn);
         }
 
         // PM button lives inside the pm-avatar strip as its first child
@@ -5242,7 +5257,7 @@
         // Detach persistent elements before the panel clear so they survive the rebuild.
         const savedResizer = panel.querySelector('#ichc-userlist-resizer');
         savedResizer?.remove();
-        const savedMoreBtn = panel.querySelector('.ichc-ul-more-btn');
+        const savedMoreBtn = document.querySelector('.ichc-ul-more-btn');
         savedMoreBtn?.remove();
         const savedPmAvatars = document.getElementById('ichc-pm-avatars');
         if (savedPmAvatars && panel.contains(savedPmAvatars)) { savedPmAvatars.remove(); }
@@ -5300,7 +5315,7 @@
         metricsRow.className = 'ichc-ul-metrics-row';
         metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams">${cammedCount}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span>${userMeta}</span>`;
 
-        // Controls: [search] [btn-stack: more(added later, top) | collapse(bottom)]
+        // Controls: [search] — collapse tab is absolute on the header right edge
         const controlsRow = document.createElement('div');
         controlsRow.className = 'ichc-ul-controls-row';
 
@@ -5312,17 +5327,13 @@
         searchBtn.innerHTML = ICONS.search;
         controlsRow.appendChild(searchBtn);
 
-        const btnStack = document.createElement('div');
-        btnStack.className = 'ichc-ul-btn-stack';
-        controlsRow.appendChild(btnStack);
-
         const collapseBtn = document.createElement('button');
         collapseBtn.type = 'button';
         collapseBtn.id = 'ichc-ul-collapse-btn';
-        collapseBtn.innerHTML = _ulCollapsed ? ICONS.chevronDown : ICONS.chevronUp;
+        collapseBtn.innerHTML = ICONS.dotsAnimated;
+        collapseBtn.classList.toggle('ichc-ul-is-collapsed', _ulCollapsed);
         collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
         collapseBtn.addEventListener('click', e => { e.stopPropagation(); _toggleUserListCollapse(); });
-        btnStack.appendChild(collapseBtn);
 
         titleRow.append(metricsRow, controlsRow);
 
@@ -5347,6 +5358,8 @@
 
         header.appendChild(titleRow);
         header.appendChild(searchRow);
+        // Collapse tab — absolute strip on the right edge of the header
+        header.appendChild(collapseBtn);
 
         // Resize handle: absolute-positioned at the left edge of the header
         const ulResizer = savedResizer || document.createElement('div');
@@ -5363,6 +5376,10 @@
             if (savedPmBtn && !savedPmAvatars.contains(savedPmBtn)) {
                 savedPmAvatars.insertBefore(savedPmBtn, savedPmAvatars.firstChild || null);
             }
+            // Collapse tab lives in the bottom-right of the PM avatar strip
+            if (!savedPmAvatars.contains(collapseBtn)) {
+                savedPmAvatars.appendChild(collapseBtn);
+            }
         }
 
         // Scroll body always lives at the end of the panel — below header and PM avatars.
@@ -5377,11 +5394,10 @@
             savedMoreBtn.querySelectorAll('[data-sort]').forEach(btn => {
                 btn.classList.toggle('ichc-ul-sort-active', btn.dataset.sort === userListState.sortMode);
             });
-            const stack = controlsRow.querySelector('.ichc-ul-btn-stack');
-            if (stack) {
-                stack.insertBefore(savedMoreBtn, stack.firstChild);
-            } else {
-                controlsRow.appendChild(savedMoreBtn);
+            const _ir = document.getElementById('ichc-input-row');
+            const _sendBtn = document.getElementById('btn');
+            if (_ir && !_ir.contains(savedMoreBtn)) {
+                _ir.insertBefore(savedMoreBtn, _sendBtn || null);
             }
         }
 
@@ -5757,9 +5773,9 @@
                 scrollBody.appendChild(section);
             }
 
-            // ⋮ export/import + sort menu in title row
+            // ⋮ export/import + sort menu — button lives in #ichc-input-row
             const titleRow = panel.querySelector('.ichc-ul-title-row');
-            if (titleRow && !panel.querySelector('.ichc-ul-more-btn')) {
+            if (titleRow && !document.querySelector('.ichc-ul-more-btn')) {
                 const moreBtn = document.createElement('button');
                 moreBtn.type = 'button';
                 moreBtn.className = 'ichc-ul-more-btn';
@@ -5939,7 +5955,8 @@
                     e.stopPropagation();
                     if (moreMenu.hidden) {
                         const rect = moreBtn.getBoundingClientRect();
-                        moreMenu.style.top = `${rect.bottom + 4}px`;
+                        moreMenu.style.top = 'auto';
+                        moreMenu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
                         moreMenu.style.right = `${window.innerWidth - rect.right}px`;
                         moreMenu.style.left = 'auto';
                         moreMenu.hidden = false;
@@ -5948,10 +5965,11 @@
                     }
                 });
 
-                // Insert more btn at top of btn-stack (above collapse btn)
-                const stack = titleRow.querySelector('.ichc-ul-btn-stack');
-                if (stack) {
-                    stack.insertBefore(moreBtn, stack.firstChild);
+                // Insert more btn in the chat input row, before the send button
+                const _ir = document.getElementById('ichc-input-row');
+                const _sendBtn = document.getElementById('btn');
+                if (_ir) {
+                    _ir.insertBefore(moreBtn, _sendBtn || null);
                 } else {
                     titleRow.appendChild(moreBtn);
                 }
