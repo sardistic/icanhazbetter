@@ -2535,7 +2535,13 @@
                 _trimMap(profileBioCache, 300);
                 try { localStorage.setItem(_BI_LS + key, JSON.stringify({ bio, ts: Date.now() })); } catch (_) {}
 
-                const url = _extractAvatarFromDoc(doc, pageUrl);
+                let url = _extractAvatarFromDoc(doc, pageUrl);
+                if (!url) {
+                    // Fallback: regex over raw HTML catches URLs embedded in <script>
+                    // blocks, JSON data, or attributes DOMParser doesn't expose cleanly.
+                    const m = html.match(/https?:\/\/images\.icanhazchat\.com\/users\/[^"'\s<>]+/i);
+                    if (m && _isUserAvatarUrl(m[0])) { url = m[0]; }
+                }
                 if (url) {
                     _profileCacheSet(key, url);
                     _lsAvSave(key, url);
@@ -5031,9 +5037,11 @@
         // - If trophies/bio are uncached, call _doFetchProfileImage directly (fetchProfileImage
         //   bails early when avatar URL is already in profileImageCache, skipping new fields).
         // - If only the avatar is missing, use the throttled fetchProfileImage path.
-        const _needsFullFetch = !profileTrophiesCache.has(key) || !profileBioCache.has(key);
-        if (_needsFullFetch || !avatarUrl) {
-            const _p = _needsFullFetch ? _doFetchProfileImage(key) : fetchProfileImage(key);
+        // Always call _doFetchProfileImage when avatar is missing — fetchProfileImage
+        // returns cached null immediately without retrying, so we bypass it here.
+        const _needsFullFetch = !profileTrophiesCache.has(key) || !profileBioCache.has(key) || !avatarUrl;
+        if (_needsFullFetch) {
+            const _p = _doFetchProfileImage(key);
             _p.then(url => {
                 if (!avatarUrl) {
                     const freshUrl = url || profileImageCache.get(key);
