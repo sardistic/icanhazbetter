@@ -6832,9 +6832,7 @@
                     setBlockedStateForCard(card, true);
                 } else if (action === 'start' || action === 'enable') {
                     const name = setBlockedStateForCard(card, false);
-                    if (name) {
-                        revealBlockedUser(name, { rerender: false });
-                    }
+                    if (name) { revealBlockedUser(name, { rerender: false }); }
                 }
 
                 const vc = card.querySelector('.videocontainer');
@@ -6843,13 +6841,13 @@
                 } else if (action === 'start' || action === 'enable') {
                     vc?.style?.removeProperty?.('display');
                 }
-                const nativeToggle = getNativeCamToggleControl(card);
-                const nativeLabel = (getNativeCamActionLabel(nativeToggle) || '').toLowerCase();
-                const actionTarget = nativeToggle?.closest('a, button, [onclick], [href]') || nativeToggle;
-                if (actionTarget && nativeLabel && nativeLabel === action) {
-                    invokeNativeElementAction(actionTarget);
-                }
+
+                // Do NOT invoke the native cam button — ICHC's handler modifies the
+                // videocontainer in ways that undo our display:none. Our own block list
+                // + ichc-persist-hidden-slot mechanism is sufficient.
+
                 buildHiddenCamManager();
+                syncCamCards();   // apply ichc-persist-hidden-slot immediately
                 buildUserList();
                 requestCamRelayout(40);
                 setTimeout(() => requestCamRelayout(140), 140);
@@ -7433,13 +7431,22 @@
             if (toggleButton) {
                 event.preventDefault();
                 event.stopPropagation();
-
+                // Fallback: per-card handler should have fired first (stopPropagation).
+                // If we're here, the card was re-created without a per-card listener.
                 const card = toggleButton.closest('.rounded_square');
-                const nativeToggle = card ? getNativeCamToggleControl(card) : null;
-                const actionTarget = nativeToggle?.closest('a, button, [onclick], [href]') || nativeToggle;
-
-                if (actionTarget) {
-                    invokeNativeElementAction(actionTarget);
+                if (card) {
+                    const action = (toggleButton.dataset.ichcAction || '').toLowerCase();
+                    if (action === 'disable' || action === 'stop') {
+                        setBlockedStateForCard(card, true);
+                        card.querySelector('.videocontainer')?.style?.setProperty('display', 'none', 'important');
+                    } else if (action === 'start' || action === 'enable') {
+                        const name = setBlockedStateForCard(card, false);
+                        if (name) { revealBlockedUser(name, { rerender: false }); }
+                        card.querySelector('.videocontainer')?.style?.removeProperty?.('display');
+                    }
+                    buildHiddenCamManager();
+                    syncCamCards();
+                    buildUserList();
                     requestCamRelayout(40);
                     setTimeout(() => requestCamRelayout(140), 140);
                     setTimeout(() => requestCamRelayout(420), 420);
