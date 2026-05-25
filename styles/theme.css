@@ -508,6 +508,51 @@
     #txt .ichc-event-join-part  { color: rgba(110,170,240,0.90)  !important; }
     #txt .ichc-event-leave-part { color: rgba(200,130,155,0.88) !important; }
 
+    /* ── @mention highlight ── */
+    @keyframes ichc-mention-flash {
+        0%   { background: rgba(255,210,50,0.32); box-shadow: inset 3px 0 0 rgba(255,200,40,1), 0 0 18px rgba(255,210,50,0.18); }
+        35%  { background: rgba(255,210,50,0.18); }
+        100% { background: rgba(255,210,50,0.07); box-shadow: inset 2px 0 0 rgba(255,200,40,0.55); }
+    }
+    @keyframes ichc-mention-glow {
+        0%   { text-shadow: 0 0 14px rgba(255,214,60,1), 0 0 28px rgba(255,170,10,0.85); color: #ffe566; }
+        55%  { text-shadow: 0 0 8px rgba(255,214,60,0.65), 0 0 16px rgba(255,170,10,0.35); }
+        100% { text-shadow: 0 0 5px rgba(255,214,60,0.30); color: #ffd63c; }
+    }
+    @keyframes ichc-mention-star {
+        0%   { opacity: 1; transform: translateY(-50%) scale(1.6) rotate(0deg); }
+        60%  { opacity: 0.7; transform: translateY(-50%) scale(1) rotate(15deg); }
+        100% { opacity: 0.25; transform: translateY(-50%) scale(0.75) rotate(25deg); }
+    }
+    #txt > table.ichc-mention,
+    #txt > div.ichc-mention,
+    #txt > p.ichc-mention,
+    #txt > ul.ichc-mention,
+    #txt .line.ichc-mention {
+        animation: ichc-mention-flash 2s ease-out forwards !important;
+        position: relative !important;
+    }
+    #txt > table.ichc-mention::after,
+    #txt > div.ichc-mention::after,
+    #txt > p.ichc-mention::after,
+    #txt > ul.ichc-mention::after,
+    #txt .line.ichc-mention::after {
+        content: '✦' !important;
+        position: absolute !important;
+        right: 8px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        font-size: 11px !important;
+        pointer-events: none !important;
+        animation: ichc-mention-star 2.5s ease-out forwards !important;
+        z-index: 1 !important;
+    }
+    .ichc-at-mention {
+        color: #ffd63c !important;
+        font-weight: 700 !important;
+        animation: ichc-mention-glow 2.5s ease-out forwards !important;
+    }
+
     /* Chat timestamps: right-aligned, dimmed — like PM */
     #txt td.ichc-ts {
         font-size: 10px !important;
@@ -702,14 +747,19 @@
         50%       { box-shadow: 0 0 0 3px rgba(176,178,178,1),    0 0 28px rgba(133,139,139,0.82), 0 0 65px rgba(128,134,134,0.45); }
     }
 
-    /* ── Userlist karma bar: spectral gradient, intensity scaled by account age ── */
+    /* ── Userlist karma gradient: fills more of the row, intensity = karma × age-viz ── */
     #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"] {
         background-image: linear-gradient(to left,
-            rgba(var(--ichc-kt-color), calc(0.82 * var(--ichc-kt-i, 1) * var(--ichc-age-mult, 1))) 0px,
-            rgba(var(--ichc-kt-color), calc(0.38 * var(--ichc-kt-i, 1) * var(--ichc-age-mult, 1))) 4px,
-            rgba(var(--ichc-kt-color), calc(0.12 * var(--ichc-kt-i, 1) * var(--ichc-age-mult, 1))) 18%,
-            rgba(var(--ichc-kt-color), calc(0.04 * var(--ichc-kt-i, 1) * var(--ichc-age-mult, 1))) 42%,
-            transparent 65%) !important;
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.80)) 0px,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.48)) 6px,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.22)) 28%,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.08)) 58%,
+            transparent 88%) !important;
+    }
+    /* Lurker de-visualisation: old accounts with low karma fade and desaturate */
+    #ichc-userlist .ichc-ul-user[style*="--ichc-lurker"] {
+        filter: grayscale(calc(var(--ichc-lurker) * 0.62)) !important;
+        opacity: calc(1 - var(--ichc-lurker) * 0.38) !important;
     }
     /* kt7 (≥50k) — dusty rose shimmer */
     #ichc-userlist .ichc-ul-user.ichc-kt7 {
@@ -3264,26 +3314,24 @@
         pointer-events: auto !important;
         z-index: 10 !important;
     }
-    /* Collapse button — top-center + bottom-left + bottom-right */
-    #ichc-ul-collapse-btn .ichc-dot-1 { left: 1.7px !important; top: 11.3px !important; }
-    #ichc-ul-collapse-btn .ichc-dot-2 { left: 6.5px !important; top: 1.7px !important; }
-    #ichc-ul-collapse-btn .ichc-dot-3 { left: 11.3px !important; top: 11.3px !important; }
+    /* Collapse button base — triangle: top-center + bottom-left + bottom-right
+       grid: x∈{2,6.5,11}  y∈{2,11}  → 2px outer margin, 1.5px inter-dot gap, 9px corner span */
+    #ichc-ul-collapse-btn .ichc-dot-1 { left: 2px !important;   top: 11px !important; }
+    #ichc-ul-collapse-btn .ichc-dot-2 { left: 6.5px !important; top: 2px !important;  }
+    #ichc-ul-collapse-btn .ichc-dot-3 { left: 11px !important;  top: 11px !important; }
     #ichc-ul-collapse-btn .ichc-dot-4 { left: 6.5px !important; top: 6.5px !important; opacity: 0 !important; }
     #ichc-ul-collapse-btn .ichc-dot-5 { opacity: 0 !important; }
-    /* Collapse hover — fan to 4 corners from top-center + bottom-left + bottom-right */
-    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-1 { transform: translate(-0.8px, 0.8px) !important; }
-    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-2 { transform: translate(5.6px, -0.8px) !important; }
-    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-3 { transform: translate(0.8px, 0.8px) !important; }
-    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-4 { transform: translate(-5.6px, -5.6px) !important; opacity: 1 !important; }
-    /* Expand (collapsed) state — bottom-center + top-left + top-right */
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-1 { left: 1.7px !important; top: 1.7px !important; }
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-2 { left: 6.5px !important; top: 11.3px !important; }
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-3 { left: 11.3px !important; top: 1.7px !important; }
-    /* Expand hover — fan to 4 corners */
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-1 { transform: translate(-0.8px, -0.8px) !important; }
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-2 { transform: translate(5.6px, 0.8px) !important; }
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-3 { transform: translate(0.8px, -0.8px) !important; }
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-4 { transform: translate(-5.6px, 5.6px) !important; opacity: 1 !important; }
+    /* Collapse hover — dots 1 & 3 rise to join dot-2 at top row (y=2) */
+    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-1 { transform: translate(0px, -9px) !important; }
+    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-3 { transform: translate(0px, -9px) !important; }
+    #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-4 { opacity: 0 !important; }
+    /* Expand (collapsed) base — triangle: bottom-center + top-left + top-right */
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-1 { left: 2px !important;   top: 2px !important;  }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-2 { left: 6.5px !important; top: 11px !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-3 { left: 11px !important;  top: 2px !important;  }
+    /* Expand hover — dot-2 slides left, dot-4 slides to bottom-right → 4 corners */
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-2 { transform: translate(-4.5px, 0px) !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-4 { transform: translate(4.5px, 4.5px) !important; opacity: 1 !important; }
 
     /* ── Animated dots icon (3 dots → 4 corner X on hover) ──
        16×16px container, dots positioned as px coords (1 SVG unit = 0.8px).
@@ -4333,8 +4381,8 @@
     #ichc-user-dropdown {
         position: fixed !important;
         z-index: 2147483100 !important;
-        min-width: 210px !important;
-        max-width: 260px !important;
+        min-width: 220px !important;
+        max-width: 290px !important;
         background: #1e1f22 !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
         border-radius: 10px !important;
@@ -4344,12 +4392,75 @@
         font-size: 13px !important;
         padding: 0 !important;
     }
+    .ichc-ud-grab {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 14px !important;
+        cursor: grab !important;
+        background: rgba(255,255,255,0.03) !important;
+        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        border-radius: 10px 10px 0 0 !important;
+        flex-shrink: 0 !important;
+    }
+    .ichc-ud-grab:hover { background: rgba(255,255,255,0.06) !important; }
+    .ichc-ud-grab-active { cursor: grabbing !important; background: rgba(255,255,255,0.08) !important; }
+    .ichc-ud-grab-pip {
+        display: block !important;
+        width: 28px !important;
+        height: 3px !important;
+        border-radius: 2px !important;
+        background: rgba(255,255,255,0.2) !important;
+    }
+    .ichc-ud-grab:hover .ichc-ud-grab-pip { background: rgba(255,255,255,0.38) !important; }
     .ichc-ud-header {
         display: flex !important;
         align-items: center !important;
         gap: 10px !important;
-        padding: 12px 14px !important;
+        padding: 10px 14px 10px 14px !important;
         background: #18191c !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+    .ichc-ud-close {
+        position: absolute !important;
+        top: 7px !important;
+        right: 7px !important;
+        z-index: 2 !important;
+        width: 22px !important;
+        height: 22px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: rgba(255,255,255,0.07) !important;
+        border: none !important;
+        border-radius: 50% !important;
+        cursor: pointer !important;
+        color: #9da3ae !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+        transition: background 0.12s, color 0.12s !important;
+    }
+    .ichc-ud-close:hover { background: rgba(239,68,68,0.2) !important; color: #f87171 !important; }
+    .ichc-ud-close svg { width: 10px !important; height: 10px !important; pointer-events: none !important; }
+    .ichc-ud-header.ichc-ud-has-bg {
+        padding-top: 16px !important;
+        padding-bottom: 16px !important;
+    }
+    .ichc-ud-header.ichc-ud-has-bg::before {
+        content: '' !important;
+        position: absolute !important;
+        inset: 0 !important;
+        background-image: var(--ichc-ud-bg) !important;
+        background-size: cover !important;
+        background-position: center top !important;
+        opacity: 0.22 !important;
+        pointer-events: none !important;
+        z-index: 0 !important;
+    }
+    .ichc-ud-header.ichc-ud-has-bg > * {
+        position: relative !important;
+        z-index: 1 !important;
     }
     .ichc-ud-avatar {
         width: 46px !important;
@@ -4438,6 +4549,7 @@
     }
     .ichc-ud-btn:hover { background: rgba(255,255,255,0.06) !important; }
     .ichc-ud-btn:last-child { border-radius: 0 0 10px 10px !important; }
+    #ichc-user-dropdown > :last-child { border-radius: 0 0 10px 10px !important; }
     .ichc-ud-btn-icon {
         width: 16px !important;
         flex-shrink: 0 !important;
@@ -4451,6 +4563,38 @@
     .ichc-ud-btn-danger { color: #f87171 !important; }
     .ichc-ud-btn-danger .ichc-ud-btn-icon { color: #f87171 !important; }
     .ichc-ud-btn-danger:hover { background: rgba(239,68,68,0.08) !important; }
+    .ichc-ud-btn-follow { color: #f472b6 !important; }
+    .ichc-ud-btn-follow .ichc-ud-btn-icon { color: #f472b6 !important; }
+    .ichc-ud-btn-follow:hover { background: rgba(244,114,182,0.08) !important; }
+    .ichc-ud-btn-gift .ichc-ud-btn-icon { font-size: 14px !important; }
+    .ichc-ud-bio {
+        padding: 7px 14px 6px !important;
+        font-size: 11px !important;
+        color: #9da3ae !important;
+        line-height: 1.5 !important;
+        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        font-style: italic !important;
+        text-shadow: none !important;
+        max-height: 80px !important;
+        overflow-y: auto !important;
+        word-break: break-word !important;
+    }
+    .ichc-ud-trophies {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+        padding: 6px 10px !important;
+        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        background: rgba(0,0,0,0.15) !important;
+    }
+    .ichc-ud-trophy-img {
+        width: 20px !important;
+        height: 20px !important;
+        object-fit: contain !important;
+        opacity: 0.85 !important;
+        border-radius: 2px !important;
+    }
+    .ichc-ud-trophy-img:hover { opacity: 1 !important; transform: scale(1.4) !important; }
 
     /* Site footer is now embedded in the room submenu dropdown — hide standalone */
     #ichc-site-footer { display: none !important; }

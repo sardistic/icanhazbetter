@@ -1211,6 +1211,86 @@
         return span;
     }
 
+    // ── @mention highlight ────────────────────────────────────────────────────
+
+    let _myNick = '';
+
+    function _escapeRegex(s) {
+        return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function _fetchMyNick() {
+        if (_myNick) { return; }
+        window.addEventListener('message', e => {
+            if (e.source !== window || e.data?.type !== 'ichc-ext-my-nick') { return; }
+            const nick = String(e.data.nick || '').trim();
+            if (!nick || nick === _myNick) { return; }
+            _myNick = nick;
+            const log = getChatLog();
+            if (log) { _markMentions(log); }
+        });
+        function _tryFetch() {
+            runInPageContext(`
+                (function() {
+                    var nick = '';
+                    ['myNick','nick','username','chatNick','currentNick','myUsername'].some(function(k) {
+                        return typeof window[k] === 'string' && window[k].trim() && (nick = window[k].trim());
+                    });
+                    if (!nick) {
+                        var el = document.querySelector('#username,[name="Nick"],[name="username"],#nick,[data-nick],[data-username]');
+                        if (el) { nick = (el.value || el.textContent || el.dataset.nick || el.dataset.username || '').trim(); }
+                    }
+                    if (nick) { window.postMessage({ type: 'ichc-ext-my-nick', nick: nick }, '*'); }
+                })();
+            `);
+        }
+        _tryFetch();
+        window.setTimeout(_tryFetch, 2000);
+    }
+
+    function _markMentions(root) {
+        if (!_myNick) { return; }
+        const re = new RegExp('@' + _escapeRegex(_myNick) + '\\b', 'gi');
+        getChatRowsInScope(root).forEach(row => {
+            if (row.classList.contains('ichc-chat-event') || row.classList.contains('ichc-bcast-event')) { return; }
+            if (row.dataset.ichcMentionNick === _myNick) { return; }
+            row.dataset.ichcMentionNick = _myNick;
+            re.lastIndex = 0;
+            if (!re.test(row.textContent || '')) { return; }
+            row.classList.add('ichc-mention');
+            re.lastIndex = 0;
+            _wrapMentionSpans(row, re);
+        });
+    }
+
+    function _wrapMentionSpans(row, re) {
+        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+        const hits = [];
+        let n;
+        while ((n = walker.nextNode())) {
+            if (n.parentElement?.closest('a, .ichc-at-mention')) { continue; }
+            re.lastIndex = 0;
+            if (re.test(n.textContent)) { hits.push(n); }
+        }
+        hits.forEach(textNode => {
+            if (!textNode.parentNode) { return; }
+            const text = textNode.textContent;
+            re.lastIndex = 0;
+            const frag = document.createDocumentFragment();
+            let last = 0, m;
+            while ((m = re.exec(text)) !== null) {
+                if (m.index > last) { frag.appendChild(document.createTextNode(text.slice(last, m.index))); }
+                const span = document.createElement('span');
+                span.className = 'ichc-at-mention';
+                span.textContent = m[0];
+                frag.appendChild(span);
+                last = m.index + m[0].length;
+            }
+            if (last < text.length) { frag.appendChild(document.createTextNode(text.slice(last))); }
+            textNode.parentNode.replaceChild(frag, textNode);
+        });
+    }
+
     function _wrapNativeSiteEmotes(scope) {
         if (!scope) { return; }
         scope.querySelectorAll('img[id^="emot-"]:not([data-ichc-wrapped])').forEach(img => {
@@ -1388,8 +1468,11 @@
 
         chatScrollState.lastMessageAt = Date.now();
 
+        _fetchMyNick();
+
         if (log.dataset.ichcThemeReady !== '1') {
             applyChatTheme(log);
+            _markMentions(log);
             log.dataset.ichcThemeReady = '1';
         }
         bindChatResumeControls();
@@ -1463,6 +1546,7 @@
                                         }
                                     }
                                     applyChatTheme(node);
+                                    _markMentions(node);
                                     sawNewRows = true;
                                 }
                             }

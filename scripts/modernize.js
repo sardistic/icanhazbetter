@@ -107,6 +107,8 @@
     const profileGuestCache = new Map();   // username_lower → true (nick/guest) | false | null (unknown)
     const profileBgCache    = new Map();   // username_lower → bg image URL string | null
     const profileJoinTsCache = new Map(); // username_lower → join timestamp ms | null
+    const profileTrophiesCache = new Map(); // username_lower → [{src,alt}] | null
+    const profileBioCache   = new Map();   // username_lower → string | null
     let _gifDataCache = null;              // shared with tab-complete: { gifs: [{code,src,full}] }
     function _profileCacheSet(key, value) {
         if (profileImageCache.size >= 200) {
@@ -172,6 +174,10 @@
     const _BG_LS          = 'ichc_bg1_';        // profile background image localStorage key prefix
     const _BG_TTL         = 7 * 24 * 3600e3;    // 7 days
     const _JT_LS          = 'ichc_jt1_';        // join timestamp localStorage key prefix
+    const _TR_LS          = 'ichc_tr1_';        // trophies localStorage key prefix
+    const _TR_TTL         = 3 * 24 * 3600e3;    // 3 days
+    const _BI_LS          = 'ichc_bi1_';        // bio localStorage key prefix
+    const _BI_TTL         = 7 * 24 * 3600e3;    // 7 days
     const _JT_TTL         = 7 * 24 * 3600e3;    // 7 days
     let   _avActive       = 0;
     const _AV_MAX         = 1;
@@ -254,31 +260,38 @@
         const t = _yearToTier(year);
         if (t >= 0) { el.classList.add(`ichc-yt${t}`); }
     }
-    // Age multiplier: older accounts get full karma gradient vibrancy (1.0),
-    // newer accounts get a dimmed version (down to 0.18 for brand-new).
-    const _AGE_MULT_STOPS = [[0, 0.18], [1, 0.32], [3, 0.52], [6, 0.72], [10, 0.88], [14, 1.0]];
-    function _ageToMult(year) {
-        if (year == null || year < 0) { return null; }
-        const n = _AGE_MULT_STOPS.length - 1;
-        let loIdx = 0;
-        for (let i = 1; i < _AGE_MULT_STOPS.length; i++) {
-            if (year < _AGE_MULT_STOPS[i][0]) { break; }
-            loIdx = i;
-        }
-        const hiIdx = Math.min(loIdx + 1, n);
-        const [yLo, mLo] = _AGE_MULT_STOPS[loIdx];
-        const [yHi, mHi] = _AGE_MULT_STOPS[hiIdx];
-        let f = 0;
-        if (loIdx < hiIdx && yHi > yLo) { f = Math.min(1, (year - yLo) / (yHi - yLo)); }
-        return +(mLo + (mHi - mLo) * f).toFixed(3);
-    }
-    function _setAgeColor(el, year) {
+    // 2-D visual weight: karma × age interaction.
+    // Old + low karma  → lurker  (faded, grey, background barely shows)
+    // New + high karma → active  (vivid, full colour)
+    // Old + high karma → veteran (slightly dimmer than active, still vivid)
+    function _setUserViz(el, karma, year) {
         if (!el) { return; }
-        const mult = _ageToMult(year);
-        if (mult !== null) {
-            el.style.setProperty('--ichc-age-mult', String(mult));
+        const k  = Math.max(0, karma || 0);
+        const yr = Math.max(0, year  ?? 0);
+
+        // Karma score 0→1 on log scale, saturates at 50k
+        const kScore  = k <= 0 ? 0 : Math.min(1, Math.log10(1 + k) / Math.log10(50001));
+        // Age 0→1 over 0–12 years
+        const ageNorm = Math.min(1, yr / 12);
+
+        // Lurk factor: how much age erodes vibrancy for low-karma accounts
+        const lurkFactor = 0.9 * Math.pow(Math.max(0, 1 - kScore), 0.85);
+
+        // ageMult: karma drives the base (0.28→1.0), age×lurk erodes it,
+        // mild age cap so veterans sit slightly below active newcomers at equal karma
+        const base    = 0.28 + 0.72 * kScore;
+        const ageMult = Math.max(0.08,
+            base * (1 - ageNorm * lurkFactor) * (1 - ageNorm * 0.10));
+
+        el.style.setProperty('--ichc-age-mult', ageMult.toFixed(3));
+
+        // CSS lurker score → drives grayscale + opacity in the stylesheet
+        const lurkerViz = Math.max(0,
+            ageNorm * Math.pow(Math.max(0, 1 - kScore * 1.1), 0.9) - 0.12);
+        if (lurkerViz > 0.01) {
+            el.style.setProperty('--ichc-lurker', lurkerViz.toFixed(3));
         } else {
-            el.style.removeProperty('--ichc-age-mult');
+            el.style.removeProperty('--ichc-lurker');
         }
     }
 
@@ -2174,6 +2187,24 @@
                 }
             } catch (_) {}
         }
+        if (!profileTrophiesCache.has(key)) {
+            try {
+                const ts_str = localStorage.getItem(_TR_LS + key);
+                if (ts_str) {
+                    const { trophies, ts } = JSON.parse(ts_str);
+                    if ((Date.now() - ts) < _TR_TTL) { profileTrophiesCache.set(key, trophies ?? null); }
+                }
+            } catch (_) {}
+        }
+        if (!profileBioCache.has(key)) {
+            try {
+                const bs = localStorage.getItem(_BI_LS + key);
+                if (bs) {
+                    const { bio, ts } = JSON.parse(bs);
+                    if ((Date.now() - ts) < _BI_TTL) { profileBioCache.set(key, bio ?? null); }
+                }
+            } catch (_) {}
+        }
 
         const pending = _scheduleAvatarFetch(() => _doFetchProfileImage(key))
             .finally(() => profileImagePending.delete(key));
@@ -2394,6 +2425,71 @@
         return /using a nick|finger command|active chatter.*nick|using a nick\. You can use/i.test(t);
     }
 
+    function _extractTrophiesFromDoc(doc) {
+        const seen = new Set();
+        const out  = [];
+        const _add = (el) => {
+            const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+            if (!src || seen.has(src)) { return; }
+            seen.add(src);
+            // Only include images that look like trophies/awards, exclude avatars/smicons/sprites
+            if (!/trophy|award|badge|medal|ribbon|supporter|hearted|contrib|patron|rank/i.test(src)) { return; }
+            if (/smicon|sprite|control_|favicon|loading\.|default_avatar|placeholder/i.test(src)) { return; }
+            const abs = /^https?:/.test(src) ? src
+                      : src.startsWith('//') ? 'https:' + src
+                      : 'https://www.icanhazchat.com' + (src.startsWith('/') ? '' : '/') + src;
+            out.push({ src: abs, alt: (el.getAttribute('alt') || el.getAttribute('title') || '').trim() });
+        };
+        // Try dedicated trophy containers first
+        for (const sel of ['.trophy_case img', '#trophies img', '.trophies img', '.awards img', '#awards img', 'td.trophy_case img']) {
+            doc.querySelectorAll(sel).forEach(_add);
+        }
+        // Fallback: any img whose src contains trophy-like keywords
+        if (!out.length) {
+            doc.querySelectorAll('img').forEach(img => {
+                const s = img.getAttribute('src') || '';
+                if (/trophy|award|medal|ribbon/i.test(s)) { _add(img); }
+            });
+        }
+        return out.length ? out : null;
+    }
+
+    function _extractBioFromDoc(doc) {
+        // ICHC profile pages display user attributes joined by ♦ diamonds, e.g.:
+        // "sardistic is a site supporter ♦ is a male living in the United States ♦ ..."
+        // This ♦ pattern is the most reliable fingerprint.
+
+        // Helper: is this element purely a text container (no interactive children)?
+        const _isTextEl = el => el.querySelectorAll('a,button,input,select,textarea,nav,header,footer').length === 0;
+
+        // Walk all block-level elements and find the ♦-bearing text closest to the profile content
+        for (const el of doc.querySelectorAll('p,div,td,span,li,section')) {
+            // Only look at leaf-ish nodes (few children) to avoid catching containers
+            if (el.children.length > 6) { continue; }
+            const t = (el.textContent || '').trim();
+            if (t.includes('♦') && t.length >= 8 && t.length <= 800 && _isTextEl(el)) {
+                return t.slice(0, 500);
+            }
+        }
+
+        // Fallback: scan the whole body text for a ♦-joined line
+        const bodyText = (doc.body?.textContent || '');
+        const diaMatch = bodyText.match(/[^\n\r]{8,500}♦[^\n\r]{2,500}/);
+        if (diaMatch) { return diaMatch[0].trim().slice(0, 500); }
+
+        // Last resort: try known ICHC ASP.NET control IDs
+        for (const id of ['ctl00_ContentPlaceHolder1_lblAbout', 'ctl00_ContentPlaceHolder1_lblBio',
+                          'ctl00_ContentPlaceHolder1_txtBio', 'ctl00_ContentPlaceHolder1_Bio',
+                          'ctl00_ContentPlaceHolder1_Description', 'bio', 'lblBio', 'txtBio']) {
+            const el = doc.getElementById(id);
+            if (!el) { continue; }
+            const t = (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') ? el.value : el.textContent;
+            const trimmed = (t || '').trim();
+            if (trimmed.length > 2) { return trimmed.slice(0, 500); }
+        }
+        return null;
+    }
+
     // Fetches the profile page, extracts avatar URL and karma, caches both.
     async function _doFetchProfileImage(key) {
         const pageUrl = `https://www.icanhazchat.com/user/${encodeURIComponent(key)}`;
@@ -2428,6 +2524,16 @@
                 profileJoinTsCache.set(key, joinTs);
                 _trimMap(profileJoinTsCache, 300);
                 try { localStorage.setItem(_JT_LS + key, JSON.stringify({ joinTs, ts: Date.now() })); } catch (_) {}
+
+                const trophies = _extractTrophiesFromDoc(doc);
+                profileTrophiesCache.set(key, trophies);
+                _trimMap(profileTrophiesCache, 300);
+                try { localStorage.setItem(_TR_LS + key, JSON.stringify({ trophies, ts: Date.now() })); } catch (_) {}
+
+                const bio = _extractBioFromDoc(doc);
+                profileBioCache.set(key, bio);
+                _trimMap(profileBioCache, 300);
+                try { localStorage.setItem(_BI_LS + key, JSON.stringify({ bio, ts: Date.now() })); } catch (_) {}
 
                 const url = _extractAvatarFromDoc(doc, pageUrl);
                 if (url) {
@@ -4769,17 +4875,68 @@
         closeUserDropdown();
 
         const key       = u.name.toLowerCase();
-        const avatarUrl = profileImageCache.get(key) || avatarImgCache.get(key)?.src || null;
+        // Only use profileImageCache (original CDN URL) — avatarImgCache holds a
+        // blob: URL that gets revoked after load and cannot be reused.
+        const avatarUrl = profileImageCache.get(key) || null;
         const karma     = profileKarmaCache.get(key);
         const year      = profileYearCache.get(key);
+        const bgUrl     = profileBgCache.get(key);
+        const trophies  = profileTrophiesCache.get(key);
+        const bio       = profileBioCache.get(key);
 
         const dd = document.createElement('div');
         dd.id = 'ichc-user-dropdown';
         dd.className = 'ichc-user-dropdown';
 
-        // ── Header: avatar + name + badges ──
+        // ── Drag grab bar ──
+        const grabBar = document.createElement('div');
+        grabBar.className = 'ichc-ud-grab';
+        grabBar.innerHTML = '<span class="ichc-ud-grab-pip"></span>';
+        dd.appendChild(grabBar);
+
+        // Close button is a sibling of the grab bar, absolutely positioned to top-right of the dropdown
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'ichc-ud-close';
+        closeBtn.setAttribute('aria-label', 'Close');
+        closeBtn.innerHTML = ICONS.xmark;
+        closeBtn.addEventListener('click', e => { e.stopPropagation(); closeUserDropdown(); });
+        dd.appendChild(closeBtn);
+
+        grabBar.addEventListener('pointerdown', e => {
+            if (e.button !== 0) { return; }
+            if (e.target.closest('.ichc-ud-close')) { return; }
+            e.preventDefault();
+            const startX  = e.clientX;
+            const startY  = e.clientY;
+            const startL  = parseFloat(dd.style.left) || 0;
+            const startT  = parseFloat(dd.style.top)  || 0;
+            grabBar.setPointerCapture(e.pointerId);
+            grabBar.classList.add('ichc-ud-grab-active');
+            const onMove = ev => {
+                dd.style.left = Math.max(0, startL + ev.clientX - startX) + 'px';
+                dd.style.top  = Math.max(0, startT + ev.clientY - startY) + 'px';
+            };
+            const onUp = () => {
+                grabBar.classList.remove('ichc-ud-grab-active');
+                grabBar.removeEventListener('pointermove', onMove);
+                grabBar.removeEventListener('pointerup',   onUp);
+            };
+            grabBar.addEventListener('pointermove', onMove);
+            grabBar.addEventListener('pointerup',   onUp);
+        });
+
+        // ── Header: profile bg + avatar + name + badges ──
         const hdr = document.createElement('div');
         hdr.className = 'ichc-ud-header';
+
+        const _applyBg = url => {
+            if (!url || !dd.isConnected) { return; }
+            hdr.style.setProperty('--ichc-ud-bg', `url("${url.replace(/"/g, '%22')}")`);
+            hdr.classList.add('ichc-ud-has-bg');
+        };
+        if (bgUrl) { _applyBg(bgUrl); }
+        // Missing bg also handled by the unified async fetch block below
 
         const avWrap = document.createElement('div');
         avWrap.className = 'ichc-ud-avatar';
@@ -4788,10 +4945,10 @@
         const _setAvImg = url => {
             if (!url || !dd.isConnected) { return; }
             avWrap.innerHTML = '';
-            const img = new Image();
+            const img = document.createElement('img');
             img.className = 'ichc-ud-avatar-img';
             img.alt = '';
-            img.src = url;
+            _loadAvatarSrc(img, url, key);
             avWrap.appendChild(img);
         };
 
@@ -4802,7 +4959,7 @@
             letter.className = 'ichc-ud-avatar-letter';
             letter.textContent = (u.name[0] || '?').toUpperCase();
             avWrap.appendChild(letter);
-            fetchProfileImage(key).then(url => { if (url) { _setAvImg(url); } });
+            // Avatar will be populated by the async fetch block below
         }
         hdr.appendChild(avWrap);
 
@@ -4838,6 +4995,56 @@
         hdr.appendChild(nameCol);
         dd.appendChild(hdr);
 
+        // ── Bio strip ──
+        const bioEl = document.createElement('div');
+        bioEl.className = 'ichc-ud-bio';
+        const _setBio = (text) => {
+            if (!text || !dd.isConnected) { return; }
+            bioEl.textContent = text;
+            bioEl.hidden = false;
+        };
+        bioEl.hidden = true;
+        if (bio) { _setBio(bio); }
+        dd.appendChild(bioEl);
+
+        // ── Trophies strip ──
+        const trophyRow = document.createElement('div');
+        trophyRow.className = 'ichc-ud-trophies';
+        const _setTrophies = (list) => {
+            if (!list?.length || !dd.isConnected) { return; }
+            trophyRow.innerHTML = '';
+            list.forEach(({ src, alt }) => {
+                const img = new Image();
+                img.className = 'ichc-ud-trophy-img';
+                img.src = src;
+                img.alt = alt;
+                img.title = alt;
+                trophyRow.appendChild(img);
+            });
+            trophyRow.hidden = false;
+        };
+        trophyRow.hidden = true;
+        if (trophies) { _setTrophies(trophies); }
+        dd.appendChild(trophyRow);
+
+        // Async populate: avatar (if missing), bio, trophies, bg.
+        // - If trophies/bio are uncached, call _doFetchProfileImage directly (fetchProfileImage
+        //   bails early when avatar URL is already in profileImageCache, skipping new fields).
+        // - If only the avatar is missing, use the throttled fetchProfileImage path.
+        const _needsFullFetch = !profileTrophiesCache.has(key) || !profileBioCache.has(key);
+        if (_needsFullFetch || !avatarUrl) {
+            const _p = _needsFullFetch ? _doFetchProfileImage(key) : fetchProfileImage(key);
+            _p.then(url => {
+                if (!avatarUrl) {
+                    const freshUrl = url || profileImageCache.get(key);
+                    if (freshUrl) { _setAvImg(freshUrl); }
+                }
+                _setBio(profileBioCache.get(key) || '');
+                _setTrophies(profileTrophiesCache.get(key) || null);
+                _applyBg(profileBgCache.get(key) || '');
+            });
+        }
+
         const hr = document.createElement('div');
         hr.className = 'ichc-ud-divider';
         dd.appendChild(hr);
@@ -4856,9 +5063,68 @@
             dd.appendChild(btn);
         };
 
-        _btn('Send PM', ICONS.chat, '', () => {
+        const _divider = () => {
+            const d = document.createElement('div');
+            d.className = 'ichc-ud-divider';
+            dd.appendChild(d);
+        };
+
+        // Fill txtMsg and focus
+        const _fillChat = text => {
+            const inp = document.getElementById('txtMsg');
+            if (!inp) { return; }
+            inp.value = text;
+            inp.focus();
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            inp.setSelectionRange(inp.value.length, inp.value.length);
+        };
+
+        // Silently trigger a native profile dialog action by button text pattern
+        const _nativeAction = (pattern) => {
+            const nick = JSON.stringify(u.name);
+            const re   = JSON.stringify(pattern);
+            runInPageContext(`(function() {
+                var nick = ${nick};
+                var patt = new RegExp(${re}, 'i');
+                var link = Array.from(document.querySelectorAll('#activeUserList a.userlink'))
+                    .find(function(a) { return (a.textContent || '').trim().toLowerCase() === nick.toLowerCase(); });
+                if (!link) { return; }
+                var tmp = document.createElement('style');
+                tmp.id = 'ichc-hd-tmp';
+                tmp.textContent = '.ui-dialog { opacity:0 !important; pointer-events:none !important; }';
+                document.head.appendChild(tmp);
+                link.click();
+                setTimeout(function() {
+                    var found = false;
+                    document.querySelectorAll('.ui-dialog').forEach(function(d) {
+                        if (found) { return; }
+                        var btn = Array.from(d.querySelectorAll('a,button,input[type=submit],input[type=button]'))
+                            .find(function(el) { return patt.test(el.textContent || el.value || ''); });
+                        if (btn) { found = true; btn.click(); }
+                    });
+                    var s = document.getElementById('ichc-hd-tmp');
+                    if (s) { s.remove(); }
+                    setTimeout(function() {
+                        try {
+                            if (typeof $ !== 'undefined') {
+                                $('.ui-dialog').each(function() { try { $(this).dialog('close'); } catch(_) {} });
+                            }
+                        } catch(_) {}
+                    }, 80);
+                }, 400);
+            })();`);
+        };
+
+        // Chat actions
+        _btn('@mention', ICONS.chat, '', () => { _fillChat('@' + u.name + ' '); });
+        _btn('Whisper', ICONS.popOut, '', () => { _fillChat('/w ' + u.name + ' '); });
+        _btn('Send PM', ICONS.phone, '', () => {
             window.dispatchEvent(new CustomEvent('ichc-pm-open', { detail: { nick: u.name, forceShow: true } }));
         });
+
+        _divider();
+
+        // Cam / social actions
         if (u.cammed) {
             _btn('Hide cam', ICONS.eyeSlash, 'ichc-ud-btn-warn', () => {
                 const bl = loadBlockedUsers();
@@ -4868,8 +5134,15 @@
                 buildUserList();
             });
         }
-        _btn('View profile', ICONS.popOut, '', () => {
-            triggerUserModal(u.trigger, u.name);
+        _btn('Follow', '♥', 'ichc-ud-btn-follow', () => { _nativeAction('follow'); });
+        _btn('Ignore', ICONS.eyeSlash, 'ichc-ud-btn-warn', () => { _nativeAction('ignore'); });
+
+        _divider();
+
+        // Profile / external
+        _btn('Gift trophy', '🎁', 'ichc-ud-btn-gift', () => { _nativeAction('gift'); });
+        _btn('View profile page', ICONS.popOut, '', () => {
+            window.open('https://www.icanhazchat.com/user/' + encodeURIComponent(u.name), '_blank');
         });
 
         // ── Position: prefer left of row, fall back to right ──
@@ -4878,7 +5151,7 @@
 
         const rr  = rowEl.getBoundingClientRect();
         const ddW = dd.offsetWidth  || 210;
-        const ddH = dd.offsetHeight || 220;
+        const ddH = dd.offsetHeight || 260;
         const vw  = window.innerWidth;
         const vh  = window.innerHeight;
 
@@ -5375,7 +5648,7 @@
         const _fh = (n, o) => `<span class="ichc-fh"><span>${n}</span><span>${n}</span><span>${o}</span><span>${o}</span></span>`;
         const metricsRow = document.createElement('div');
         metricsRow.className = 'ichc-ul-metrics-row';
-        metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams" data-val="${cammedCount}">${_fh(cammedCount, _camOld)}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users" data-val="${_totalUsers}">${_fh(_totalUsers, _userOld)}</span>${userMeta}</span>`;
+        metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-count-cams" data-val="${cammedCount}">${_fh(cammedCount, _camOld)}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-count-users" data-val="${_totalUsers}">${_fh(_totalUsers, _userOld)}</span>${userMeta}</span>`;
         const _snapCam  = _prevCammed;
         const _snapUsr  = _prevUsers;
         userListState.prevCammedCount = cammedCount;
@@ -5489,6 +5762,7 @@
             if (u.trigger) {
                 [...u.trigger.getAttributeNames()].forEach(attr => {
                     if (attr === 'class' || attr === 'style' || attr === 'id' || attr === 'href') { return; }
+                    if (/^on/i.test(attr)) { return; }
                     span.setAttribute(attr, u.trigger.getAttribute(attr) || '');
                 });
             }
@@ -5507,7 +5781,7 @@
             const initKarma = profileKarmaCache.get(imgKey) ?? u.karma;
             if (initKarma != null) { karmaEl.textContent = initKarma.toLocaleString(); }
             _setKarmaTierClass(span, initKarma ?? null);
-            _setAgeColor(span, initYear ?? null);
+            _setUserViz(span, initKarma ?? null, initYear ?? null);
 
             // Profile avatar — reuse <img> element across rebuilds; src is only set
             // after the row enters the viewport (IntersectionObserver below) to avoid
@@ -5647,7 +5921,7 @@
                         const initYear = profileYearCache.get(imgKey);
                         _setBadgeYear(yearEl, initYear ?? null);
                         _setYearTierClass(yearEl, initYear ?? null);
-                        _setAgeColor(span, initYear ?? null);
+                        _setUserViz(span, initKarma ?? null, initYear ?? null);
                     }
                     const avatarWrap = span.querySelector('.ichc-ul-avatar-wrap');
                     if (avatarWrap) {
@@ -5702,7 +5976,7 @@
             if (row) {
                 if (isGuest != null) { row.classList.toggle('ichc-ul-guest', isGuest); }
                 _setKarmaTierClass(row, k ?? null);
-                _setAgeColor(row, yr ?? null);
+                _setUserViz(row, k ?? null, yr ?? null);
                 const bg = profileBgCache.get(key);
                 if (bg) { row.style.setProperty('--ichc-bg-img', `url("${bg}")`); }
             }
