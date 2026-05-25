@@ -4931,7 +4931,7 @@
         hdr.className = 'ichc-ud-header';
 
         const _applyBg = url => {
-            if (!url || !dd.isConnected) { return; }
+            if (!url) { return; }
             hdr.style.setProperty('--ichc-ud-bg', `url("${url.replace(/"/g, '%22')}")`);
             hdr.classList.add('ichc-ud-has-bg');
         };
@@ -4943,7 +4943,7 @@
         avWrap.style.setProperty('--av-bg', userAvatarColor(u.name));
 
         const _setAvImg = url => {
-            if (!url || !dd.isConnected) { return; }
+            if (!url) { return; }
             avWrap.innerHTML = '';
             const img = document.createElement('img');
             img.className = 'ichc-ud-avatar-img';
@@ -4999,7 +4999,7 @@
         const bioEl = document.createElement('div');
         bioEl.className = 'ichc-ud-bio';
         const _setBio = (text) => {
-            if (!text || !dd.isConnected) { return; }
+            if (!text) { return; }
             bioEl.textContent = text;
             bioEl.hidden = false;
         };
@@ -5011,7 +5011,7 @@
         const trophyRow = document.createElement('div');
         trophyRow.className = 'ichc-ud-trophies';
         const _setTrophies = (list) => {
-            if (!list?.length || !dd.isConnected) { return; }
+            if (!list?.length) { return; }
             trophyRow.innerHTML = '';
             list.forEach(({ src, alt }) => {
                 const img = new Image();
