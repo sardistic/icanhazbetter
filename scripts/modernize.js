@@ -254,6 +254,59 @@
         const t = _yearToTier(year);
         if (t >= 0) { el.classList.add(`ichc-yt${t}`); }
     }
+    // Age multiplier: older accounts get full karma gradient vibrancy (1.0),
+    // newer accounts get a dimmed version (down to 0.18 for brand-new).
+    const _AGE_MULT_STOPS = [[0, 0.18], [1, 0.32], [3, 0.52], [6, 0.72], [10, 0.88], [14, 1.0]];
+    function _ageToMult(year) {
+        if (year == null || year < 0) { return null; }
+        const n = _AGE_MULT_STOPS.length - 1;
+        let loIdx = 0;
+        for (let i = 1; i < _AGE_MULT_STOPS.length; i++) {
+            if (year < _AGE_MULT_STOPS[i][0]) { break; }
+            loIdx = i;
+        }
+        const hiIdx = Math.min(loIdx + 1, n);
+        const [yLo, mLo] = _AGE_MULT_STOPS[loIdx];
+        const [yHi, mHi] = _AGE_MULT_STOPS[hiIdx];
+        let f = 0;
+        if (loIdx < hiIdx && yHi > yLo) { f = Math.min(1, (year - yLo) / (yHi - yLo)); }
+        return +(mLo + (mHi - mLo) * f).toFixed(3);
+    }
+    function _setAgeColor(el, year) {
+        if (!el) { return; }
+        const mult = _ageToMult(year);
+        if (mult !== null) {
+            el.style.setProperty('--ichc-age-mult', String(mult));
+        } else {
+            el.style.removeProperty('--ichc-age-mult');
+        }
+    }
+
+    function _flipCountWAAPI(el, oldVal, newVal) {
+        if (!el) { return; }
+        const spans = el.querySelectorAll('.ichc-fh > span');
+        if (spans.length < 4) { return; }
+        const [newTop, newBot, oldTop, oldBot] = spans;
+        const FOLD = 200;
+        // Phase 1: both old halves fold away simultaneously (unzip from centre)
+        oldTop.animate(
+            [{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(-90deg)' }],
+            { duration: FOLD, easing: 'ease-in', fill: 'both' }
+        );
+        oldBot.animate(
+            [{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(90deg)' }],
+            { duration: FOLD, easing: 'ease-in', fill: 'both' }
+        );
+        // Phase 2: both new halves fold in simultaneously
+        newTop.animate(
+            [{ transform: 'rotateX(90deg)' }, { transform: 'rotateX(0deg)' }],
+            { delay: FOLD, duration: FOLD, easing: 'ease-out', fill: 'both' }
+        );
+        newBot.animate(
+            [{ transform: 'rotateX(-90deg)' }, { transform: 'rotateX(0deg)' }],
+            { delay: FOLD, duration: FOLD, easing: 'ease-out', fill: 'both' }
+        );
+    }
 
     // ── Input typing gradient (spectral palette, same stops as karma tiers) ──────
     const _INPUT_SPECTRAL = [
@@ -5291,6 +5344,9 @@
         const idleCount      = users.filter(u => u.idle).length;
         const cammedCount    = users.filter(u => u.cammed).length;
         const hiddenCamCount = users.filter(u => u.hidden && u.cammed).length;
+        const _prevCammed = userListState.prevCammedCount ?? null;
+        const _prevUsers  = userListState.prevUserCount  ?? null;
+        const _totalUsers = activeCount + idleCount;
 
         const chatShell = document.getElementById('ichc-chat-shell');
 
@@ -5311,9 +5367,25 @@
         titleRow.className = 'ichc-ul-title-row';
 
         // Metrics — fills left space
+        const _camChanged   = _prevCammed !== null && cammedCount !== _prevCammed;
+        const _usersChanged = _prevUsers  !== null && _totalUsers !== _prevUsers;
+        const _camOld  = _camChanged   ? _prevCammed : cammedCount;
+        const _userOld = _usersChanged ? _prevUsers  : _totalUsers;
+        // 4 spans: [new-top, new-bottom, old-top, old-bottom]
+        const _fh = (n, o) => `<span class="ichc-fh"><span>${n}</span><span>${n}</span><span>${o}</span><span>${o}</span></span>`;
         const metricsRow = document.createElement('div');
         metricsRow.className = 'ichc-ul-metrics-row';
-        metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams">${cammedCount}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users">${activeCount + idleCount}</span>${userMeta}</span>`;
+        metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-metric-icon">${ICONS.broadcast}</span><span class="ichc-ul-count-cams" data-val="${cammedCount}">${_fh(cammedCount, _camOld)}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-metric-icon">${ICONS.eye}</span><span class="ichc-ul-count-users" data-val="${_totalUsers}">${_fh(_totalUsers, _userOld)}</span>${userMeta}</span>`;
+        const _snapCam  = _prevCammed;
+        const _snapUsr  = _prevUsers;
+        userListState.prevCammedCount = cammedCount;
+        userListState.prevUserCount   = _totalUsers;
+        if (_camChanged || _usersChanged) {
+            requestAnimationFrame(() => {
+                if (_camChanged)   { _flipCountWAAPI(panel.querySelector('.ichc-ul-count-cams'),  _snapCam, cammedCount); }
+                if (_usersChanged) { _flipCountWAAPI(panel.querySelector('.ichc-ul-count-users'), _snapUsr, _totalUsers); }
+            });
+        }
 
         // Controls: [search] — collapse tab is absolute on the header right edge
         const controlsRow = document.createElement('div');
@@ -5435,6 +5507,7 @@
             const initKarma = profileKarmaCache.get(imgKey) ?? u.karma;
             if (initKarma != null) { karmaEl.textContent = initKarma.toLocaleString(); }
             _setKarmaTierClass(span, initKarma ?? null);
+            _setAgeColor(span, initYear ?? null);
 
             // Profile avatar — reuse <img> element across rebuilds; src is only set
             // after the row enters the viewport (IntersectionObserver below) to avoid
@@ -5574,6 +5647,7 @@
                         const initYear = profileYearCache.get(imgKey);
                         _setBadgeYear(yearEl, initYear ?? null);
                         _setYearTierClass(yearEl, initYear ?? null);
+                        _setAgeColor(span, initYear ?? null);
                     }
                     const avatarWrap = span.querySelector('.ichc-ul-avatar-wrap');
                     if (avatarWrap) {
@@ -5628,6 +5702,7 @@
             if (row) {
                 if (isGuest != null) { row.classList.toggle('ichc-ul-guest', isGuest); }
                 _setKarmaTierClass(row, k ?? null);
+                _setAgeColor(row, yr ?? null);
                 const bg = profileBgCache.get(key);
                 if (bg) { row.style.setProperty('--ichc-bg-img', `url("${bg}")`); }
             }
@@ -6633,6 +6708,18 @@
         card.classList.toggle('ichc-persist-hidden-slot', persistHidden);
         card.classList.toggle('ichc-ghost-slot', ghost);
         card.classList.toggle('ichc-placeholder-slot', placeholder);
+        const isLoading = (hasRealName || !!camId) && !mediaReady && !hidden && !ghost && !disabled && !placeholder;
+        card.classList.toggle('ichc-cam-loading', isLoading);
+        let scanLine = card.querySelector('.ichc-scan-line');
+        if (isLoading) {
+            if (!scanLine) {
+                scanLine = document.createElement('div');
+                scanLine.className = 'ichc-scan-line';
+                card.appendChild(scanLine);
+            }
+        } else {
+            scanLine?.remove();
+        }
 
         // Disabled-state overlay — shows immediately so there's no blank gap
         let disabledOverlay = card.querySelector('.ichc-disabled-overlay');
