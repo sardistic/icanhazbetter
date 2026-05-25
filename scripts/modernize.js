@@ -5135,12 +5135,14 @@
         // Cam / social actions
         if (u.cammed) {
             _btn('Hide cam', ICONS.eyeSlash, 'ichc-ud-btn-warn', () => {
+                closeUserDropdown();
                 const bl = loadBlockedUsers();
                 bl.add(key);
                 saveBlockedUsers(bl);
                 syncCamCards();
                 buildUserList();
             });
+            _btn('Cam down', ICONS.xmark, 'ichc-ud-btn-warn', () => { _nativeAction('cam.?down|disable.?cam|cam.?off'); });
         }
         _btn('Follow', '♥', 'ichc-ud-btn-follow', () => { _nativeAction('follow'); });
         _btn('Ignore', ICONS.eyeSlash, 'ichc-ud-btn-warn', () => { _nativeAction('ignore'); });
