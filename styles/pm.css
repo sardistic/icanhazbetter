@@ -183,7 +183,6 @@
     #tabs .pm_convo {
         flex: 1 1 auto !important;
         min-height: 0 !important;
-        max-height: calc(100% - 36px) !important;
         overflow-y: auto !important;
         padding: 6px 8px !important;
         background: #18191c !important;

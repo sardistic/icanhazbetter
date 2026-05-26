@@ -195,7 +195,7 @@
             conversations,
         });
         if (localStorage.getItem(PM_STATE_KEY) === payload) { return; }
-        localStorage.setItem(PM_STATE_KEY, payload);
+        try { localStorage.setItem(PM_STATE_KEY, payload); } catch (_) {}
     }
 
     // ─── DOM helpers ─────────────────────────────────────────────────────────────
@@ -665,6 +665,7 @@
     function stampPmRow(row) {
         if (!(row instanceof HTMLElement)) { return; }
         if (row.classList.contains('ichc-pm-date-sep')) { return; }
+        if (!row.dataset.ichcPmIncoming) { return; }
         if (!row.dataset.ichcDate) { row.dataset.ichcDate = _todayDateStr(); }
         if (row.querySelector('.ichc-pm-ts')) { return; }
         const ts = document.createElement('span');
@@ -1436,6 +1437,7 @@
 
         const line = document.createElement('div');
         line.className = 'line';
+        line.dataset.ichcPmIncoming = '1';
 
         const nickColor = makeReadableChatColor(
             /^[0-9a-f]{6}$/i.test(color || '') ? `#${color}` : (color || '#dbeafe'),

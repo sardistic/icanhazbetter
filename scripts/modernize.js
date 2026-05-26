@@ -2555,27 +2555,13 @@
         return null;
     }
 
-    // Load an avatar image, using fetch+blob for CDN /users/ paths to include
-    // session cookies and bypass Firefox OpaqueResponseBlocking.
-    function _loadAvatarSrc(img, url, key) {
+    // Load an avatar image by setting img.src directly.
+    // <img> elements bypass Firefox OpaqueResponseBlocking and don't require CORS headers,
+    // unlike fetch(). Never use fetch+blob here — that path was blocking with ORB errors
+    // and then poisoning the cache with null on failure.
+    function _loadAvatarSrc(img, url) {
         if (!img || !url) { return; }
-        if (/\/users\//i.test(url) && url.includes('images.icanhazchat.com')) {
-            fetch(url, { credentials: 'include', cache: 'default' })
-                .then(r => {
-                    if (!r.ok || !(r.headers.get('content-type') || '').startsWith('image/')) { throw new Error('bad'); }
-                    return r.blob();
-                })
-                .then(blob => {
-                    const blobUrl = URL.createObjectURL(blob);
-                    img.addEventListener('load',  () => { URL.revokeObjectURL(blobUrl); img.classList.add('ichc-ul-avatar-loaded'); }, { once: true });
-                    img.addEventListener('error', () => { URL.revokeObjectURL(blobUrl); }, { once: true });
-                    img.src = blobUrl;
-                })
-                .catch(() => {
-                    if (key) { _profileCacheSet(key, null); _lsAvSave(key, null); }
-                });
-            return;
-        }
+        img.addEventListener('load',  () => { img.classList.add('ichc-ul-avatar-loaded'); }, { once: true });
         img.src = url;
         img.classList.add('ichc-ul-avatar-loaded');
     }
@@ -3507,8 +3493,25 @@
         }
     }
 
+    function _evictOldProfileCache(maxKeys = 60) {
+        const prefixes = [_AV_LS, _BG_LS, _KM_LS, _YB_LS, _JT_LS, _TR_LS, _BI_LS, _GS_LS];
+        try {
+            const matching = Object.keys(localStorage)
+                .filter(k => prefixes.some(p => k.startsWith(p)));
+            matching.slice(0, maxKeys).forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+        } catch (_) {}
+    }
+
     function saveBlockedUsers(set) {
-        localStorage.setItem('ichc_blocked', JSON.stringify([...set]));
+        const data = JSON.stringify([...set]);
+        try {
+            localStorage.setItem('ichc_blocked', data);
+        } catch (e) {
+            if (e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014) {
+                _evictOldProfileCache(60);
+                try { localStorage.setItem('ichc_blocked', data); } catch (_) {}
+            }
+        }
     }
 
     function getLiveCamEntries() {
@@ -6664,7 +6667,15 @@
         try { return JSON.parse(localStorage.getItem(CAM_SPAN_KEY) || '{}') || {}; } catch (_) { return {}; }
     }
     function _saveCamSpans(spans) {
-        try { localStorage.setItem(CAM_SPAN_KEY, JSON.stringify(spans)); } catch (_) {}
+        const data = JSON.stringify(spans);
+        try {
+            localStorage.setItem(CAM_SPAN_KEY, data);
+        } catch (e) {
+            if (e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014) {
+                _evictOldProfileCache(60);
+                try { localStorage.setItem(CAM_SPAN_KEY, data); } catch (_) {}
+            }
+        }
     }
     function _getCamColumns() {
         return Math.max(1, Number.parseInt(
@@ -7064,11 +7075,19 @@
     }
 
     function saveCurrentOrder() {
-        localStorage.setItem(ORDER_KEY, JSON.stringify(
+        const data = JSON.stringify(
             getCamCards()
                 .filter(card => card.dataset.ichcCam)
                 .map(card => card.dataset.ichcCam),
-        ));
+        );
+        try {
+            localStorage.setItem(ORDER_KEY, data);
+        } catch (e) {
+            if (e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014) {
+                _evictOldProfileCache(60);
+                try { localStorage.setItem(ORDER_KEY, data); } catch (_) {}
+            }
+        }
     }
 
     function getVisibleCamCards() {
@@ -7335,7 +7354,14 @@
         if (current === key) {
             localStorage.removeItem(FEATURED_KEY);
         } else {
-            localStorage.setItem(FEATURED_KEY, key);
+            try {
+                localStorage.setItem(FEATURED_KEY, key);
+            } catch (e) {
+                if (e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014) {
+                    _evictOldProfileCache(60);
+                    try { localStorage.setItem(FEATURED_KEY, key); } catch (_) {}
+                }
+            }
             card.parentElement?.prepend(card);
             saveCurrentOrder();
         }
