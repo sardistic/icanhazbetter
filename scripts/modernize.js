@@ -92,6 +92,7 @@
         timer: null,
         resizeObserver: null,
         panelObserver: null,
+        syncObserver: null,
         sideWidthOverride: null,
         ulWidthOverride: null,
         suppressUntil: 0,
@@ -7428,13 +7429,15 @@
             }
             requestCamRelayout(70);
         }, 100);
-        new MutationObserver(() => {
+        camLayoutState.syncObserver?.disconnect();
+        camLayoutState.syncObserver = new MutationObserver(() => {
             // Always schedule syncSoon — never skip mutations outright.
             // Timer cleanup is handled by prepareCamCard (ghost detection) and
             // _reconcileBcastTimers (wholesale #cams replacement) — not here,
             // because refreshCams() transiently removes cards that are still live.
             syncSoon();
-        }).observe(cams, {
+        });
+        camLayoutState.syncObserver.observe(cams, {
             childList: true,
             subtree: true,
         });

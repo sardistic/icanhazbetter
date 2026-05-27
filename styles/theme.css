@@ -750,16 +750,16 @@
     /* ── Userlist karma gradient: fills more of the row, intensity = karma × age-viz ── */
     #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"] {
         background-image: linear-gradient(to left,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.80)) 0px,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.48)) 6px,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.22)) 28%,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.08)) 58%,
-            transparent 88%) !important;
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 1.10)) 0px,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.68)) 8px,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.34)) 38%,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.12)) 68%,
+            transparent 92%) !important;
     }
     /* Lurker de-visualisation: old accounts with low karma fade and desaturate */
     #ichc-userlist .ichc-ul-user[style*="--ichc-lurker"] {
-        filter: grayscale(calc(var(--ichc-lurker) * 0.62)) !important;
-        opacity: calc(1 - var(--ichc-lurker) * 0.38) !important;
+        filter: grayscale(calc(var(--ichc-lurker) * 0.85)) !important;
+        opacity: calc(1 - var(--ichc-lurker) * 0.50) !important;
     }
     /* kt7 (≥50k) — dusty rose shimmer */
     #ichc-userlist .ichc-ul-user.ichc-kt7 {
@@ -3640,7 +3640,7 @@
     }
     #ichc-userlist .ichc-ul-karma {
         font-size: 9px !important;
-        color: #6c7178 !important;
+        color: #8e949c !important;
         font-weight: 500 !important;
         white-space: nowrap !important;
         flex-shrink: 0 !important;
@@ -3650,7 +3650,7 @@
     #ichc-userlist .ichc-ul-karma:empty { display: none !important; }
     /* Karma number tinted — continuous via CSS custom properties, dimmed by age */
     #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"] .ichc-ul-karma {
-        color: rgba(var(--ichc-kt-color), calc((0.58 + 0.42 * var(--ichc-kt-i, 1)) * var(--ichc-age-mult, 1))) !important;
+        color: rgba(var(--ichc-kt-color), clamp(0.58, calc((0.58 + 0.42 * var(--ichc-kt-i, 1)) * var(--ichc-age-mult, 1)), 1)) !important;
         text-shadow: 0 0 5px rgba(var(--ichc-kt-color), calc(0.32 * var(--ichc-kt-i, 1) * var(--ichc-age-mult, 1))), 0 1px 3px rgba(0,0,0,0.9) !important;
     }
     /* kt7/kt8 override karma color with fixed values */
