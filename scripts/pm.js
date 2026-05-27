@@ -186,7 +186,14 @@
             : [];
         if (!conversations.length) {
             if (hasLivePmTabs()) { return; }
-            localStorage.removeItem(PM_STATE_KEY);
+            // Preserve geometry so the window reopens in the same position when
+            // a new PM arrives, even after all conversations are closed.
+            const geo = nextState?.geometry;
+            if (geo?.width > 0 && geo?.height > 0) {
+                try { localStorage.setItem(PM_STATE_KEY, JSON.stringify({ active: '', geometry: geo, conversations: [] })); } catch (_) {}
+            } else {
+                localStorage.removeItem(PM_STATE_KEY);
+            }
             return;
         }
         const payload = JSON.stringify({

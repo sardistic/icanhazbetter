@@ -6704,31 +6704,27 @@
                 card.style.setProperty('min-height', 'clamp(180px, 28vh, 380px)', 'important');
                 card.style.setProperty('max-height', 'clamp(180px, 46vh, 520px)', 'important');
             }
-        } else if (level === 3) {
-            // Triple-wide: 3 standard-slot widths, natural aspect ratio.
-            // span 6 in a 2N-track grid = 3/N of row; full row for N=3, 3/4 for N=4.
-            card.style.setProperty('grid-column', 'span 6', 'important');
-            card.style.removeProperty('aspect-ratio');
-            card.style.removeProperty('min-height');
-            card.style.removeProperty('max-height');
-        } else if (level === 2) {
-            // Double-wide: 2 standard-slot widths, natural aspect ratio.
-            // span 4 in a 2N-track grid = 2/N of row; caps to full row when N≤2.
-            card.style.setProperty('grid-column', 'span 4', 'important');
-            card.style.removeProperty('aspect-ratio');
-            card.style.removeProperty('min-height');
-            card.style.removeProperty('max-height');
-        } else if (level === 0) {
-            card.style.setProperty('grid-column', 'span 1', 'important');
-            card.style.removeProperty('aspect-ratio');
-            card.style.removeProperty('min-height');
-            card.style.removeProperty('max-height');
         } else {
-            // level 1 default: span 2 in the doubled grid = natural 1/N width
-            card.style.setProperty('grid-column', 'span 2', 'important');
-            card.style.removeProperty('aspect-ratio');
-            card.style.removeProperty('min-height');
-            card.style.removeProperty('max-height');
+            if (level === 3) {
+                // Triple-wide: 3 standard-slot widths, natural aspect ratio.
+                // span 6 in a 2N-track grid = 3/N of row; full row for N=3, 3/4 for N=4.
+                card.style.setProperty('grid-column', 'span 6', 'important');
+            } else if (level === 2) {
+                // Double-wide: 2 standard-slot widths, natural aspect ratio.
+                // span 4 in a 2N-track grid = 2/N of row; caps to full row when N≤2.
+                card.style.setProperty('grid-column', 'span 4', 'important');
+            } else if (level === 0) {
+                card.style.setProperty('grid-column', 'span 1', 'important');
+            } else {
+                // level 1 default: span 2 in the doubled grid = natural 1/N width
+                card.style.setProperty('grid-column', 'span 2', 'important');
+            }
+            // Featured mode owns aspect-ratio/height for thumbnail cards; don't clobber.
+            if (!hasFeatured) {
+                card.style.removeProperty('aspect-ratio');
+                card.style.removeProperty('min-height');
+                card.style.removeProperty('max-height');
+            }
         }
     }
     function _applyCardSpans() {
