@@ -102,7 +102,7 @@
                 const epoch = parseInt(el.dataset.ichcTsEpoch, 10);
                 if (!isNaN(epoch)) { el.textContent = _relativeTime(epoch); }
             });
-        }, 60000);
+        }, 5000);
     });
 
     // ── Chat ──────────────────────────────────────────────────────────────────────
@@ -1121,11 +1121,12 @@
         if (!m) { return null; }
         let h = parseInt(m[1], 10);
         const min = parseInt(m[2], 10);
+        const sec = parseInt(m[3] || '0', 10);
         const ampm = (m[4] || '').toLowerCase();
         if (ampm === 'pm' && h < 12) { h += 12; }
         if (ampm === 'am' && h === 12) { h = 0; }
         const now = new Date();
-        const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, min, 0, 0);
+        const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, min, sec, 0);
         if (ts.getTime() > now.getTime() + 60000) { ts.setDate(ts.getDate() - 1); }
         return ts.getTime();
     }
