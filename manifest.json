@@ -1,6 +1,12 @@
 {
   "manifest_version": 3,
   "name": "icanhazbetter",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "icanhazbetter@sardistic",
+      "strict_min_version": "109.0"
+    }
+  },
   "version": "3.13",
   "description": "Dark theme, flexible room layout, cam management, and chat improvements for icanhazchat.com",
   "permissions": ["scripting"],
