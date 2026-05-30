@@ -347,9 +347,13 @@
             };
         }).filter(item => item.key);
         const geo = getPmGeometry(root);
+        const measuredOk = geo.width > 0 && geo.height > 0;
+        const isHidden = root.style.getPropertyValue('display') === 'none';
         return {
             active,
-            geometry: (geo.width > 0 && geo.height > 0) ? geo : null,
+            // If the window is hidden (display:none) getBoundingClientRect returns zeros.
+            // Preserve the last saved geometry rather than overwriting it with nulls.
+            geometry: measuredOk ? geo : (isHidden ? (loadPmState().geometry ?? _loadVisState().geo) : null),
             conversations,
         };
     }
@@ -1391,7 +1395,7 @@
         // Show the window unless the user has manually hidden PMs via the toggle button.
         if (!_userHiddenPm) {
             if (root.dataset.ichcPmGeometryApplied !== '1') {
-                applyPmGeometry(root, loadPmState().geometry);
+                applyPmGeometry(root, loadPmState().geometry ?? _loadVisState().geo);
             } else {
                 showPmRoot(root);
             }

@@ -172,10 +172,10 @@
         box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
     }
     .videocontainer { background: #111214 !important; }
-    /* Name label and cam controls must stay above the ::before profile-bg overlay */
+    /* Name label and cam controls stay above both the profile-bg (z:1) and videocontainer (z:2) */
     .name-on-cam {
         position: relative !important;
-        z-index: 2 !important;
+        z-index: 3 !important;
         background: rgba(0,0,0,0.7) !important;
         color: #dbdee1 !important;
         padding: 2px 5px !important;
@@ -184,7 +184,7 @@
     }
     .cam-button {
         position: relative !important;
-        z-index: 2 !important;
+        z-index: 3 !important;
         background: rgba(17,18,20,0.9) !important;
         color: #dbdee1 !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
@@ -283,13 +283,8 @@
         padding: 3px 2px 3px 4px !important;
         border-radius: 4px !important;
         border: 1px solid rgba(255,255,255,0.04) !important;
-        /* Single left-edge fade: one smooth transition instead of the original
-           3-peak shimmer. Multiple transparent→color→transparent stops created
-           6 discrete edges that banded on 8-bit panels; a single directional
-           fade produces at most one soft gradient with no repeating stripes. */
-        background:
-            linear-gradient(to right, var(--ichc-nick-color, rgba(0,0,0,0)) 0%, rgba(0,0,0,0) 34%),
-            rgba(26,28,31,0.82) !important;
+        position: relative !important;
+        background: rgba(26,28,31,0.82) !important;
         box-shadow: none !important;
     }
     #txt .line:hover,
@@ -298,9 +293,7 @@
     #txt > p:hover,
     #txt > ul:hover {
         border-color: rgba(255,255,255,0.07) !important;
-        background:
-            linear-gradient(to right, var(--ichc-nick-color, rgba(0,0,0,0)) 0%, rgba(0,0,0,0) 34%),
-            rgba(34,36,40,0.92) !important;
+        background: rgba(34,36,40,0.92) !important;
     }
     #txt > table.ichc-chat-event,
     #txt > div.ichc-chat-event,
@@ -660,15 +653,48 @@
         opacity: 0.6 !important;
     }
 
-    /* ── Chat row karma indicator (right border, spectral tiers) ── */
-    #txt [data-ichc-kt="1"] { border-right: 2px solid rgba(125,80,205,0.38) !important; }
-    #txt [data-ichc-kt="2"] { border-right: 2px solid rgba(85,105,215,0.50) !important; }
-    #txt [data-ichc-kt="3"] { border-right: 2px solid rgba(65,145,215,0.62) !important; }
-    #txt [data-ichc-kt="4"] { border-right: 3px solid rgba(55,185,200,0.72) !important; }
-    #txt [data-ichc-kt="5"] { border-right: 3px solid rgba(72,198,145,0.82) !important; }
-    #txt [data-ichc-kt="6"] { border-right: 3px solid rgba(205,170,55,0.90) !important; }
-    #txt [data-ichc-kt="7"] { border-right: 4px solid rgba(200,88,138,0.94) !important; box-shadow: inset -4px 0 8px rgba(200,88,138,0.18) !important; }
-    #txt [data-ichc-kt="8"] { border-right: 4px solid rgba(55,185,200,1.00) !important; box-shadow: inset -4px 0 12px rgba(200,88,138,0.28) !important; }
+    /* ── Chat row karma indicator — right border + bottom bar, all driven by --ichc-kt-color ── */
+    /* Border width per tier; color comes from the exact spectral value set by JS */
+    #txt [style*="--ichc-kt-color"] {
+        border-right-color: rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.90)) !important;
+    }
+    #txt [data-ichc-kt="1"], #txt [data-ichc-kt="2"], #txt [data-ichc-kt="3"] { border-right-width: 2px !important; }
+    #txt [data-ichc-kt="4"], #txt [data-ichc-kt="5"], #txt [data-ichc-kt="6"] { border-right-width: 3px !important; }
+    #txt [data-ichc-kt="7"], #txt [data-ichc-kt="8"]                          { border-right-width: 4px !important; }
+    #txt [data-ichc-kt="7"] { box-shadow: inset -4px 0 6px  rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.16)) !important; }
+    #txt [data-ichc-kt="8"] { box-shadow: inset -4px 0 8px  rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.22)), inset -4px 0 8px rgba(200,88,138,0.12) !important; }
+
+    /* Bottom bar: same spectral color, width ∝ tier, soft glow blooms upward.
+       --ichc-age-mult (set by _setUserViz) dims everything for old low-karma lurkers. */
+    #txt [style*="--ichc-kt-color"]::before {
+        content: '' !important;
+        position: absolute !important;
+        bottom: 0 !important;
+        right: 0 !important;
+        left: auto !important;
+        height: 1px !important;
+        border-radius: 0 0 4px 0 !important;
+        pointer-events: none !important;
+        z-index: 0 !important;
+        background: linear-gradient(to right,
+            transparent 0%,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.68 + 0.06)) 100%) !important;
+        box-shadow:
+            0 -3px 5px 0px rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.08)),
+            0  0   2px 0px rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.05)) !important;
+    }
+    /* Lurker desaturation: grayscale the bar proportional to --ichc-lurker */
+    #txt [style*="--ichc-lurker"]::before {
+        filter: grayscale(calc(var(--ichc-lurker) * 0.70)) !important;
+    }
+    #txt [data-ichc-kt="1"][style*="--ichc-kt-color"]::before { width: 16%; }
+    #txt [data-ichc-kt="2"][style*="--ichc-kt-color"]::before { width: 28%; }
+    #txt [data-ichc-kt="3"][style*="--ichc-kt-color"]::before { width: 40%; }
+    #txt [data-ichc-kt="4"][style*="--ichc-kt-color"]::before { width: 52%; }
+    #txt [data-ichc-kt="5"][style*="--ichc-kt-color"]::before { width: 64%; }
+    #txt [data-ichc-kt="6"][style*="--ichc-kt-color"]::before { width: 76%; }
+    #txt [data-ichc-kt="7"][style*="--ichc-kt-color"]::before { width: 90%; height: 2px !important; }
+    #txt [data-ichc-kt="8"][style*="--ichc-kt-color"]::before { width: 100%; height: 2px !important; }
 
     /* ── Chat row cam status indicator (left border) ── */
     #txt .ichc-chat-oncam  { border-left: 2px solid rgba(52,211,100,0.75) !important; }
@@ -752,14 +778,29 @@
         50%       { box-shadow: 0 0 0 3px rgba(176,178,178,1),    0 0 28px rgba(133,139,139,0.82), 0 0 65px rgba(128,134,134,0.45); }
     }
 
-    /* ── Userlist karma gradient: fills more of the row, intensity = karma × age-viz ── */
+    /* ── Userlist karma bottom-fill bar (::after, width ∝ tier × age) ── */
+    /* ::before is reserved for the profile background image overlay. */
     #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"] {
-        background-image: linear-gradient(to left,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.84)) 0px,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.50)) 8px,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.22)) 42%,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.07)) 72%,
-            transparent 96%) !important;
+        position: relative !important;
+        background-image: none !important;
+    }
+    #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"]::after {
+        content: '' !important;
+        position: absolute !important;
+        bottom: 0 !important;
+        right: 0 !important;
+        left: auto !important;
+        height: 2px !important;
+        pointer-events: none !important;
+        z-index: 0 !important;
+        width: clamp(0%, calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 100%), 100%) !important;
+        background: linear-gradient(to right,
+            transparent 0%,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.55 + 0.10)) 50%,
+            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.85 + 0.15)) 100%) !important;
+        box-shadow:
+            0 -6px 14px 2px rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.55)),
+            0  0   6px 1px rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.45)) !important;
     }
     /* Lurker de-visualisation: old accounts with low karma fade and desaturate */
     #ichc-userlist .ichc-ul-user[style*="--ichc-lurker"] {
@@ -2543,6 +2584,11 @@
         justify-items: stretch !important;
         overflow: hidden !important;
     }
+    /* Featured cam active: stack from top so thumbnails below the featured card
+       aren't clipped by the centered overflow that happens with align-content:center */
+    #cams.ichc-has-featured {
+        align-content: start !important;
+    }
     /* Word cloud visible: cams revert to natural size so WC fills the remaining space */
     #ichc-cams-panel:has(#ichc-wordcloud.ichc-wc-visible) #cams {
         flex: 0 0 auto !important;
@@ -2773,6 +2819,8 @@
         overflow: hidden !important;
         background: #111214 !important;
         pointer-events: none !important;
+        position: relative !important;
+        z-index: 2 !important;
     }
     #cams .videocontainer, #cams video, #cams iframe, #cams object, #cams embed {
         width: 100% !important;
@@ -3586,6 +3634,19 @@
         background: rgba(255, 72, 176, 0.855) !important;
         filter: blur(7px) !important;
     }
+    /* ── Supporter (hearted) left-bar indicator ── */
+    /* ::after is used by the karma bar — use border-left instead. */
+    /* Hearted only — muted pink left border */
+    #ichc-userlist .ichc-ul-supporter-row {
+        border-left: 2px solid rgba(200, 90, 140, 0.38) !important;
+    }
+    /* Hearted + broadcasting — gradient split: pink top / green bottom */
+    #ichc-userlist .ichc-ul-supporter-row.cammed {
+        border-image: linear-gradient(to bottom,
+            rgba(200, 90, 140, 0.42) 50%,
+            rgba(52, 195, 90, 0.42) 50%) 0 0 0 1 !important;
+    }
+
     /* (sidebar avatars removed — no sidebar strip) */
     .ichc-ul-sidebar-avatar-img {
         position: absolute !important;
@@ -3703,32 +3764,38 @@
         background: transparent !important;
         opacity: 0.75 !important;
     }
-    /* ── Solari board counters ── */
+    /* ── Solari board counters — per-digit flip cells ── */
     .ichc-ul-count-cams,
     .ichc-ul-count-users {
         font-size: 26px !important;
         font-weight: 800 !important;
         line-height: 1 !important;
         letter-spacing: -0.02em !important;
-        display: inline-block !important;
-        position: relative !important;
+        display: inline-flex !important;
+        align-items: stretch !important;
         vertical-align: middle !important;
-    }
-    /* Ghost text sizes the wrapper */
-    .ichc-ul-count-cams::before,
-    .ichc-ul-count-users::before {
-        content: attr(data-val) !important;
-        visibility: hidden !important;
-        display: inline-block !important;
-        padding: 2px 5px !important;
     }
     .ichc-ul-count-cams  { color: rgba(34,195,85,1)  !important; }
     .ichc-ul-count-users { color: rgba(85,105,215,1) !important; }
-    /* Flip holder — tight perspective makes the 3D fold clearly visible */
+    /* One cell per digit — sized by ghost char, flip panel fills it */
+    .ichc-fh-digit {
+        position: relative !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    /* Hidden "0" ghost — widest digit, keeps each cell at a stable width */
+    .ichc-fh-ghost {
+        visibility: hidden !important;
+        display: block !important;
+        padding: 2px 3px !important;
+        line-height: 1 !important;
+    }
+    /* Flip holder covers its digit cell */
     .ichc-fh {
         position: absolute !important;
         inset: 0 !important;
-        perspective: 150px !important;
+        perspective: 80px !important;
         perspective-origin: center 50% !important;
     }
     /* Centre seam */

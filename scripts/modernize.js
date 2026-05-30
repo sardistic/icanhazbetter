@@ -297,29 +297,33 @@
     }
 
     function _flipCountWAAPI(el, oldVal, newVal) {
-        if (!el) { return; }
-        const spans = el.querySelectorAll('.ichc-fh > span');
-        if (spans.length < 4) { return; }
-        const [newTop, newBot, oldTop, oldBot] = spans;
+        if (!el || oldVal === newVal) { return; }
         const FOLD = 200;
-        // Phase 1: both old halves fold away simultaneously (unzip from centre)
-        oldTop.animate(
-            [{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(-90deg)' }],
-            { duration: FOLD, easing: 'ease-in', fill: 'both' }
-        );
-        oldBot.animate(
-            [{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(90deg)' }],
-            { duration: FOLD, easing: 'ease-in', fill: 'both' }
-        );
-        // Phase 2: both new halves fold in simultaneously
-        newTop.animate(
-            [{ transform: 'rotateX(90deg)' }, { transform: 'rotateX(0deg)' }],
-            { delay: FOLD, duration: FOLD, easing: 'ease-out', fill: 'both' }
-        );
-        newBot.animate(
-            [{ transform: 'rotateX(-90deg)' }, { transform: 'rotateX(0deg)' }],
-            { delay: FOLD, duration: FOLD, easing: 'ease-out', fill: 'both' }
-        );
+        const len = Math.max(String(newVal).length, String(oldVal).length);
+        const ns = String(newVal).padStart(len, '0');
+        const os = String(oldVal).padStart(len, '0');
+        el.querySelectorAll('.ichc-fh-digit').forEach((digit, i) => {
+            if (i >= len || ns[i] === os[i]) { return; } // unchanged digit — skip
+            const spans = digit.querySelectorAll('.ichc-fh > span');
+            if (spans.length < 4) { return; }
+            const [newTop, newBot, oldTop, oldBot] = spans;
+            oldTop.animate(
+                [{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(-90deg)' }],
+                { duration: FOLD, easing: 'ease-in', fill: 'both' }
+            );
+            oldBot.animate(
+                [{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(90deg)' }],
+                { duration: FOLD, easing: 'ease-in', fill: 'both' }
+            );
+            newTop.animate(
+                [{ transform: 'rotateX(90deg)' }, { transform: 'rotateX(0deg)' }],
+                { delay: FOLD, duration: FOLD, easing: 'ease-out', fill: 'both' }
+            );
+            newBot.animate(
+                [{ transform: 'rotateX(-90deg)' }, { transform: 'rotateX(0deg)' }],
+                { delay: FOLD, duration: FOLD, easing: 'ease-out', fill: 'both' }
+            );
+        });
     }
 
     // ── Input typing gradient (spectral palette, same stops as karma tiers) ──────
@@ -2699,13 +2703,21 @@
             const tier  = _karmaToTier(karma);
             const yt    = _yearToTier(profileYearCache.get(nick) ?? null);
             const alpha = (tier <= 0 ? 0 : tier * 0.013) + (yt <= 0 ? 0 : yt * 0.008);
+            const year = profileYearCache.get(nick) ?? null;
             if (tier > 0) {
                 const spectral = _karmaToSpectral(karma);
-                if (spectral) { row.style.setProperty('--ichc-nick-color', `rgba(${spectral[0]},${alpha})`); }
+                if (spectral) {
+                    row.style.setProperty('--ichc-nick-color', `rgba(${spectral[0]},${alpha})`);
+                    row.style.setProperty('--ichc-kt-color', spectral[0]);
+                    row.style.setProperty('--ichc-kt-i', String(spectral[1]));
+                }
             } else {
                 const m = (anchor.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
                 if (m) { row.style.setProperty('--ichc-nick-color', `rgba(${m[1]},${m[2]},${m[3]},${alpha})`); }
+                row.style.removeProperty('--ichc-kt-color');
+                row.style.removeProperty('--ichc-kt-i');
             }
+            _setUserViz(row, karma, year);
             _applyChatGrouping(row, nick);
         }
 
@@ -2769,11 +2781,18 @@
                 row.classList.toggle('ichc-chat-camoff', !active.has(key) && disabled.has(key));
                 if (tier > 0) {
                     const spectral = _karmaToSpectral(karma ?? null);
-                    if (spectral) { row.style.setProperty('--ichc-nick-color', `rgba(${spectral[0]},${alpha})`); }
+                    if (spectral) {
+                        row.style.setProperty('--ichc-nick-color', `rgba(${spectral[0]},${alpha})`);
+                        row.style.setProperty('--ichc-kt-color', spectral[0]);
+                        row.style.setProperty('--ichc-kt-i', String(spectral[1]));
+                    }
                 } else {
                     const mc = (a.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
                     if (mc) { row.style.setProperty('--ichc-nick-color', `rgba(${mc[1]},${mc[2]},${mc[3]},${alpha})`); }
+                    row.style.removeProperty('--ichc-kt-color');
+                    row.style.removeProperty('--ichc-kt-i');
                 }
+                _setUserViz(row, karma, year ?? null);
             }
         });
         document.querySelectorAll(`#txt span[data-ichc-year-badge="${CSS.escape(key)}"]`).forEach(span => {
@@ -2822,7 +2841,7 @@
             if (bgUrl) {
                 // Profile background fills behind the video as a subtle wash.
                 // z-index:0 keeps it below the video; videocontainer sits on top.
-                rules.push(`${cardSel}::before{content:'';position:absolute;inset:0;background:url("${bgUrl}") center 30%/cover no-repeat;opacity:0.22;z-index:0;pointer-events:none;border-radius:11px;transition:opacity 0.3s}`);
+                rules.push(`${cardSel}::before{content:'';position:absolute;inset:0;background:url("${bgUrl}") center 30%/cover no-repeat;opacity:0.38;z-index:1;pointer-events:none;border-radius:inherit;transition:opacity 0.3s}`);
             }
             if (year != null) {
                 const nameSel = `${cardSel} .name-on-cam`;
@@ -2860,7 +2879,7 @@
         const camId = getCamId(card);
         if (!camId) { return; }
         _applyCamDecor(camId, profileKarmaCache.get(nick) ?? null, profileYearCache.get(nick) ?? null, profileBgCache.get(nick) ?? null);
-        if (!profileYearCache.has(nick)) {
+        if (!profileYearCache.has(nick) || !profileBgCache.has(nick)) {
             fetchProfileImage(nick).then(() => {
                 _updateChatBadgesForUser(nick);
                 _updateCamBadgesForUser(nick);
@@ -2890,13 +2909,67 @@
     // synchronous cascades when bursts of messages arrive.
     let _chatBadgePending = new Set();
     let _chatBadgeRAF = null;
+
+    // ── Chat scroll lock ──────────────────────────────────────────────────────
+    // The site auto-scrolls #txt to the bottom on every new message. We intercept
+    // this by scheduling a rAF that restores the user's saved position whenever
+    // they have scrolled up to read history.
+    let _chatAtBottom = true;
+    let _chatSavedScrollTop = 0;
+    let _chatScrollRestoreRAF = null;
+
+    function _initChatScrollLock(log) {
+        if (!log || log._ichcScrollLock) { return; }
+        log._ichcScrollLock = true;
+        _chatAtBottom = (log.scrollHeight - log.scrollTop - log.clientHeight) < 80;
+        log.addEventListener('scroll', () => {
+            if (_chatScrollRestoreRAF !== null) { return; } // our own restore firing
+            const atBottom = (log.scrollHeight - log.scrollTop - log.clientHeight) < 80;
+            _chatAtBottom = atBottom;
+            if (!atBottom) { _chatSavedScrollTop = log.scrollTop; }
+        }, { passive: true });
+    }
+
+    function _restoreChatScroll(log) {
+        if (_chatAtBottom || !log) { return; }
+        const saved = _chatSavedScrollTop;
+        if (_chatScrollRestoreRAF !== null) { cancelAnimationFrame(_chatScrollRestoreRAF); }
+        _chatScrollRestoreRAF = requestAnimationFrame(() => {
+            _chatScrollRestoreRAF = null;
+            if (!_chatAtBottom && log.isConnected) { log.scrollTop = saved; }
+        });
+    }
+
+    // ── Chat log pruning ──────────────────────────────────────────────────────
+    const _CHAT_MAX_ROWS = 5000;
+    const _CHAT_TRIM_TO  = 4000;
+
+    function _pruneChatLog(log) {
+        if (!log) { return; }
+        const count = log.children.length;
+        if (count <= _CHAT_MAX_ROWS) { return; }
+        const excess = count - _CHAT_TRIM_TO;
+        const rows = [...log.children].slice(0, excess);
+        // Compensate scrollTop so the viewport doesn't jump when top rows are removed.
+        const heightBefore = log.scrollHeight;
+        const scrollBefore = log.scrollTop;
+        rows.forEach(r => r.remove());
+        const removed = heightBefore - log.scrollHeight;
+        const newTop = Math.max(0, scrollBefore - removed);
+        log.scrollTop = newTop;
+        if (!_chatAtBottom) { _chatSavedScrollTop = Math.max(0, _chatSavedScrollTop - removed); }
+    }
+
     function _scheduleChatBadgeFlush() {
         if (_chatBadgeRAF !== null) { return; }
         _chatBadgeRAF = requestAnimationFrame(() => {
             _chatBadgeRAF = null;
             const nodes = [..._chatBadgePending];
             _chatBadgePending.clear();
+            const log = document.getElementById('txt');
             nodes.forEach(_applyChatBadgesScope);
+            _pruneChatLog(log);
+            _restoreChatScroll(log);
         });
     }
 
@@ -2906,6 +2979,8 @@
         _chatBadgeObs?.disconnect();
         _chatBadgeRoot = log;
         _applyChatBadgesScope(log);
+        _initChatScrollLock(log);
+        _chatAtBottom = true; // reset on reconnect — treat as following mode
         _chatBadgeObs = new MutationObserver(mutations => {
             let changed = false;
             for (const m of mutations) {
@@ -5658,8 +5733,18 @@
         const _usersChanged = _prevUsers  !== null && _totalUsers !== _prevUsers;
         const _camOld  = _camChanged   ? _prevCammed : cammedCount;
         const _userOld = _usersChanged ? _prevUsers  : _totalUsers;
-        // 4 spans: [new-top, new-bottom, old-top, old-bottom]
-        const _fh = (n, o) => `<span class="ichc-fh"><span>${n}</span><span>${n}</span><span>${o}</span><span>${o}</span></span>`;
+        // Per-digit flip cells: one .ichc-fh-digit per character position.
+        // Ghost "0" inside each cell sizes it; the absolute .ichc-fh covers it.
+        const _fh = (n, o) => {
+            const ns = String(n), os = String(o);
+            const len = Math.max(ns.length, os.length);
+            const nPad = ns.padStart(len, '0'), oPad = os.padStart(len, '0');
+            return nPad.split('').map((d, i) =>
+                `<span class="ichc-fh-digit"><span class="ichc-fh-ghost">0</span>` +
+                `<span class="ichc-fh"><span>${d}</span><span>${d}</span>` +
+                `<span>${oPad[i]}</span><span>${oPad[i]}</span></span></span>`
+            ).join('');
+        };
         const metricsRow = document.createElement('div');
         metricsRow.className = 'ichc-ul-metrics-row';
         metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-count-cams" data-val="${cammedCount}">${_fh(cammedCount, _camOld)}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-count-users" data-val="${_totalUsers}">${_fh(_totalUsers, _userOld)}</span>${userMeta}</span>`;
@@ -5865,7 +5950,7 @@
                     e.stopPropagation();
                     revealBlockedUser(u.name.toLowerCase());
                 });
-                span.appendChild(enableBtn);
+                span.insertBefore(enableBtn, span.firstElementChild);
             } else {
                 span.addEventListener('click', event => {
                     event.preventDefault();
@@ -6138,7 +6223,22 @@
 
             // ⋮ export/import + sort menu — button lives in #ichc-input-row
             const titleRow = panel.querySelector('.ichc-ul-title-row');
-            if (titleRow && !document.querySelector('.ichc-ul-more-btn')) {
+            if (titleRow && savedMoreBtn) {
+                // Reuse existing button — update sort-active state and re-insert
+                const existingMenu = document.getElementById('ichc-ul-more-menu');
+                if (existingMenu) {
+                    existingMenu.querySelectorAll('.ichc-ul-sort-item').forEach(b => {
+                        b.classList.toggle('ichc-ul-sort-active', b.dataset.sort === userListState.sortMode);
+                    });
+                }
+                const _irReuse = document.getElementById('ichc-input-row');
+                const _sendBtnReuse = document.getElementById('btn');
+                if (_irReuse) {
+                    _irReuse.insertBefore(savedMoreBtn, _sendBtnReuse || null);
+                } else {
+                    titleRow.appendChild(savedMoreBtn);
+                }
+            } else if (titleRow && !savedMoreBtn) {
                 const moreBtn = document.createElement('button');
                 moreBtn.type = 'button';
                 moreBtn.className = 'ichc-ul-more-btn';
@@ -7306,16 +7406,21 @@
                 card.style.setProperty('min-height', 'clamp(240px, 48vh, 560px)', 'important');
                 card.style.setProperty('max-height', 'clamp(240px, 60vh, 680px)', 'important');
                 card.style.removeProperty('min-width');
+                card.style.removeProperty('align-self');
             } else {
                 card.style.removeProperty('grid-column');
                 card.style.removeProperty('min-height');
                 if (featured) {
-                    // Thumbnail row when another cam is focused.
+                    // Thumbnail row: force a uniform aspect so mixed-ratio streams don't
+                    // produce uneven row heights. align-self:start prevents grid row
+                    // stretch from inflating cards beyond their aspect-ratio.
                     card.style.setProperty('aspect-ratio', '4 / 3', 'important');
-                    card.style.setProperty('max-height', 'clamp(120px, 28vh, 300px)', 'important');
+                    card.style.setProperty('max-height', 'clamp(160px, 32vh, 360px)', 'important');
+                    card.style.setProperty('align-self', 'start', 'important');
                 } else {
                     card.style.removeProperty('aspect-ratio');
                     card.style.removeProperty('max-height');
+                    card.style.removeProperty('align-self');
                 }
             }
             const button = card.querySelector('.ichc-spotlight-btn');
@@ -7439,16 +7544,23 @@
         });
 
         const panel = document.getElementById('ichc-cams-panel');
-        if (panel && typeof ResizeObserver !== 'undefined' && !camLayoutState.panelObserver) {
-            let lastPanelWidth = Math.round(panel.getBoundingClientRect().width || panel.clientWidth || 0);
-            camLayoutState.panelObserver = new ResizeObserver(entries => {
-                const nextWidth = Math.round(entries[0]?.contentRect?.width || panel.getBoundingClientRect().width || panel.clientWidth || 0);
-                if (isCamRelayoutSuppressed()) { return; }
-                if (Math.abs(nextWidth - lastPanelWidth) < 4) { return; }
-                lastPanelWidth = nextWidth;
-                requestCamRelayout(30);
-            });
-            camLayoutState.panelObserver.observe(panel);
+        if (panel && typeof ResizeObserver !== 'undefined') {
+            if (!camLayoutState.panelObserver) {
+                let lastPanelWidth = Math.round(panel.getBoundingClientRect().width || panel.clientWidth || 0);
+                camLayoutState.panelObserver = new ResizeObserver(entries => {
+                    const nextWidth = Math.round(entries[0]?.contentRect?.width || panel.getBoundingClientRect().width || panel.clientWidth || 0);
+                    if (isCamRelayoutSuppressed()) { return; }
+                    if (Math.abs(nextWidth - lastPanelWidth) < 4) { return; }
+                    lastPanelWidth = nextWidth;
+                    requestCamRelayout(30);
+                });
+                camLayoutState.panelObserverTarget = panel;
+                camLayoutState.panelObserver.observe(panel);
+            } else if (camLayoutState.panelObserverTarget !== panel) {
+                camLayoutState.panelObserver.disconnect();
+                camLayoutState.panelObserver.observe(panel);
+                camLayoutState.panelObserverTarget = panel;
+            }
         }
 
         cams.addEventListener('click', event => {
