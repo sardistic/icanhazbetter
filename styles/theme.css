@@ -3552,7 +3552,7 @@
         background-image: var(--ichc-bg-img, none) !important;
         background-size: cover !important;
         background-position: center top !important;
-        opacity: 0.28 !important;
+        opacity: 0.38 !important;
         pointer-events: none !important;
         z-index: -1 !important;
         border-radius: inherit !important;

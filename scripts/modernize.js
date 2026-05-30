@@ -2520,7 +2520,17 @@
                 try { localStorage.setItem(_GS_LS + key, JSON.stringify({ isGuest, ts: Date.now() })); } catch (_) {}
 
                 const bgInput = doc.getElementById('ctl00_ContentPlaceHolder1_backImgUrl');
-                const bgUrl = bgInput?.value?.trim() || null;
+                let bgUrl = bgInput?.value?.trim() || null;
+                // Fallback: ICHC may render the bg as an inline style on <body> or a wrapper div
+                if (!bgUrl) {
+                    for (const el of [doc.body, ...doc.querySelectorAll('[style*="background"]')]) {
+                        if (!el) { continue; }
+                        const m = (el.getAttribute('style') || '').match(
+                            /background(?:-image)?\s*:\s*url\(\s*['"]?(https?:\/\/[^'")\s]+)['"]?\s*\)/i
+                        );
+                        if (m?.[1]) { bgUrl = m[1]; break; }
+                    }
+                }
                 profileBgCache.set(key, bgUrl);
                 _trimMap(profileBgCache, 300);
                 try { localStorage.setItem(_BG_LS + key, JSON.stringify({ bgUrl, ts: Date.now() })); } catch (_) {}
@@ -6102,7 +6112,10 @@
                     const key = row.dataset.ichcAvKey;
                     if (!key) { return; }
                     const avatarImg = avatarImgCache.get(key);
-                    if (!avatarImg || avatarImg.src) { return; } // already have a src
+                    // If bg is already cached, apply it immediately (avatar src may already be set)
+                    const cachedBg = profileBgCache.get(key);
+                    if (cachedBg) { row.style.setProperty('--ichc-bg-img', `url("${cachedBg}")`); }
+                    if (!avatarImg || avatarImg.src) { return; } // avatar already loaded — skip fetch
                     fetchProfileImage(key).then(url => {
                         if (url && avatarImg) { _loadAvatarSrc(avatarImg, url, key); }
                         _applyProfileData(key);
