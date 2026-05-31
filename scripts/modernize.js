@@ -3051,10 +3051,28 @@
     }
 
     // ── Emoji / meme tab-complete ─────────────────────────────────────────────
+    function _prefetchGifData() {
+        if (_gifDataCache) { return; }
+        const chromeOrBrowser = typeof browser !== 'undefined' ? browser : chrome;
+        fetch(chromeOrBrowser.runtime.getURL('gifs.txt')).then(r => r.text()).then(text => {
+            if (_gifDataCache) { return; }
+            const gifSeen = new Set();
+            const gifs = [];
+            for (const m of text.matchAll(/copyToClipboard\('(:[^']+)'\)[\s\S]{1,400}?src="(\/\/www\.vidble\.com\/([A-Za-z0-9]+)_sqr\.(gif|jpg|png))"/g)) {
+                const code = m[1];
+                if (gifSeen.has(code)) { continue; }
+                gifSeen.add(code);
+                gifs.push({ code, src: m[2], full: 'https://www.vidble.com/' + m[3] + '.' + m[4] });
+            }
+            _gifDataCache = { gifs };
+        }).catch(() => {});
+    }
+
     function _initEmojiTabComplete() {
         const input = document.getElementById('txtMsg');
         if (!input || input._ichcTC) { return; }
         input._ichcTC = true;
+        _prefetchGifData();
 
         const popup = document.createElement('div');
         popup.className = 'ichc-tc-popup';
@@ -6843,6 +6861,7 @@
     function _applyCardSpans() {
         const spans = _loadCamSpans();
         const columns = _getCamColumns();
+        const hasFeatured = !!document.querySelector('#cams .ichc-featured');
         getCamCards().forEach(card => {
             if (card.classList.contains('ichc-featured')) {
                 const s = card.querySelector('.ichc-cam-shrink-btn');
@@ -6851,6 +6870,8 @@
                 if (g) { g.disabled = true; }
                 return;
             }
+            // In featured/side-by-side mode applyFeaturedCam owns grid placement.
+            if (hasFeatured) { return; }
             const key = getCardKey(card);
             const level = key ? Math.max(0, Math.min(4, (key in spans) ? spans[key] : 1)) : 1;
             _applySpanLevel(card, level, columns);
@@ -7438,7 +7459,10 @@
             const active = card === featuredCard;
             if (active) {
                 if (useSideBySide) {
-                    card.style.setProperty('grid-column', `1 / ${columns}`, 'important');
+                    // Grid uses doubled tracks: N cols = 2N tracks. Featured spans
+                    // all but the last visual column = tracks 1 to (N-1)*2+1.
+                    const featTrackEnd = (columns - 1) * 2 + 1;
+                    card.style.setProperty('grid-column', `1 / ${featTrackEnd}`, 'important');
                     card.style.setProperty('grid-row', `1 / span ${thumbCards.length}`, 'important');
                     card.style.removeProperty('aspect-ratio');
                     card.style.removeProperty('min-height');
@@ -7455,7 +7479,9 @@
                 card.style.removeProperty('min-width');
             } else {
                 if (useSideBySide) {
-                    card.style.setProperty('grid-column', String(columns), 'important');
+                    // Last visual column: tracks (N-1)*2+1 to end (-1).
+                    const thumbTrackStart = (columns - 1) * 2 + 1;
+                    card.style.setProperty('grid-column', `${thumbTrackStart} / -1`, 'important');
                     card.style.removeProperty('grid-row');
                     card.style.setProperty('aspect-ratio', '4 / 3', 'important');
                     card.style.setProperty('max-height', thumbMaxH, 'important');

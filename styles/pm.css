@@ -11,12 +11,11 @@
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
-        background: #1e2024 !important;
+        background: #1a1c20 !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
         border-radius: 12px 12px 4px 12px !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.42) !important;
         z-index: 2147483647 !important;
-        backdrop-filter: blur(12px) !important;
         pointer-events: auto !important;
         font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
         color: #dbdee1 !important;
