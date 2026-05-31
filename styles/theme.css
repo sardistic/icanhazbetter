@@ -2589,8 +2589,6 @@
        overflow-y:auto lets the thumbnail row scroll rather than being clipped. */
     #cams.ichc-has-featured {
         align-content: start !important;
-        overflow-x: hidden !important;
-        overflow-y: auto !important;
     }
     /* Word cloud visible: cams revert to natural size so WC fills the remaining space */
     #ichc-cams-panel:has(#ichc-wordcloud.ichc-wc-visible) #cams {

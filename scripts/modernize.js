@@ -7403,32 +7403,58 @@
             Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ichc-cam-columns'), 10) || 1,
         );
         let found = false;
+        let featuredCard = null;
+        const thumbCards = [];
 
         getCamCards().forEach(card => {
             const active = !!featured && card.dataset.ichcCam === featured;
             card.classList.toggle('ichc-featured', active);
             if (active) {
-                // Always span the full width so no other cam appears beside the featured one.
+                featuredCard = card;
+                found = true;
+            } else if (featured) {
+                thumbCards.push(card);
+            }
+        });
+
+        // Calculate how much vertical space thumbnails need so the featured card
+        // doesn't push them out of the container.
+        let featuredMaxH = 'clamp(240px, 60vh, 680px)';
+        if (found && cams) {
+            const containerH = cams.clientHeight;
+            if (containerH > 0) {
+                const gap = parseFloat(getComputedStyle(cams).gap) || 8;
+                const thumbRows = Math.ceil(thumbCards.length / columns);
+                // Estimate each thumbnail row height: card width ÷ columns × (3/4) aspect.
+                const cardW = (containerH > 0 && cams.clientWidth > 0)
+                    ? (cams.clientWidth - gap * (columns - 1)) / columns
+                    : 200;
+                const thumbRowH = Math.min(cardW * (3 / 4), window.innerHeight * 0.32);
+                const thumbArea = thumbRows * (thumbRowH + gap);
+                const maxH = Math.max(200, containerH - thumbArea - gap);
+                featuredMaxH = `${maxH}px`;
+            }
+        }
+
+        getCamCards().forEach(card => {
+            const active = card === featuredCard;
+            if (active) {
                 if (columns >= 2) {
                     card.style.setProperty('grid-column', '1 / -1', 'important');
                 } else {
                     card.style.removeProperty('grid-column');
                 }
-                // Use a wide aspect for the featured card so it doesn't eat all vertical space.
                 card.style.setProperty('aspect-ratio', '16 / 9', 'important');
-                card.style.setProperty('min-height', 'clamp(240px, 48vh, 560px)', 'important');
-                card.style.setProperty('max-height', 'clamp(240px, 60vh, 680px)', 'important');
+                card.style.setProperty('min-height', 'clamp(200px, 40vh, 520px)', 'important');
+                card.style.setProperty('max-height', featuredMaxH, 'important');
                 card.style.removeProperty('min-width');
                 card.style.removeProperty('align-self');
             } else {
                 card.style.removeProperty('grid-column');
                 card.style.removeProperty('min-height');
                 if (featured) {
-                    // Thumbnail row: force a uniform aspect so mixed-ratio streams don't
-                    // produce uneven row heights. align-self:start prevents grid row
-                    // stretch from inflating cards beyond their aspect-ratio.
                     card.style.setProperty('aspect-ratio', '4 / 3', 'important');
-                    card.style.setProperty('max-height', 'clamp(160px, 32vh, 360px)', 'important');
+                    card.style.setProperty('max-height', 'clamp(120px, 28vh, 320px)', 'important');
                     card.style.setProperty('align-self', 'start', 'important');
                 } else {
                     card.style.removeProperty('aspect-ratio');
@@ -7442,7 +7468,6 @@
                 button.title = active ? 'Unfocus cam' : 'Focus cam';
                 button.setAttribute('aria-label', active ? 'Unfocus cam' : 'Focus cam');
             }
-            if (active) { found = true; }
         });
 
         if (cams) { cams.classList.toggle('ichc-has-featured', found); }
