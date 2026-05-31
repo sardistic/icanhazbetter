@@ -7417,49 +7417,64 @@
             }
         });
 
-        // Calculate how much vertical space thumbnails need so the featured card
-        // doesn't push them out of the container.
-        let featuredMaxH = 'clamp(240px, 60vh, 680px)';
-        if (found && cams) {
+        // Side-by-side layout: featured fills left (N-1) columns, thumbnails stack in
+        // the last column. Falls back to stacked (featured full-width on top) when
+        // there is only 1 column or no thumbnails.
+        const useSideBySide = found && columns >= 2 && thumbCards.length > 0;
+        let thumbMaxH = 'clamp(120px, 28vh, 320px)';
+
+        if (useSideBySide && cams && cams.clientHeight > 0) {
             const containerH = cams.clientHeight;
-            if (containerH > 0) {
-                const gap = parseFloat(getComputedStyle(cams).gap) || 8;
-                const thumbRows = Math.ceil(thumbCards.length / columns);
-                // Estimate each thumbnail row height: card width ÷ columns × (3/4) aspect.
-                const cardW = (containerH > 0 && cams.clientWidth > 0)
-                    ? (cams.clientWidth - gap * (columns - 1)) / columns
-                    : 200;
-                const thumbRowH = Math.min(cardW * (3 / 4), window.innerHeight * 0.32);
-                const thumbArea = thumbRows * (thumbRowH + gap);
-                const maxH = Math.max(200, containerH - thumbArea - gap);
-                featuredMaxH = `${maxH}px`;
-            }
+            const containerW = cams.clientWidth;
+            const gap = parseFloat(getComputedStyle(cams).gap) || 8;
+            const n = thumbCards.length;
+            const thumbColW = (containerW - gap * (columns - 1)) / columns;
+            const thumbNatH = thumbColW * (3 / 4);
+            const thumbFitH = (containerH - gap * Math.max(n - 1, 0)) / n;
+            thumbMaxH = Math.max(80, Math.floor(Math.min(thumbNatH, thumbFitH))) + 'px';
         }
 
         getCamCards().forEach(card => {
             const active = card === featuredCard;
             if (active) {
-                if (columns >= 2) {
-                    card.style.setProperty('grid-column', '1 / -1', 'important');
+                if (useSideBySide) {
+                    card.style.setProperty('grid-column', `1 / ${columns}`, 'important');
+                    card.style.setProperty('grid-row', `1 / span ${thumbCards.length}`, 'important');
+                    card.style.removeProperty('aspect-ratio');
+                    card.style.removeProperty('min-height');
+                    card.style.removeProperty('max-height');
+                    card.style.setProperty('align-self', 'stretch', 'important');
                 } else {
-                    card.style.removeProperty('grid-column');
+                    card.style.setProperty('grid-column', columns >= 2 ? '1 / -1' : '', 'important');
+                    card.style.removeProperty('grid-row');
+                    card.style.setProperty('aspect-ratio', '16 / 9', 'important');
+                    card.style.setProperty('min-height', 'clamp(200px, 40vh, 480px)', 'important');
+                    card.style.setProperty('max-height', 'clamp(200px, 55vh, 600px)', 'important');
+                    card.style.setProperty('align-self', 'start', 'important');
                 }
-                card.style.setProperty('aspect-ratio', '16 / 9', 'important');
-                card.style.setProperty('min-height', 'clamp(200px, 40vh, 520px)', 'important');
-                card.style.setProperty('max-height', featuredMaxH, 'important');
                 card.style.removeProperty('min-width');
-                card.style.removeProperty('align-self');
             } else {
-                card.style.removeProperty('grid-column');
-                card.style.removeProperty('min-height');
-                if (featured) {
+                if (useSideBySide) {
+                    card.style.setProperty('grid-column', String(columns), 'important');
+                    card.style.removeProperty('grid-row');
+                    card.style.setProperty('aspect-ratio', '4 / 3', 'important');
+                    card.style.setProperty('max-height', thumbMaxH, 'important');
+                    card.style.setProperty('align-self', 'start', 'important');
+                    card.style.removeProperty('min-height');
+                } else if (featured) {
+                    card.style.removeProperty('grid-column');
+                    card.style.removeProperty('grid-row');
                     card.style.setProperty('aspect-ratio', '4 / 3', 'important');
                     card.style.setProperty('max-height', 'clamp(120px, 28vh, 320px)', 'important');
                     card.style.setProperty('align-self', 'start', 'important');
+                    card.style.removeProperty('min-height');
                 } else {
+                    card.style.removeProperty('grid-column');
+                    card.style.removeProperty('grid-row');
                     card.style.removeProperty('aspect-ratio');
                     card.style.removeProperty('max-height');
                     card.style.removeProperty('align-self');
+                    card.style.removeProperty('min-height');
                 }
             }
             const button = card.querySelector('.ichc-spotlight-btn');
