@@ -1137,6 +1137,8 @@
         }
     }
 
+    let _pmSyncInFlight = false;
+
     let _pmSyncTimer = null;
     function schedulePmSync(delay = 120) {
         window.clearTimeout(_pmSyncTimer);

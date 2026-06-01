@@ -980,6 +980,15 @@
         border-radius: 3px !important;
         vertical-align: middle !important;
     }
+    /* Plain image URLs (not :emote: codes) should display at full size */
+    #txt .ichc-inline-image .ichc-chat-inline-img {
+        display: block !important;
+        max-width: min(320px, 90%) !important;
+        max-height: 240px !important;
+        margin: 2px 0 5px !important;
+        border-radius: 6px !important;
+        vertical-align: unset !important;
+    }
     #txt .ichc-og-card {
         display: grid !important;
         grid-template-columns: 74px minmax(0, 1fr) !important;
@@ -1121,6 +1130,9 @@
         padding: 7px 10px !important;
         font-family: inherit !important;
         font-size: 13px !important;
+    }
+    #txtMsg {
+        transition: none !important;
     }
     #txtMsg:focus {
         border-color: var(--ichc-input-border, #5865f2) !important;
@@ -5281,6 +5293,47 @@
         height: 24px !important;
     }
 
+    /* Quickbar flyout — most-used emotes/gifs, appears to the left of the GIF button */
+    #ichc-gif-quickbar {
+        position: fixed !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        background: #2b2d31 !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.45) !important;
+        z-index: 2147483647 !important;
+    }
+    #ichc-gif-quickbar[hidden] { display: none !important; }
+    .ichc-quickbar-item {
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        border-radius: 6px !important;
+        cursor: pointer !important;
+        width: 44px !important;
+        height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 2px !important;
+        font-size: 22px !important;
+        transition: background 0.1s, border-color 0.1s !important;
+        overflow: hidden !important;
+    }
+    .ichc-quickbar-item:hover {
+        background: rgba(255,255,255,0.08) !important;
+        border-color: rgba(255,255,255,0.14) !important;
+    }
+    .ichc-quickbar-item img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        border-radius: 4px !important;
+    }
+
     @media (max-width: 1100px) {
         #ichc-room-stage, #ichc-room-stage.ichc-chat-left {
             flex-direction: column !important;
@@ -5565,6 +5618,15 @@
     html.ichc-light-theme .ichc-cog-divider { border-top: 1px solid #b8bbbe !important; }
 
     /* GIF / emoji picker */
+    html.ichc-light-theme #ichc-gif-quickbar {
+        background: #d4d7dc !important;
+        border-color: #b8bbbe !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
+    }
+    html.ichc-light-theme .ichc-quickbar-item:hover {
+        background: rgba(0,0,0,0.08) !important;
+        border-color: rgba(0,0,0,0.14) !important;
+    }
     html.ichc-light-theme #ichc-gif-panel,
     html.ichc-light-theme .ichc-gif-panel {
         background: #d4d7dc !important;

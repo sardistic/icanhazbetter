@@ -111,6 +111,30 @@
     const profileTrophiesCache = new Map(); // username_lower → [{src,alt}] | null
     const profileBioCache   = new Map();   // username_lower → string | null
     let _gifDataCache = null;              // shared with tab-complete: { gifs: [{code,src,full}] }
+
+    function _trackEmoteUsage(code) {
+        try {
+            const counts = JSON.parse(localStorage.getItem('ichc_emote_usage') || '{}');
+            counts[code] = (counts[code] || 0) + 1;
+            localStorage.setItem('ichc_emote_usage', JSON.stringify(counts));
+        } catch {}
+    }
+
+    function _getTopEmotes(n) {
+        try {
+            const counts = JSON.parse(localStorage.getItem('ichc_emote_usage') || '{}');
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, n);
+            const gifs = _gifDataCache?.gifs ?? [];
+            return sorted.map(([code]) => {
+                const gif = gifs.find(g => g.code === code);
+                if (gif) { return { type: 'gif', code, src: 'https:' + gif.src }; }
+                const emoji = ICHC_EMOJIS.find(e => e.e === code);
+                if (emoji) { return { type: 'emoji', code, char: emoji.e }; }
+                return { type: 'text', code };
+            });
+        } catch { return []; }
+    }
+
     function _profileCacheSet(key, value) {
         if (profileImageCache.size >= 200) {
             let evicted = 0;
@@ -417,13 +441,14 @@
             const timerEl = card.querySelector('.ichc-cam-timer');
             if (!timerEl) { return; }
             const name = getCardName?.(card)?.trim().toLowerCase();
-            if (!name) { timerEl.textContent = ''; return; }
+            if (!name) { if (timerEl.textContent) { timerEl.textContent = ''; } return; }
             try {
                 const raw = localStorage.getItem(_BCAST_LS + name);
-                if (!raw) { timerEl.textContent = ''; return; }
+                if (!raw) { if (timerEl.textContent) { timerEl.textContent = ''; } return; }
                 const startMs = parseInt(raw, 10);
-                if (!startMs) { timerEl.textContent = ''; return; }
-                timerEl.textContent = _formatBcastTime(Date.now() - startMs);
+                if (!startMs) { if (timerEl.textContent) { timerEl.textContent = ''; } return; }
+                const next = _formatBcastTime(Date.now() - startMs);
+                if (timerEl.textContent !== next) { timerEl.textContent = next; }
             } catch (_) {}
         });
     }
@@ -883,6 +908,7 @@
     }());
 
     installBroadcastQualityPatch();
+    installBroadcastDeviceSwitchFix();
 
     document.addEventListener('DOMContentLoaded', () => {
         installStageLayout();
@@ -1200,12 +1226,21 @@
         const next = Object.assign({}, constraints || {});
         const video = next.video;
         if (!video) { return constraints; }
+        // When a specific deviceId is requested (e.g. user switching cameras in the
+        // broadcast UI), pass through unchanged. Firefox rejects or mismatch-selects
+        // the device when extra width/height/frameRate constraints are added alongside
+        // a deviceId, causing the input change to silently have no effect.
+        if (typeof video === 'object' && video.deviceId != null) { return constraints; }
         if (video === true) {
             next.video = {
                 width: Object.assign({}, target.width),
                 height: Object.assign({}, target.height),
                 frameRate: Object.assign({}, target.frameRate),
             };
+            // Inject the user-selected camera for broadcast-start getUserMedia calls
+            if (window._ichcSelectedVideoId) {
+                next.video.deviceId = { ideal: window._ichcSelectedVideoId };
+            }
             return next;
         }
         if (typeof video !== 'object') { return constraints; }
@@ -1215,6 +1250,9 @@
             height: liftConstraint(video.height, target.height),
             frameRate: liftConstraint(video.frameRate, target.frameRate),
         });
+        if (window._ichcSelectedVideoId) {
+            next.video.deviceId = { ideal: window._ichcSelectedVideoId };
+        }
         return next;
     }
 
@@ -1288,6 +1326,228 @@
         runInPageContext(source);
         window.setTimeout(() => runInPageContext(source), 1000);
         window.setTimeout(() => runInPageContext(source), 3000);
+    }
+
+    function installBroadcastDeviceSwitchFix() {
+        // Firefox silently ignores applyConstraints({deviceId}) on a live track — it
+        // does not switch the physical device. This is a known Firefox WebRTC limitation.
+        // Fix: (1) wrap the RTCPeerConnection constructor to track active peers so we
+        // can call replaceTrack later; (2) patch applyConstraints to do a proper
+        // getUserMedia restart when a deviceId change is requested; (3) watch the
+        // broadcast panel for select changes as a belt-and-suspenders fallback.
+        const source = `
+(() => {
+    if (window.__ichcDeviceSwitchFix) { return; }
+    window.__ichcDeviceSwitchFix = true;
+
+    // ── Peer registry ──────────────────────────────────────────────────────────
+    // Wrap the RTCPeerConnection constructor (not prototype methods) to record
+    // each peer. Returning the native instance from the wrapper is safe in all
+    // modern browsers.
+    const _OrigPeer = window.RTCPeerConnection;
+    if (_OrigPeer && !_OrigPeer.__ichcW) {
+        window._ichcPeers = [];
+        function _IchcRTC(...a) {
+            const pc = new _OrigPeer(...a);
+            window._ichcPeers.push(pc);
+            // After a short delay ICHC will have called addTrack with whatever
+            // track it had stored. If the user switched cameras, replace them now.
+            setTimeout(() => {
+                try {
+                    const selV = window._ichcSelectedVideoTrack;
+                    const selA = window._ichcSelectedAudioTrack;
+                    if (!selV && !selA) { return; }
+                    if (pc.signalingState === 'closed') { return; }
+                    pc.getSenders().forEach(sender => {
+                        if (!sender.track) { return; }
+                        if (sender.track.kind === 'video' && selV &&
+                            selV.readyState !== 'ended' && sender.track !== selV) {
+                            console.log('[ichc] replaceTrack on new peer: video',
+                                sender.track.label, '→', selV.label);
+                            sender.replaceTrack(selV).catch(() => {});
+                        } else if (sender.track.kind === 'audio' && selA &&
+                            selA.readyState !== 'ended' && sender.track !== selA) {
+                            console.log('[ichc] replaceTrack on new peer: audio',
+                                sender.track.label, '→', selA.label);
+                            sender.replaceTrack(selA).catch(() => {});
+                        }
+                    });
+                } catch (_) {}
+            }, 600);
+            return pc; // returning an object from a constructor uses that object
+        }
+        _IchcRTC.prototype = _OrigPeer.prototype;
+        _IchcRTC.__ichcW = true;
+        try { Object.setPrototypeOf(_IchcRTC, _OrigPeer); } catch (_) {}
+        window.RTCPeerConnection = _IchcRTC;
+    }
+
+    // ── Core switch helper ──────────────────────────────────────────────────────
+    async function _doSwitch(kind, oldTrack, deviceId, deviceLabel) {
+        let realId = deviceId;
+        try {
+            const devs = await navigator.mediaDevices.enumerateDevices();
+            const inputs = devs.filter(d => d.kind === kind + 'input');
+            // ICHC's CameraMobile_XXX IDs don't match Firefox deviceIds.
+            // Match first by exact id, then by the option's human-readable label
+            // (which DOES match enumerateDevices labels), then by numeric index.
+            const lbl = (deviceLabel || '').toLowerCase();
+            const match = inputs.find(d => d.deviceId === deviceId)
+                || (lbl ? inputs.find(d => {
+                    const dl = d.label.toLowerCase();
+                    return dl === lbl || dl.includes(lbl) || lbl.includes(dl);
+                }) : null)
+                || inputs.find(d => d.label === deviceId)
+                || (isNaN(+deviceId) ? null : inputs[+deviceId]);
+            if (match) {
+                realId = match.deviceId;
+                console.log('[ichc] resolved', deviceLabel || deviceId, '→', match.label);
+            }
+        } catch (_) {}
+
+        console.log('[ichc] switching', kind, 'to', realId);
+
+        // Firefox grants camera permission per-device. { exact } throws
+        // OverconstrainedError for devices beyond the first permitted one.
+        // Workaround: stop the current track to release it, then request
+        // with { ideal } — Firefox will use the now-available device.
+        const panel = document.getElementById('rtc-broadcaster');
+        const vid = panel && panel.querySelector('video');
+        const prevStream = vid && vid.srcObject instanceof MediaStream ? vid.srcObject : null;
+        const prevTracks = prevStream
+            ? (kind === 'video' ? prevStream.getVideoTracks() : prevStream.getAudioTracks())
+            : [];
+        prevTracks.forEach(t => { try { t.stop(); } catch (_) {} });
+
+        let newTrack;
+        for (const c of [{ exact: realId }, { ideal: realId }]) {
+            try {
+                const s = await navigator.mediaDevices.getUserMedia({ [kind]: { deviceId: c } });
+                newTrack = s.getTracks()[0];
+                if (newTrack) { break; }
+            } catch (_) {}
+        }
+        if (!newTrack) {
+            console.warn('[ichc] getUserMedia failed for all constraints:', kind, realId);
+            return;
+        }
+
+        console.log('[ichc] new track:', newTrack.label || newTrack.id,
+            '| was:', prevTracks[0] ? (prevTracks[0].label || prevTracks[0].id) : 'none');
+
+        // Store selected device so both improveConstraints (getUserMedia path)
+        // and the addTrack substitution (stored-track path) use the right device.
+        if (kind === 'video') {
+            window._ichcSelectedVideoId = realId;
+            window._ichcSelectedVideoTrack = newTrack;
+        } else {
+            window._ichcSelectedAudioId = realId;
+            window._ichcSelectedAudioTrack = newTrack;
+        }
+
+        // Modify the EXISTING stream in-place so ICHC's stored reference still
+        // points to a stream containing the new track. Then force Firefox to
+        // visually refresh the video by briefly nulling srcObject.
+        if (vid) {
+            const targetStream = prevStream || new MediaStream();
+            prevTracks.forEach(t => { try { targetStream.removeTrack(t); } catch (_) {} });
+            try { targetStream.addTrack(newTrack); } catch (_) {}
+            vid.srcObject = null;
+            vid.srcObject = targetStream;
+            vid.play().catch(() => {});
+            console.log('[ichc] preview updated in-place');
+        }
+
+        // Replace sender in any open RTCPeerConnection
+        const live = (window._ichcPeers || []).filter(p => {
+            try { return p.signalingState !== 'closed'; } catch (_) { return false; }
+        });
+        window._ichcPeers = live;
+        for (const pc of live) {
+            try {
+                for (const sender of pc.getSenders()) {
+                    if (sender.track && sender.track.kind === kind) {
+                        await sender.replaceTrack(newTrack);
+                        console.log('[ichc] sender track replaced');
+                    }
+                }
+            } catch (e) { console.warn('[ichc] replaceTrack failed', e); }
+        }
+    }
+
+    // ── applyConstraints patch ──────────────────────────────────────────────────
+    const _origApply = MediaStreamTrack.prototype.applyConstraints;
+    if (_origApply && !_origApply.__ichcP) {
+        MediaStreamTrack.prototype.applyConstraints = function(constraints) {
+            const dId = constraints && (
+                typeof constraints.deviceId === 'string' ? constraints.deviceId :
+                constraints.deviceId ? (constraints.deviceId.exact || constraints.deviceId.ideal || null) : null
+            );
+            if (!dId) { return _origApply.call(this, constraints); }
+            console.log('[ichc] applyConstraints intercepted:', this.kind, dId);
+            _doSwitch(this.kind, this, dId, null).catch(e => console.warn('[ichc] _doSwitch error', e));
+            return _origApply.call(this, constraints).catch(() => Promise.resolve());
+        };
+        MediaStreamTrack.prototype.applyConstraints.__ichcP = true;
+    }
+
+    // ── Select-change fallback ──────────────────────────────────────────────────
+    function _attachPanelListener(panel) {
+        if (!panel || panel.dataset.ichcDsw) { return; }
+        panel.dataset.ichcDsw = '1';
+
+        // On panel open, ICHC restores the last-used device label in the dropdown
+        // but its CameraMobile_XXX deviceId fails silently in Firefox, so the preview
+        // falls back to the default camera. Auto-correct after ICHC finishes opening.
+        setTimeout(() => {
+            try {
+                const vid = panel.querySelector('video');
+                panel.querySelectorAll('select').forEach(sel => {
+                    const opt = sel.options[sel.selectedIndex];
+                    if (!opt || !sel.value) { return; }
+                    const optLabel = opt.textContent.trim();
+                    const hint = (sel.id + ' ' + sel.name).toLowerCase();
+                    const kind = /audio|mic|sound/i.test(hint) ? 'audio' : 'video';
+                    const curTrack = vid && vid.srcObject instanceof MediaStream
+                        ? (kind === 'video' ? vid.srcObject.getVideoTracks()[0]
+                                            : vid.srcObject.getAudioTracks()[0])
+                        : null;
+                    const curLabel = (curTrack ? curTrack.label : '').toLowerCase();
+                    const selLabel = optLabel.toLowerCase();
+                    if (optLabel && curLabel &&
+                        !curLabel.includes(selLabel) && !selLabel.includes(curLabel)) {
+                        console.log('[ichc] panel open mismatch — correcting:', curLabel, '→', optLabel);
+                        _doSwitch(kind, null, sel.value, optLabel).catch(() => {});
+                    }
+                });
+            } catch (_) {}
+        }, 1500);
+
+        panel.addEventListener('change', e => {
+            const sel = e.target;
+            if (sel.tagName !== 'SELECT' || !sel.value) { return; }
+            const hint = (sel.id + ' ' + sel.name + ' ' +
+                (sel.labels && sel.labels[0] ? sel.labels[0].textContent : '')).toLowerCase();
+            const kind = /audio|mic|sound/i.test(hint) ? 'audio' : 'video';
+            // Pass the option's visible text as a label hint so _doSwitch can
+            // match against enumerateDevices labels even when the value is an
+            // ICHC-internal ID that doesn't match Firefox's deviceId format.
+            const optLabel = sel.options[sel.selectedIndex]
+                ? sel.options[sel.selectedIndex].textContent.trim() : '';
+            console.log('[ichc] broadcast select changed:', kind, sel.value, optLabel);
+            _doSwitch(kind, null, sel.value, optLabel).catch(e => console.warn('[ichc] _doSwitch error', e));
+        }, true); // capture so we fire before the site's handler
+    }
+
+    _attachPanelListener(document.getElementById('rtc-broadcaster'));
+    const _mo = new MutationObserver(() => {
+        _attachPanelListener(document.getElementById('rtc-broadcaster'));
+    });
+    _mo.observe(document.body, { childList: true, subtree: true });
+})();
+        `;
+        runInPageContext(source);
+        window.setTimeout(() => runInPageContext(source), 2000);
     }
     function invokeNativeElementAction(element) {
         if (!element || !element.isConnected) { return; }
@@ -3111,11 +3371,18 @@
             return out;
         }
 
-        function _render() {
+        let _popupAnchored = false;
+
+        function _anchorPopup() {
             const r = input.getBoundingClientRect();
             popup.style.bottom = (window.innerHeight - r.top + 4) + 'px';
             popup.style.left = r.left + 'px';
             popup.style.minWidth = Math.min(r.width, 320) + 'px';
+            _popupAnchored = true;
+        }
+
+        function _render() {
+            if (!_popupAnchored) { _anchorPopup(); }
             popup.innerHTML = '';
             hits.forEach((h, i) => {
                 const item = document.createElement('div');
@@ -3147,6 +3414,7 @@
             const tok = _token();
             if (!tok) { _dismiss(); return; }
             const ins = h.insert + ' ';
+            _trackEmoteUsage(h.insert);
             input.value = input.value.slice(0, tok.start) + ins + input.value.slice(tok.end);
             input.setSelectionRange(tok.start + ins.length, tok.start + ins.length);
             _dismiss();
@@ -3155,9 +3423,10 @@
         }
 
         function _dismiss() {
-            popup.hidden = true;
+            if (!popup.hidden) { popup.hidden = true; }
             hits = [];
             sel = 0;
+            _popupAnchored = false;
         }
 
         input.addEventListener('input', () => {
@@ -4540,11 +4809,84 @@
             gifPanel.appendChild(grid);
             gifWrapper.appendChild(gifBtn);
 
+            // Quickbar flyout — shows 3 most-used emotes/gifs on hover
+            let quickbar = document.getElementById('ichc-gif-quickbar');
+            if (!quickbar) {
+                quickbar = document.createElement('div');
+                quickbar.id = 'ichc-gif-quickbar';
+                quickbar.hidden = true;
+                document.body.appendChild(quickbar);
+            }
+
+            const refreshQuickbar = () => {
+                const top = _getTopEmotes(3);
+                quickbar.innerHTML = '';
+                if (!top.length) { return; }
+                top.forEach(item => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'ichc-quickbar-item';
+                    btn.title = item.code;
+                    if (item.type === 'gif') {
+                        const img = document.createElement('img');
+                        img.src = item.src;
+                        img.alt = item.code;
+                        img.loading = 'lazy';
+                        btn.appendChild(img);
+                    } else {
+                        btn.textContent = item.code;
+                    }
+                    btn.addEventListener('click', e => {
+                        e.stopPropagation();
+                        const txtMsg = document.getElementById('txtMsg');
+                        if (txtMsg) {
+                            const start = txtMsg.selectionStart ?? txtMsg.value.length;
+                            const end = txtMsg.selectionEnd ?? txtMsg.value.length;
+                            const before = txtMsg.value.slice(0, start);
+                            const after = txtMsg.value.slice(end);
+                            const sep = before && !before.endsWith(' ') ? ' ' : '';
+                            txtMsg.value = before + sep + item.code + ' ' + after;
+                            const pos = (before + sep + item.code + ' ').length;
+                            txtMsg.setSelectionRange(pos, pos);
+                            txtMsg.focus();
+                        }
+                        _trackEmoteUsage(item.code);
+                        quickbar.hidden = true;
+                    });
+                    quickbar.appendChild(btn);
+                });
+                quickbar.hidden = top.length === 0;
+            };
+
+            const positionQuickbar = () => {
+                if (quickbar.parentElement !== document.body) { document.body.appendChild(quickbar); }
+                const rect = gifWrapper.getBoundingClientRect();
+                quickbar.style.setProperty('bottom', (window.innerHeight - rect.bottom) + 'px', 'important');
+                quickbar.style.setProperty('right', (window.innerWidth - rect.left + 6) + 'px', 'important');
+                quickbar.style.removeProperty('top');
+                quickbar.style.removeProperty('left');
+            };
+
+            let _qbHideTimer = null;
+            const showQuickbar = () => {
+                clearTimeout(_qbHideTimer);
+                refreshQuickbar();
+                if (!quickbar.hidden) { positionQuickbar(); }
+            };
+            const hideQuickbar = () => {
+                _qbHideTimer = setTimeout(() => { quickbar.hidden = true; }, 250);
+            };
+            gifWrapper.addEventListener('mouseenter', showQuickbar);
+            gifWrapper.addEventListener('mouseleave', hideQuickbar);
+            quickbar.addEventListener('mouseenter', () => clearTimeout(_qbHideTimer));
+            quickbar.addEventListener('mouseleave', hideQuickbar);
+
             let _gifData = null; // { gifs: [{code, src, full}], emotes: [{code}] }
             let _activeTab = 'gif';
             let _gifQuery = '';
 
             const insertText = (text) => {
+                _trackEmoteUsage(text);
                 const msg = document.getElementById('txtMsg');
                 if (!msg) { return; }
                 const start = msg.selectionStart ?? msg.value.length;
@@ -7293,6 +7635,7 @@
             240,
             Math.min(window.innerHeight, Math.round(rawPanelH - hiddenBarHeight - 6)),
         );
+        camLayoutState.lastAvailableHeight = availableHeight;
 
         if (window.innerWidth > 760 && densityCount > 0) {
             aspect = '4 / 3';
@@ -7438,70 +7781,99 @@
             }
         });
 
-        // Side-by-side layout: featured fills left (N-1) columns, thumbnails stack in
-        // the last column. Falls back to stacked (featured full-width on top) when
-        // there is only 1 column or no thumbnails.
-        const useSideBySide = found && columns >= 2 && thumbCards.length > 0;
-        let thumbMaxH = 'clamp(120px, 28vh, 320px)';
+        // Layout: featured cam fills the left (columns-1) visual columns and spans as
+        // many rows as can be filled by thumbnails on the right. CSS grid dense
+        // auto-placement then naturally puts thumbnails in the right column first
+        // (those are the only open cells alongside the featured cam), and any excess
+        // thumbnails wrap below in a normal multi-column grid.
+        const n = thumbCards.length;
+        let sideRowSpan = 0;
+        let thumbH = null;
 
-        if (useSideBySide && cams && cams.clientHeight > 0) {
-            const containerH = cams.clientHeight;
+        if (cams) {
+            cams.style.removeProperty('grid-template-rows');
+            cams.style.removeProperty('align-content');
+        }
+
+        if (found && columns >= 2 && n > 0 && cams) {
+            // Measure #cams directly — lastAvailableHeight is based on the panel's
+            // clientHeight before footer-padding is subtracted, causing a mismatch.
+            // getBoundingClientRect reflects the actual flex-resolved #cams height.
+            const containerH = Math.round(cams.getBoundingClientRect().height) || cams.clientHeight || Math.round(window.innerHeight * 0.72);
             const containerW = cams.clientWidth;
-            const gap = parseFloat(getComputedStyle(cams).gap) || 8;
-            const n = thumbCards.length;
-            const thumbColW = (containerW - gap * (columns - 1)) / columns;
-            const thumbNatH = thumbColW * (3 / 4);
-            const thumbFitH = (containerH - gap * Math.max(n - 1, 0)) / n;
-            thumbMaxH = Math.max(80, Math.floor(Math.min(thumbNatH, thumbFitH))) + 'px';
+            if (containerH > 0 && containerW > 0) {
+                const gap = parseFloat(getComputedStyle(cams).gap) || 8;
+                const thumbColW = Math.round(2 * (containerW - (columns * 2 - 1) * gap) / (columns * 2) + gap);
+                const thumbNatH = Math.round(thumbColW * 0.75);
+                // minThumbH: 40% of natural — below this thumbnails are uselessly tiny.
+                const minThumbH = Math.max(60, Math.round(thumbNatH * 0.4));
+
+                // Find the sideRowSpan (how many rows the featured cam spans, filling
+                // the right column first) that maximises the featured cam height while
+                // guaranteeing ALL thumbnails fit in containerH without any overflow.
+                // thumbH is derived from totalRows so the grid never exceeds containerH.
+                let maxFeatH = 0;
+                for (let k = 1; k <= n; k++) {
+                    const belowRows = Math.ceil(Math.max(0, n - k) / columns);
+                    const totalRows = k + belowRows;
+                    const h = Math.min(thumbNatH, Math.floor((containerH - (totalRows - 1) * gap) / totalRows));
+                    if (h < minThumbH) continue;
+                    const fh = k * h + (k - 1) * gap;
+                    if (fh > maxFeatH) { maxFeatH = fh; sideRowSpan = k; thumbH = h; }
+                }
+            }
         }
 
         getCamCards().forEach(card => {
             const active = card === featuredCard;
             if (active) {
-                if (useSideBySide) {
-                    // Grid uses doubled tracks: N cols = 2N tracks. Featured spans
-                    // all but the last visual column = tracks 1 to (N-1)*2+1.
+                if (sideRowSpan > 0) {
+                    // Featured cam: left (N-1) columns, spans sideRowSpan rows.
+                    // aspect-ratio:auto overrides the CSS 4/3 rule so align-self:stretch
+                    // fills the grid area without the ratio collapsing the height.
                     const featTrackEnd = (columns - 1) * 2 + 1;
                     card.style.setProperty('grid-column', `1 / ${featTrackEnd}`, 'important');
-                    card.style.setProperty('grid-row', `1 / span ${thumbCards.length}`, 'important');
-                    card.style.removeProperty('aspect-ratio');
+                    card.style.setProperty('grid-row', `1 / span ${sideRowSpan}`, 'important');
+                    card.style.setProperty('aspect-ratio', 'auto', 'important');
+                    card.style.removeProperty('height');
                     card.style.removeProperty('min-height');
                     card.style.removeProperty('max-height');
                     card.style.setProperty('align-self', 'stretch', 'important');
                 } else {
+                    // Single column or no measurement yet — simple full-width stacked.
                     card.style.setProperty('grid-column', columns >= 2 ? '1 / -1' : '', 'important');
                     card.style.removeProperty('grid-row');
                     card.style.setProperty('aspect-ratio', '16 / 9', 'important');
+                    card.style.removeProperty('height');
                     card.style.setProperty('min-height', 'clamp(200px, 40vh, 480px)', 'important');
                     card.style.setProperty('max-height', 'clamp(200px, 55vh, 600px)', 'important');
                     card.style.setProperty('align-self', 'start', 'important');
                 }
                 card.style.removeProperty('min-width');
-            } else {
-                if (useSideBySide) {
-                    // Last visual column: tracks (N-1)*2+1 to end (-1).
-                    const thumbTrackStart = (columns - 1) * 2 + 1;
-                    card.style.setProperty('grid-column', `${thumbTrackStart} / -1`, 'important');
-                    card.style.removeProperty('grid-row');
-                    card.style.setProperty('aspect-ratio', '4 / 3', 'important');
-                    card.style.setProperty('max-height', thumbMaxH, 'important');
-                    card.style.setProperty('align-self', 'start', 'important');
-                    card.style.removeProperty('min-height');
-                } else if (featured) {
-                    card.style.removeProperty('grid-column');
-                    card.style.removeProperty('grid-row');
-                    card.style.setProperty('aspect-ratio', '4 / 3', 'important');
-                    card.style.setProperty('max-height', 'clamp(120px, 28vh, 320px)', 'important');
-                    card.style.setProperty('align-self', 'start', 'important');
-                    card.style.removeProperty('min-height');
+            } else if (featured) {
+                // Thumbnail: span 2 tracks (1 visual column). Explicit px height so
+                // totalRows * (thumbH + gap) ≤ containerH — no overflow, no scroll.
+                // aspect-ratio:auto overrides the CSS 4/3 rule so the explicit height
+                // doesn't collapse the card width.
+                card.style.setProperty('grid-column', 'span 2', 'important');
+                card.style.removeProperty('grid-row');
+                card.style.setProperty('aspect-ratio', 'auto', 'important');
+                if (thumbH !== null) {
+                    card.style.setProperty('height', `${thumbH}px`, 'important');
                 } else {
-                    card.style.removeProperty('grid-column');
-                    card.style.removeProperty('grid-row');
-                    card.style.removeProperty('aspect-ratio');
-                    card.style.removeProperty('max-height');
-                    card.style.removeProperty('align-self');
-                    card.style.removeProperty('min-height');
+                    card.style.removeProperty('height');
                 }
+                card.style.removeProperty('max-height');
+                card.style.removeProperty('min-height');
+                card.style.setProperty('align-self', 'start', 'important');
+            } else {
+                card.style.removeProperty('grid-column');
+                card.style.removeProperty('grid-row');
+                card.style.removeProperty('aspect-ratio');
+                card.style.removeProperty('height');
+                card.style.removeProperty('max-height');
+                card.style.removeProperty('align-self');
+                card.style.removeProperty('min-height');
             }
             const button = card.querySelector('.ichc-spotlight-btn');
             if (button) {
@@ -7564,8 +7936,8 @@
         cams?.classList.toggle('ichc-has-rounded-cards', !!document.querySelector('#cams .rounded_square'));
         cards.forEach(prepareCamCard);
         applySavedOrder();
-        applyFeaturedCam();
         updateCamDensity();
+        applyFeaturedCam();
         updateEmptyCamState();
         buildHiddenCamManager();
     }

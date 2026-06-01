@@ -100,7 +100,10 @@
         setInterval(() => {
             document.querySelectorAll('#txt .ichc-ts[data-ichc-ts-epoch]').forEach(el => {
                 const epoch = parseInt(el.dataset.ichcTsEpoch, 10);
-                if (!isNaN(epoch)) { el.textContent = _relativeTime(epoch); }
+                if (!isNaN(epoch)) {
+                    const next = _relativeTime(epoch);
+                    if (el.textContent !== next) { el.textContent = next; }
+                }
             });
         }, 5000);
     });
@@ -1189,7 +1192,10 @@
     }
     function _makeEmoteWrap(url, code, type, mediaEl) {
         const wrap = document.createElement('span');
-        wrap.className = 'ichc-emote-wrap';
+        // True ICHC emotes always have :code: format (e.g. ":doge:").
+        // Plain image URLs get a filename-based code — treat those as full-size images.
+        const isEmoteCode = /^:.+:$/.test(code);
+        wrap.className = isEmoteCode ? 'ichc-emote-wrap' : 'ichc-emote-wrap ichc-inline-image';
         wrap.dataset.ichcEmoteUrl = url;
         wrap.dataset.ichcEmoteCode = code;
         wrap.dataset.ichcEmoteType = type;
