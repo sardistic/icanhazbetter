@@ -1222,15 +1222,68 @@
         return next;
     }
 
+    // Resolve the broadcaster dropdown's CURRENTLY-selected camera to a real Firefox
+    // deviceId, read live at the moment getUserMedia fires. By the time ICHC calls
+    // getUserMedia (in response to the dropdown's change event) the <select> already
+    // holds the new value — so reading it here is never a tick behind, unlike the
+    // pre-recorded window._ichcSelectedVideoId which raced ICHC's preview capture and
+    // always landed one selection late (OBS showed Kinect, Kinect showed OBS).
+    function selectedVideoId() {
+        try {
+            const panel = document.getElementById('rtc-broadcaster');
+            const inputs = window._ichcVideoInputs || [];
+            if (panel && inputs.length) {
+                const sels = panel.querySelectorAll('select');
+                for (const sel of sels) {
+                    if (!sel.value) { continue; }
+                    const hint = (sel.id + ' ' + sel.name).toLowerCase();
+                    if (/audio|mic|sound/i.test(hint)) { continue; }
+                    const opt = sel.options[sel.selectedIndex];
+                    const lbl = ((opt && opt.textContent) || '').trim().toLowerCase();
+                    const m = inputs.find(d => d.deviceId === sel.value)
+                        || (lbl ? inputs.find(d => d.label && d.label.toLowerCase() === lbl) : null)
+                        || (lbl ? inputs.find(d => {
+                            const dl = d.label.toLowerCase();
+                            return dl && (dl.includes(lbl) || lbl.includes(dl));
+                        }) : null);
+                    if (m) { return m.deviceId; }
+                }
+            }
+        } catch (_) {}
+        return window._ichcSelectedVideoId || null;
+    }
+
     function improveConstraints(constraints) {
         const next = Object.assign({}, constraints || {});
         const video = next.video;
         if (!video) { return constraints; }
-        // When a specific deviceId is requested (e.g. user switching cameras in the
-        // broadcast UI), pass through unchanged. Firefox rejects or mismatch-selects
-        // the device when extra width/height/frameRate constraints are added alongside
-        // a deviceId, causing the input change to silently have no effect.
-        if (typeof video === 'object' && video.deviceId != null) { return constraints; }
+        // ICHC's own getUserMedia passes its CameraMobile_XXX deviceId, which Firefox
+        // can't match — it silently falls back to the default camera (mjpeg). THIS is
+        // why cam-up ignored the selected device. If we've resolved the user's chosen
+        // camera to a real Firefox deviceId, OVERRIDE ICHC's broken id with it. We use
+        // { exact } (not ideal) so a co-present resolution constraint can't make Firefox
+        // mismatch back to the default; the getUserMedia patch retries without the
+        // override if exact ever over-constrains.
+        if (typeof video === 'object' && video.deviceId != null) {
+            // If ICHC passed a deviceId that matches a real Firefox device, respect it —
+            // only override the unmatchable CameraMobile_XXX ids.
+            const requested = typeof video.deviceId === 'string'
+                ? video.deviceId
+                : (video.deviceId.exact || video.deviceId.ideal || '');
+            const knownInputs = window._ichcVideoInputs;
+            const live = selectedVideoId();
+            if (requested && Array.isArray(knownInputs) && knownInputs.some(d => d.deviceId === requested)) {
+                // ICHC already asked for a real device — only override if the dropdown
+                // resolves to a DIFFERENT real one (so we still honor a fresh switch).
+                if (!live || live === requested) { return constraints; }
+            }
+            if (live) {
+                next.video = Object.assign({}, video, { deviceId: { exact: live } });
+                console.log('[ichc] override camera deviceId →', live);
+                return next;
+            }
+            return constraints;
+        }
         if (video === true) {
             next.video = {
                 width: Object.assign({}, target.width),
@@ -1238,8 +1291,10 @@
                 frameRate: Object.assign({}, target.frameRate),
             };
             // Inject the user-selected camera for broadcast-start getUserMedia calls
-            if (window._ichcSelectedVideoId) {
-                next.video.deviceId = { ideal: window._ichcSelectedVideoId };
+            const liveTrue = selectedVideoId();
+            if (liveTrue) {
+                next.video.deviceId = { exact: liveTrue };
+                console.log('[ichc] inject camera deviceId →', liveTrue);
             }
             return next;
         }
@@ -1250,8 +1305,10 @@
             height: liftConstraint(video.height, target.height),
             frameRate: liftConstraint(video.frameRate, target.frameRate),
         });
-        if (window._ichcSelectedVideoId) {
-            next.video.deviceId = { ideal: window._ichcSelectedVideoId };
+        const liveObj = selectedVideoId();
+        if (liveObj) {
+            next.video.deviceId = { exact: liveObj };
+            console.log('[ichc] inject camera deviceId →', liveObj);
         }
         return next;
     }
@@ -1283,7 +1340,17 @@
     if (mediaDevices && mediaDevices.getUserMedia && !mediaDevices.getUserMedia.__ichcQualityPatched) {
         const original = mediaDevices.getUserMedia.bind(mediaDevices);
         const patched = function(constraints) {
-            return original(improveConstraints(constraints));
+            const improved = improveConstraints(constraints);
+            return original(improved).catch(err => {
+                // Our forced { exact } deviceId (or boosted resolution) over-constrained
+                // — e.g. a stale stored camera id. Retry with ICHC's original request so
+                // cam-up never fails just because our injection didn't fit.
+                if (improved !== constraints) {
+                    console.warn('[ichc] getUserMedia failed with injected constraints, retrying original:', err && err.name);
+                    return original(constraints);
+                }
+                throw err;
+            });
         };
         patched.__ichcQualityPatched = true;
         mediaDevices.getUserMedia = patched;
@@ -1329,214 +1396,159 @@
     }
 
     function installBroadcastDeviceSwitchFix() {
-        // Firefox silently ignores applyConstraints({deviceId}) on a live track — it
-        // does not switch the physical device. This is a known Firefox WebRTC limitation.
-        // Fix: (1) wrap the RTCPeerConnection constructor to track active peers so we
-        // can call replaceTrack later; (2) patch applyConstraints to do a proper
-        // getUserMedia restart when a deviceId change is requested; (3) watch the
-        // broadcast panel for select changes as a belt-and-suspenders fallback.
+        // Firefox silently ignores applyConstraints({deviceId}) on a live track, so
+        // ICHC's camera dropdown can't switch the physical device. Two earlier fixes
+        // both desynced ICHC's broadcast state machine (stuck "broadcasting audio",
+        // can't cam back up): (a) swapping a foreign getUserMedia track onto ICHC's
+        // senders; (b) auto-clicking ICHC's broadcast toggle to restart. Clean approach:
+        // never touch ICHC's tracks or controls. Just RECORD the chosen camera as a real
+        // Firefox deviceId in window._ichcSelectedVideoId (persisted to localStorage);
+        // improveConstraints in the quality patch OVERRIDES ICHC's unmatchable
+        // CameraMobile_XXX id with it on every getUserMedia. So the selection applies on
+        // the next capture — automatically on cam-up; to switch mid-broadcast, cam down
+        // then back up. ICHC stays fully in control of its tracks and broadcast.
         const source = `
 (() => {
     if (window.__ichcDeviceSwitchFix) { return; }
     window.__ichcDeviceSwitchFix = true;
 
-    // ── Peer registry ──────────────────────────────────────────────────────────
-    // Wrap the RTCPeerConnection constructor (not prototype methods) to record
-    // each peer. Returning the native instance from the wrapper is safe in all
-    // modern browsers.
-    const _OrigPeer = window.RTCPeerConnection;
-    if (_OrigPeer && !_OrigPeer.__ichcW) {
-        window._ichcPeers = [];
-        function _IchcRTC(...a) {
-            const pc = new _OrigPeer(...a);
-            window._ichcPeers.push(pc);
-            // After a short delay ICHC will have called addTrack with whatever
-            // track it had stored. If the user switched cameras, replace them now.
-            setTimeout(() => {
-                try {
-                    const selV = window._ichcSelectedVideoTrack;
-                    const selA = window._ichcSelectedAudioTrack;
-                    if (!selV && !selA) { return; }
-                    if (pc.signalingState === 'closed') { return; }
-                    pc.getSenders().forEach(sender => {
-                        if (!sender.track) { return; }
-                        if (sender.track.kind === 'video' && selV &&
-                            selV.readyState !== 'ended' && sender.track !== selV) {
-                            console.log('[ichc] replaceTrack on new peer: video',
-                                sender.track.label, '→', selV.label);
-                            sender.replaceTrack(selV).catch(() => {});
-                        } else if (sender.track.kind === 'audio' && selA &&
-                            selA.readyState !== 'ended' && sender.track !== selA) {
-                            console.log('[ichc] replaceTrack on new peer: audio',
-                                sender.track.label, '→', selA.label);
-                            sender.replaceTrack(selA).catch(() => {});
-                        }
-                    });
-                } catch (_) {}
-            }, 600);
-            return pc; // returning an object from a constructor uses that object
-        }
-        _IchcRTC.prototype = _OrigPeer.prototype;
-        _IchcRTC.__ichcW = true;
-        try { Object.setPrototypeOf(_IchcRTC, _OrigPeer); } catch (_) {}
-        window.RTCPeerConnection = _IchcRTC;
-    }
+    const LS_KEY = 'ichc_selected_video_id';
 
-    // ── Core switch helper ──────────────────────────────────────────────────────
-    async function _doSwitch(kind, oldTrack, deviceId, deviceLabel) {
-        let realId = deviceId;
+    // Pre-load the last-used device so the very first cam-up getUserMedia — which
+    // fires before the user touches the dropdown — already requests it via the
+    // improveConstraints injection. Uses { ideal } there, so a now-invalid stored id
+    // (device unplugged) falls back to the default instead of failing.
+    try {
+        const saved = localStorage.getItem(LS_KEY);
+        if (saved && !window._ichcSelectedVideoId) { window._ichcSelectedVideoId = saved; }
+    } catch (_) {}
+
+    // Keep a synchronously-readable cache of real video inputs. The dropdown change
+    // handler must resolve label→deviceId BEFORE ICHC's own handler fires its
+    // getUserMedia in the same tick — an async enumerateDevices (or the old 300ms
+    // debounce) makes the injected camera lag one selection behind, which is exactly
+    // the "pick kinect, get the previous camera" symptom.
+    window._ichcVideoInputs = window._ichcVideoInputs || [];
+    async function _refreshInputs() {
         try {
             const devs = await navigator.mediaDevices.enumerateDevices();
-            const inputs = devs.filter(d => d.kind === kind + 'input');
-            // ICHC's CameraMobile_XXX IDs don't match Firefox deviceIds.
-            // Match first by exact id, then by the option's human-readable label
-            // (which DOES match enumerateDevices labels), then by numeric index.
+            window._ichcVideoInputs = devs
+                .filter(d => d.kind === 'videoinput')
+                .map(d => ({ deviceId: d.deviceId, label: d.label || '' }));
+        } catch (_) {}
+    }
+    _refreshInputs();
+    try { navigator.mediaDevices.addEventListener('devicechange', _refreshInputs); } catch (_) {}
+
+    // Map ICHC's CameraMobile_XXX id / human label to a real Firefox deviceId. Match
+    // by exact id, then exact label, then substring — but NEVER on an empty label:
+    // before permission Firefox returns blank labels and 'kinect'.includes('') is
+    // true, which would resolve every camera to inputs[0] (a virtual mjpeg/sprout).
+    async function _resolveVideoId(deviceId, deviceLabel) {
+        let realId = deviceId, matchLabel = '';
+        try {
+            const devs = await navigator.mediaDevices.enumerateDevices();
+            const inputs = devs.filter(d => d.kind === 'videoinput');
             const lbl = (deviceLabel || '').toLowerCase();
             const match = inputs.find(d => d.deviceId === deviceId)
+                || (lbl ? inputs.find(d => d.label && d.label.toLowerCase() === lbl) : null)
                 || (lbl ? inputs.find(d => {
                     const dl = d.label.toLowerCase();
-                    return dl === lbl || dl.includes(lbl) || lbl.includes(dl);
+                    return dl && (dl.includes(lbl) || lbl.includes(dl));
                 }) : null)
-                || inputs.find(d => d.label === deviceId)
                 || (isNaN(+deviceId) ? null : inputs[+deviceId]);
-            if (match) {
-                realId = match.deviceId;
-                console.log('[ichc] resolved', deviceLabel || deviceId, '→', match.label);
-            }
+            if (match) { realId = match.deviceId; matchLabel = match.label || ''; }
         } catch (_) {}
-
-        console.log('[ichc] switching', kind, 'to', realId);
-
-        // Firefox grants camera permission per-device. { exact } throws
-        // OverconstrainedError for devices beyond the first permitted one.
-        // Workaround: stop the current track to release it, then request
-        // with { ideal } — Firefox will use the now-available device.
-        const panel = document.getElementById('rtc-broadcaster');
-        const vid = panel && panel.querySelector('video');
-        const prevStream = vid && vid.srcObject instanceof MediaStream ? vid.srcObject : null;
-        const prevTracks = prevStream
-            ? (kind === 'video' ? prevStream.getVideoTracks() : prevStream.getAudioTracks())
-            : [];
-        prevTracks.forEach(t => { try { t.stop(); } catch (_) {} });
-
-        let newTrack;
-        for (const c of [{ exact: realId }, { ideal: realId }]) {
-            try {
-                const s = await navigator.mediaDevices.getUserMedia({ [kind]: { deviceId: c } });
-                newTrack = s.getTracks()[0];
-                if (newTrack) { break; }
-            } catch (_) {}
-        }
-        if (!newTrack) {
-            console.warn('[ichc] getUserMedia failed for all constraints:', kind, realId);
-            return;
-        }
-
-        console.log('[ichc] new track:', newTrack.label || newTrack.id,
-            '| was:', prevTracks[0] ? (prevTracks[0].label || prevTracks[0].id) : 'none');
-
-        // Store selected device so both improveConstraints (getUserMedia path)
-        // and the addTrack substitution (stored-track path) use the right device.
-        if (kind === 'video') {
-            window._ichcSelectedVideoId = realId;
-            window._ichcSelectedVideoTrack = newTrack;
-        } else {
-            window._ichcSelectedAudioId = realId;
-            window._ichcSelectedAudioTrack = newTrack;
-        }
-
-        // Modify the EXISTING stream in-place so ICHC's stored reference still
-        // points to a stream containing the new track. Then force Firefox to
-        // visually refresh the video by briefly nulling srcObject.
-        if (vid) {
-            const targetStream = prevStream || new MediaStream();
-            prevTracks.forEach(t => { try { targetStream.removeTrack(t); } catch (_) {} });
-            try { targetStream.addTrack(newTrack); } catch (_) {}
-            vid.srcObject = null;
-            vid.srcObject = targetStream;
-            vid.play().catch(() => {});
-            console.log('[ichc] preview updated in-place');
-        }
-
-        // Replace sender in any open RTCPeerConnection
-        const live = (window._ichcPeers || []).filter(p => {
-            try { return p.signalingState !== 'closed'; } catch (_) { return false; }
-        });
-        window._ichcPeers = live;
-        for (const pc of live) {
-            try {
-                for (const sender of pc.getSenders()) {
-                    if (sender.track && sender.track.kind === kind) {
-                        await sender.replaceTrack(newTrack);
-                        console.log('[ichc] sender track replaced');
-                    }
-                }
-            } catch (e) { console.warn('[ichc] replaceTrack failed', e); }
-        }
+        return { realId, matchLabel };
     }
 
-    // ── applyConstraints patch ──────────────────────────────────────────────────
-    const _origApply = MediaStreamTrack.prototype.applyConstraints;
-    if (_origApply && !_origApply.__ichcP) {
-        MediaStreamTrack.prototype.applyConstraints = function(constraints) {
-            const dId = constraints && (
-                typeof constraints.deviceId === 'string' ? constraints.deviceId :
-                constraints.deviceId ? (constraints.deviceId.exact || constraints.deviceId.ideal || null) : null
-            );
-            if (!dId) { return _origApply.call(this, constraints); }
-            console.log('[ichc] applyConstraints intercepted:', this.kind, dId);
-            _doSwitch(this.kind, this, dId, null).catch(e => console.warn('[ichc] _doSwitch error', e));
-            return _origApply.call(this, constraints).catch(() => Promise.resolve());
-        };
-        MediaStreamTrack.prototype.applyConstraints.__ichcP = true;
+    // We deliberately do NOT auto-restart the broadcast to apply a live switch.
+    // Clicking ICHC's broadcast toggle (stop → go-live) is unreliable and, with
+    // overlapping requests from fast dropdown changes, corrupts ICHC into the stuck
+    // "broadcasting audio / can't cam up" state. Instead the selected device is just
+    // recorded; the improveConstraints override applies it on the next getUserMedia —
+    // i.e. the next cam-up. To switch mid-broadcast, cam down then back up.
+    let _selectTimer = null;
+    async function _selectVideoDevice(deviceId, deviceLabel) {
+        const { realId, matchLabel } = await _resolveVideoId(deviceId, deviceLabel);
+        const changed = window._ichcSelectedVideoId !== realId;
+        window._ichcSelectedVideoId = realId;
+        try { localStorage.setItem(LS_KEY, realId); } catch (_) {}
+        console.log('[ichc] selected camera', matchLabel || realId,
+            changed ? '(new — cam down/up to apply)' : '(unchanged)');
+    }
+    function _selectDebounced(deviceId, deviceLabel) {
+        clearTimeout(_selectTimer);
+        _selectTimer = setTimeout(() => {
+            _selectVideoDevice(deviceId, deviceLabel).catch(() => {});
+        }, 300);
     }
 
-    // ── Select-change fallback ──────────────────────────────────────────────────
+    // Synchronous resolve from the cached input list — runs in the capture-phase
+    // change handler so _ichcSelectedVideoId is already correct when ICHC's own
+    // handler calls getUserMedia in the same tick. Returns false if the cache
+    // couldn't resolve it (then the async path is the fallback).
+    function _selectSync(deviceId, deviceLabel) {
+        const lbl = (deviceLabel || '').toLowerCase();
+        const inputs = window._ichcVideoInputs || [];
+        const match = inputs.find(d => d.deviceId === deviceId)
+            || (lbl ? inputs.find(d => d.label && d.label.toLowerCase() === lbl) : null)
+            || (lbl ? inputs.find(d => {
+                const dl = d.label.toLowerCase();
+                return dl && (dl.includes(lbl) || lbl.includes(dl));
+            }) : null)
+            || (isNaN(+deviceId) ? null : inputs[+deviceId]);
+        if (!match) { return false; }
+        window._ichcSelectedVideoId = match.deviceId;
+        try { localStorage.setItem(LS_KEY, match.deviceId); } catch (_) {}
+        console.log('[ichc] selected camera', match.label || match.deviceId, '(applies on next cam-up)');
+        return true;
+    }
+
+    // Watch the broadcaster panel: record the dropdown's selected video device (on
+    // open and on change) so the improveConstraints override applies it on the next
+    // getUserMedia. No broadcast manipulation here.
     function _attachPanelListener(panel) {
         if (!panel || panel.dataset.ichcDsw) { return; }
         panel.dataset.ichcDsw = '1';
 
-        // On panel open, ICHC restores the last-used device label in the dropdown
-        // but its CameraMobile_XXX deviceId fails silently in Firefox, so the preview
-        // falls back to the default camera. Auto-correct after ICHC finishes opening.
-        setTimeout(() => {
+        // On open, only record the dropdown default if nothing is saved yet. The panel
+        // resets its dropdown to option 1 regardless of what we injected, so recording
+        // it unconditionally STOMPS the saved selection — dropdown then disagrees with
+        // the live preview and the next cam-up flips back to mjpeg.
+        const _readSelected = () => {
+            if (window._ichcSelectedVideoId) { return; }
             try {
-                const vid = panel.querySelector('video');
                 panel.querySelectorAll('select').forEach(sel => {
                     const opt = sel.options[sel.selectedIndex];
                     if (!opt || !sel.value) { return; }
-                    const optLabel = opt.textContent.trim();
                     const hint = (sel.id + ' ' + sel.name).toLowerCase();
-                    const kind = /audio|mic|sound/i.test(hint) ? 'audio' : 'video';
-                    const curTrack = vid && vid.srcObject instanceof MediaStream
-                        ? (kind === 'video' ? vid.srcObject.getVideoTracks()[0]
-                                            : vid.srcObject.getAudioTracks()[0])
-                        : null;
-                    const curLabel = (curTrack ? curTrack.label : '').toLowerCase();
-                    const selLabel = optLabel.toLowerCase();
-                    if (optLabel && curLabel &&
-                        !curLabel.includes(selLabel) && !selLabel.includes(curLabel)) {
-                        console.log('[ichc] panel open mismatch — correcting:', curLabel, '→', optLabel);
-                        _doSwitch(kind, null, sel.value, optLabel).catch(() => {});
-                    }
+                    if (/audio|mic|sound/i.test(hint)) { return; } // video only
+                    _selectDebounced(sel.value, opt.textContent.trim());
                 });
             } catch (_) {}
-        }, 1500);
+        };
+        setTimeout(_readSelected, 800);
+        setTimeout(_readSelected, 2500);
+        _refreshInputs(); // labels populate once permission is granted
 
         panel.addEventListener('change', e => {
             const sel = e.target;
             if (sel.tagName !== 'SELECT' || !sel.value) { return; }
             const hint = (sel.id + ' ' + sel.name + ' ' +
                 (sel.labels && sel.labels[0] ? sel.labels[0].textContent : '')).toLowerCase();
-            const kind = /audio|mic|sound/i.test(hint) ? 'audio' : 'video';
-            // Pass the option's visible text as a label hint so _doSwitch can
-            // match against enumerateDevices labels even when the value is an
-            // ICHC-internal ID that doesn't match Firefox's deviceId format.
-            const optLabel = sel.options[sel.selectedIndex]
-                ? sel.options[sel.selectedIndex].textContent.trim() : '';
-            console.log('[ichc] broadcast select changed:', kind, sel.value, optLabel);
-            _doSwitch(kind, null, sel.value, optLabel).catch(e => console.warn('[ichc] _doSwitch error', e));
-        }, true); // capture so we fire before the site's handler
+            if (/audio|mic|sound/i.test(hint)) { return; } // video only
+            const opt = sel.options[sel.selectedIndex];
+            const optLabel = opt ? opt.textContent.trim() : '';
+            console.log('[ichc] camera dropdown changed →', optLabel);
+            // Resolve synchronously so ICHC's same-tick getUserMedia already sees the
+            // new selection; fall back to the async resolver only if the cache missed.
+            if (!_selectSync(sel.value, optLabel)) {
+                _selectDebounced(sel.value, optLabel);
+            } else {
+                _refreshInputs();
+            }
+        }, true); // capture so we read the value before the site's handler
     }
 
     _attachPanelListener(document.getElementById('rtc-broadcaster'));
@@ -2917,17 +2929,78 @@
         }
     }
 
+    function _finalizeChatBadgeAnchor(anchor, nick) {
+        const row = _chatRowFromAnchor(anchor);
+        _applyChatRowDecor(row, nick);
+
+        if (row) {
+            const karma = profileKarmaCache.get(nick) ?? null;
+            const tier  = _karmaToTier(karma);
+            const yt    = _yearToTier(profileYearCache.get(nick) ?? null);
+            const alpha = (tier <= 0 ? 0 : tier * 0.013) + (yt <= 0 ? 0 : yt * 0.008);
+            const year = profileYearCache.get(nick) ?? null;
+            if (tier > 0) {
+                const spectral = _karmaToSpectral(karma);
+                if (spectral) {
+                    row.style.setProperty('--ichc-nick-color', `rgba(${spectral[0]},${alpha})`);
+                    row.style.setProperty('--ichc-kt-color', spectral[0]);
+                    row.style.setProperty('--ichc-kt-i', String(spectral[1]));
+                }
+            } else {
+                const m = (anchor.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (m) { row.style.setProperty('--ichc-nick-color', `rgba(${m[1]},${m[2]},${m[3]},${alpha})`); }
+                row.style.removeProperty('--ichc-kt-color');
+                row.style.removeProperty('--ichc-kt-i');
+            }
+            _setUserViz(row, karma, year);
+            _applyChatGrouping(row, nick);
+        }
+
+        if (!profileYearCache.has(nick) || !profileJoinTsCache.has(nick)) {
+            fetchProfileImage(nick).then(() => {
+                _updateChatBadgesForUser(nick);
+                _updateCamBadgesForUser(nick);
+            });
+        }
+    }
+
+    function _dedupeNickBlock(nickBlock, nick, anchor) {
+        if (!nickBlock) { return; }
+        const badges = [...nickBlock.querySelectorAll(`.ichc-chat-year-badge[data-ichc-year-badge="${CSS.escape(nick)}"]`)];
+        badges.slice(1).forEach(el => el.remove());
+        const indicators = [...nickBlock.querySelectorAll(`.ichc-nick-indicators[data-ichc-nick-indicators="${CSS.escape(nick)}"]`)];
+        indicators.slice(1).forEach(el => el.remove());
+        const indicator = indicators[0] || document.createElement('span');
+        indicator.className = 'ichc-nick-indicators';
+        indicator.dataset.ichcNickIndicators = nick;
+        _updateNickIndicators(indicator, nick);
+        if (!indicator.isConnected && anchor) { nickBlock.insertBefore(indicator, anchor); }
+    }
+
     function _applyChatBadge(anchor) {
-        if (!anchor || 'ichcNick' in anchor.dataset) { return; }
+        if (!anchor) { return; }
+        if ('ichcNick' in anchor.dataset) {
+            const block = anchor.closest('.ichc-nick-block');
+            if (block) { _dedupeNickBlock(block, anchor.dataset.ichcNick, anchor); }
+            return;
+        }
         const nick = anchor.textContent.trim().toLowerCase();
         if (!nick) { return; }
-        anchor.dataset.ichcNick = nick;
 
         // Chat messages have "nick: message" — the text node after the anchor starts with ':'.
         // Event rows (join/leave/broadcast) don't have that separator; skip them entirely.
+        const existingBlock = anchor.closest('.ichc-nick-block');
+        if (existingBlock) {
+            anchor.dataset.ichcNick = nick;
+            _dedupeNickBlock(existingBlock, nick, anchor);
+            _finalizeChatBadgeAnchor(anchor, nick);
+            return;
+        }
+
         const nextRaw = anchor.nextSibling;
         const isMessage = nextRaw?.nodeType === Node.TEXT_NODE && /^\s*:/.test(nextRaw.textContent);
         if (!isMessage) { return; }
+        anchor.dataset.ichcNick = nick;
 
         const year    = profileYearCache.get(nick);
         const isGuest = profileGuestCache.get(nick);
@@ -2965,38 +3038,7 @@
             }
         }
 
-        const row = _chatRowFromAnchor(anchor);
-        _applyChatRowDecor(row, nick);
-
-        if (row) {
-            const karma = profileKarmaCache.get(nick) ?? null;
-            const tier  = _karmaToTier(karma);
-            const yt    = _yearToTier(profileYearCache.get(nick) ?? null);
-            const alpha = (tier <= 0 ? 0 : tier * 0.013) + (yt <= 0 ? 0 : yt * 0.008);
-            const year = profileYearCache.get(nick) ?? null;
-            if (tier > 0) {
-                const spectral = _karmaToSpectral(karma);
-                if (spectral) {
-                    row.style.setProperty('--ichc-nick-color', `rgba(${spectral[0]},${alpha})`);
-                    row.style.setProperty('--ichc-kt-color', spectral[0]);
-                    row.style.setProperty('--ichc-kt-i', String(spectral[1]));
-                }
-            } else {
-                const m = (anchor.style.color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-                if (m) { row.style.setProperty('--ichc-nick-color', `rgba(${m[1]},${m[2]},${m[3]},${alpha})`); }
-                row.style.removeProperty('--ichc-kt-color');
-                row.style.removeProperty('--ichc-kt-i');
-            }
-            _setUserViz(row, karma, year);
-            _applyChatGrouping(row, nick);
-        }
-
-        if (!profileYearCache.has(nick) || !profileJoinTsCache.has(nick)) {
-            fetchProfileImage(nick).then(() => {
-                _updateChatBadgesForUser(nick);
-                _updateCamBadgesForUser(nick);
-            });
-        }
+        _finalizeChatBadgeAnchor(anchor, nick);
     }
 
     function _applyChatBadgesScope(root) {
@@ -3179,6 +3221,7 @@
     // synchronous cascades when bursts of messages arrive.
     let _chatBadgePending = new Set();
     let _chatBadgeRAF = null;
+    let _chatBadgeIdle = null;
 
     // ── Chat scroll lock ──────────────────────────────────────────────────────
     // The site auto-scrolls #txt to the bottom on every new message. We intercept
@@ -3231,15 +3274,37 @@
     }
 
     function _scheduleChatBadgeFlush() {
-        if (_chatBadgeRAF !== null) { return; }
-        _chatBadgeRAF = requestAnimationFrame(() => {
+        if (_chatBadgeRAF !== null || _chatBadgeIdle !== null) { return; }
+        const schedule = !_chatAtBottom && window.requestIdleCallback
+            ? cb => {
+                _chatBadgeIdle = window.requestIdleCallback(deadline => {
+                    _chatBadgeIdle = null;
+                    cb(deadline);
+                }, { timeout: 450 });
+            }
+            : cb => {
+                _chatBadgeRAF = requestAnimationFrame(() => {
+                    _chatBadgeRAF = null;
+                    cb(null);
+                });
+            };
+        schedule(deadline => {
             _chatBadgeRAF = null;
-            const nodes = [..._chatBadgePending];
-            _chatBadgePending.clear();
+            const budget = !_chatAtBottom ? 12 : 80;
+            const nodes = [];
+            const started = performance.now();
+            for (const node of _chatBadgePending) {
+                _chatBadgePending.delete(node);
+                nodes.push(node);
+                if (nodes.length >= budget) { break; }
+                if (deadline && deadline.timeRemaining() < 4) { break; }
+                if (!_chatAtBottom && performance.now() - started > 8) { break; }
+            }
             const log = document.getElementById('txt');
             nodes.forEach(_applyChatBadgesScope);
-            _pruneChatLog(log);
+            if (_chatAtBottom || _chatBadgePending.size === 0) { _pruneChatLog(log); }
             _restoreChatScroll(log);
+            if (_chatBadgePending.size > 0) { _scheduleChatBadgeFlush(); }
         });
     }
 
@@ -3633,6 +3698,39 @@
         _syncSidebarUnread();
     }
 
+    function _pulsePmAttention(nick) {
+        const item = nick ? _pmAvNode(nick) : null;
+        if (item) {
+            item.classList.remove('ichc-pm-avatar-attention');
+            void item.offsetWidth;
+            item.classList.add('ichc-pm-avatar-attention');
+            window.setTimeout(() => item.classList.remove('ichc-pm-avatar-attention'), 4200);
+        }
+        const pmBtn = document.getElementById('ichc-pm-toggle-btn');
+        if (pmBtn) {
+            pmBtn.classList.remove('ichc-pm-toggle-attention');
+            void pmBtn.offsetWidth;
+            pmBtn.classList.add('ichc-pm-toggle-attention');
+            window.setTimeout(() => pmBtn.classList.remove('ichc-pm-toggle-attention'), 4200);
+        }
+    }
+
+    function _setMentionIndicator(active, detail = null) {
+        const moreBtn = document.querySelector('.ichc-ul-more-btn');
+        const inputRow = document.getElementById('ichc-input-row');
+        if (moreBtn) {
+            moreBtn.classList.toggle('ichc-has-mention', !!active);
+            if (active) {
+                moreBtn.title = detail?.text ? `Mentioned: ${detail.text}` : 'You were mentioned';
+            } else if (moreBtn.classList.contains('ichc-menu-open')) {
+                moreBtn.title = 'Close options';
+            } else {
+                moreBtn.title = 'More options';
+            }
+        }
+        if (inputRow) { inputRow.classList.toggle('ichc-has-mention', !!active); }
+    }
+
     function _injectPmAvStyles() {
         if (document.getElementById('ichc-pm-av-styles')) { return; }
         const s = document.createElement('style');
@@ -3673,6 +3771,7 @@
             const nick = e.detail?.nick;
             if (!nick) { return; }
             ensurePmAvatarItem(nick, null);
+            _pulsePmAttention(nick);
             if (_isPmTabFocused(nick)) { return; }
             const item = _pmAvNode(nick);
             if (!item) { return; }
@@ -3752,6 +3851,18 @@
                 window.dispatchEvent(new CustomEvent('ichc-pm-active', { detail: { nick: targetNick } }));
             } else {
                 window.dispatchEvent(new CustomEvent('ichc-pm-user-toggle'));
+            }
+        }, true);
+
+        window.addEventListener('ichc-mention-alert', e => {
+            _setMentionIndicator(true, e.detail || null);
+        });
+        document.addEventListener('focusin', e => {
+            if (e.target?.id === 'txtMsg') { _setMentionIndicator(false); }
+        }, true);
+        document.addEventListener('click', e => {
+            if (e.target?.closest?.('#txt, #chat_container, #ichc-input-row')) {
+                _setMentionIndicator(false);
             }
         }, true);
 
@@ -4707,6 +4818,7 @@
         const clearPmButtonAlert = () => {
             pmBtn.dataset.pmUnread = '0';
             pmBtn.classList.remove('ichc-pm-toggle-alert');
+            pmBtn.classList.remove('ichc-pm-toggle-attention');
             _stopSidebarPulse();
             pmBadge.textContent = '';
             pmBadge.hidden = true;
@@ -4737,10 +4849,13 @@
             pmBtn.title = 'Pop out PM';
         });
         window.addEventListener('ichc-pm-active', () => {
+            const pmRoot = document.getElementById('tabs');
+            if (!pmRoot || getComputedStyle(pmRoot).display === 'none') { return; }
             pmBtn.classList.add('ichc-pm-open');
             pmBtn.title = 'Pop in PM';
         });
         window.addEventListener('ichc-pm-alert', e => {
+            _pulsePmAttention(e.detail?.nick);
             if (_isPmTabFocused(e.detail?.nick)) { return; }
             markPmButtonAlert(e.detail);
         });
@@ -7695,11 +7810,20 @@
         document.documentElement.style.setProperty('--ichc-cam-aspect', aspect);
         document.documentElement.style.setProperty('--ichc-cam-columns', String(columns));
         const cams = document.getElementById('cams');
+        const hasFeatured = !!document.querySelector('#cams .ichc-featured') || !!(localStorage.getItem(FEATURED_KEY) || '').trim();
         if (cams) {
-            cams.style.setProperty('grid-template-columns', `repeat(${columns * 2}, minmax(0, 1fr))`, 'important');
-            cams.style.removeProperty('grid-auto-rows');
             cams.classList.remove('ichc-cam-fill-mode');
-            _applyCardSpans();
+            if (hasFeatured) {
+                // applyFeaturedCam owns the grid template + auto-rows in featured mode
+                // (a simple cols-track grid, not the doubled span grid). Setting the
+                // doubled grid here would clobber it and re-break the thumbnail sizing.
+                applyFeaturedCam();
+            } else {
+                cams.style.setProperty('grid-template-columns', `repeat(${columns * 2}, minmax(0, 1fr))`, 'important');
+                cams.style.removeProperty('grid-auto-rows');
+                cams.style.removeProperty('grid-template-rows');
+                _applyCardSpans();
+            }
         }
         // Persist for next page load so first paint is already correct.
         try {
@@ -7776,103 +7900,193 @@
             if (active) {
                 featuredCard = card;
                 found = true;
-            } else if (featured) {
+            } else if (featured &&
+                !card.classList.contains('ichc-hidden-slot') &&
+                !card.classList.contains('ichc-persist-hidden-slot') &&
+                !card.classList.contains('ichc-ghost-slot')) {
+                // Only VISIBLE cams count toward the layout math — hidden/ghost
+                // slots take no grid cell, so counting them would shrink everything.
                 thumbCards.push(card);
             }
         });
 
-        // Layout: featured cam fills the left (columns-1) visual columns and spans as
-        // many rows as can be filled by thumbnails on the right. CSS grid dense
-        // auto-placement then naturally puts thumbnails in the right column first
-        // (those are the only open cells alongside the featured cam), and any excess
-        // thumbnails wrap below in a normal multi-column grid.
+        // Once the focused video reports its real dimensions (or they change),
+        // re-run the layout so the frame tracks the feed's true aspect ratio.
+        if (found) {
+            [featuredCard, ...thumbCards].forEach(c => {
+                const v = c.querySelector('video');
+                if (v && !v._ichcFeatMeta) {
+                    v._ichcFeatMeta = true;
+                    v.addEventListener('loadedmetadata', () => requestCamRelayout(60));
+                    v.addEventListener('resize', () => requestCamRelayout(120));
+                }
+            });
+        }
+
+        // Featured layout — ONE algorithm, computed from scratch each pass:
+        // a uniform c-column grid of fixed-height rows. The focused cam sits at the
+        // TOP-LEFT spanning k columns × r rows, where r is derived from the focused
+        // cam's OWN video aspect ratio — so the card frame hugs the video instead of
+        // being stretched to an arbitrary grid block. Thumbnails are exactly one
+        // cell each and auto-flow (dense) into the column(s) right of the focused
+        // cam first, then into full rows beneath it. We search all (c, k) pairs and
+        // keep the one that gives the focused cam the most area while every
+        // thumbnail still fits the container without shrinking below a floor.
         const n = thumbCards.length;
-        let sideRowSpan = 0;
-        let thumbH = null;
+        let layout = null; // {c, k, r, rowH, featAR}
+
+        if (found && cams && n > 0) {
+            const containerH = Math.round(cams.getBoundingClientRect().height) || cams.clientHeight || 0;
+            const containerW = cams.clientWidth || 0;
+            if (containerH > 0 && containerW > 0) {
+                const gap = parseFloat(getComputedStyle(cams).gap) || 8;
+
+                // Thumbnail cell ratio (h/w) from the global cam aspect, default 4:3.
+                const aspRaw = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--ichc-cam-aspect');
+                const aspM = aspRaw.match(/([\d.]+)\s*\/\s*([\d.]+)/);
+                const cellRatio = aspM ? (Number(aspM[2]) / Number(aspM[1])) : 0.75;
+
+                // Focused cam's real video aspect (w/h) so the frame fits the feed.
+                let featAR = aspM ? (Number(aspM[1]) / Number(aspM[2])) : 4 / 3;
+                const vid = featuredCard.querySelector('video');
+                if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
+                    featAR = vid.videoWidth / vid.videoHeight;
+                }
+
+                let best = null;
+                const maxC = Math.min(8, Math.max(2, n + 1));
+                for (let c = 2; c <= maxC; c++) {
+                    const cellW = (containerW - (c - 1) * gap) / c;
+                    const natRowH = cellW * cellRatio;
+                    for (let k = 1; k < c; k++) {
+                        // Cap the focused cam at ~2/3 of the container width so the
+                        // thumbnails stay readable instead of being crushed.
+                        if (k / c > 0.7) { continue; }
+                        const featW = k * cellW + (k - 1) * gap;
+                        const featH = featW / featAR;
+                        // Rows the focused cam needs at its native aspect (ceil so the
+                        // card never overflows its block; any slack stays below it).
+                        const r = Math.max(1, Math.ceil((featH + gap) / (natRowH + gap) - 0.15));
+                        const sideCells = r * (c - k);
+                        const belowRows = Math.ceil(Math.max(0, n - sideCells) / c);
+                        const rows = Math.max(r, r + belowRows);
+                        // Divide the FULL container height across the rows so the grid
+                        // always fills the panel — thumbnails grow past their natural
+                        // 4:3 height (up to 1.75x) instead of leaving dead space below.
+                        let rowH = (containerH - (rows - 1) * gap) / rows;
+                        if (rowH < Math.max(64, natRowH * 0.4)) { continue; }
+                        rowH = Math.min(rowH, natRowH * 1.75);
+                        const blockH = r * rowH + (r - 1) * gap;
+                        // Weight by how close thumbnails stay to natural size, so a
+                        // bigger focused cam can't win by squashing everything else.
+                        const area = featW * Math.min(featH, blockH) * (Math.min(rowH, natRowH) / natRowH);
+                        if (!best || area > best.area) {
+                            best = { c, k, r, rowH: Math.floor(rowH), cellW, area };
+                        }
+                    }
+                }
+                if (best) { layout = { ...best, featAR }; }
+            }
+        }
 
         if (cams) {
             cams.style.removeProperty('grid-template-rows');
             cams.style.removeProperty('align-content');
-        }
-
-        if (found && columns >= 2 && n > 0 && cams) {
-            // Measure #cams directly — lastAvailableHeight is based on the panel's
-            // clientHeight before footer-padding is subtracted, causing a mismatch.
-            // getBoundingClientRect reflects the actual flex-resolved #cams height.
-            const containerH = Math.round(cams.getBoundingClientRect().height) || cams.clientHeight || Math.round(window.innerHeight * 0.72);
-            const containerW = cams.clientWidth;
-            if (containerH > 0 && containerW > 0) {
-                const gap = parseFloat(getComputedStyle(cams).gap) || 8;
-                const thumbColW = Math.round(2 * (containerW - (columns * 2 - 1) * gap) / (columns * 2) + gap);
-                const thumbNatH = Math.round(thumbColW * 0.75);
-                // minThumbH: 40% of natural — below this thumbnails are uselessly tiny.
-                const minThumbH = Math.max(60, Math.round(thumbNatH * 0.4));
-
-                // Find the sideRowSpan (how many rows the featured cam spans, filling
-                // the right column first) that maximises the featured cam height while
-                // guaranteeing ALL thumbnails fit in containerH without any overflow.
-                // thumbH is derived from totalRows so the grid never exceeds containerH.
-                let maxFeatH = 0;
-                for (let k = 1; k <= n; k++) {
-                    const belowRows = Math.ceil(Math.max(0, n - k) / columns);
-                    const totalRows = k + belowRows;
-                    const h = Math.min(thumbNatH, Math.floor((containerH - (totalRows - 1) * gap) / totalRows));
-                    if (h < minThumbH) continue;
-                    const fh = k * h + (k - 1) * gap;
-                    if (fh > maxFeatH) { maxFeatH = fh; sideRowSpan = k; thumbH = h; }
-                }
+            if (found && layout) {
+                cams.style.setProperty('grid-template-columns', `repeat(${layout.c}, minmax(0, 1fr))`, 'important');
+                cams.style.setProperty('grid-auto-rows', `${layout.rowH}px`, 'important');
+            } else if (found) {
+                // Not measurable yet — simple 2-col grid until the next pass measures.
+                cams.style.setProperty('grid-template-columns', 'repeat(2, minmax(0, 1fr))', 'important');
+                cams.style.removeProperty('grid-auto-rows');
+            } else {
+                // No featured cam: restore the doubled span grid that the normal
+                // per-card size levels (_applyCardSpans) depend on.
+                cams.style.removeProperty('grid-auto-rows');
+                cams.style.setProperty('grid-template-columns', `repeat(${columns * 2}, minmax(0, 1fr))`, 'important');
             }
         }
 
         getCamCards().forEach(card => {
             const active = card === featuredCard;
             if (active) {
-                if (sideRowSpan > 0) {
-                    // Featured cam: left (N-1) columns, spans sideRowSpan rows.
-                    // aspect-ratio:auto overrides the CSS 4/3 rule so align-self:stretch
-                    // fills the grid area without the ratio collapsing the height.
-                    const featTrackEnd = (columns - 1) * 2 + 1;
-                    card.style.setProperty('grid-column', `1 / ${featTrackEnd}`, 'important');
-                    card.style.setProperty('grid-row', `1 / span ${sideRowSpan}`, 'important');
-                    card.style.setProperty('aspect-ratio', 'auto', 'important');
+                if (layout) {
+                    // Top-left block, k columns × r rows; the card keeps the video's
+                    // own aspect ratio (frame hugs the feed) anchored to the top-left
+                    // of its block, clamped so it can never spill into the rows below.
+                    card.style.setProperty('grid-column', `1 / ${layout.k + 1}`, 'important');
+                    card.style.setProperty('grid-row', `1 / span ${layout.r}`, 'important');
+                    card.style.setProperty('aspect-ratio', String(layout.featAR), 'important');
                     card.style.removeProperty('height');
                     card.style.removeProperty('min-height');
-                    card.style.removeProperty('max-height');
-                    card.style.setProperty('align-self', 'stretch', 'important');
+                    card.style.setProperty('max-height', '100%', 'important');
+                    card.style.setProperty('align-self', 'start', 'important');
+                    card.style.setProperty('justify-self', 'stretch', 'important');
                 } else {
-                    // Single column or no measurement yet — simple full-width stacked.
-                    card.style.setProperty('grid-column', columns >= 2 ? '1 / -1' : '', 'important');
+                    // Not measurable yet — full-width stacked until the next pass measures.
+                    card.style.setProperty('grid-column', '1 / -1', 'important');
                     card.style.removeProperty('grid-row');
                     card.style.setProperty('aspect-ratio', '16 / 9', 'important');
                     card.style.removeProperty('height');
                     card.style.setProperty('min-height', 'clamp(200px, 40vh, 480px)', 'important');
                     card.style.setProperty('max-height', 'clamp(200px, 55vh, 600px)', 'important');
                     card.style.setProperty('align-self', 'start', 'important');
+                    card.style.removeProperty('justify-self');
                 }
                 card.style.removeProperty('min-width');
+                card.style.removeProperty('width');
             } else if (featured) {
-                // Thumbnail: span 2 tracks (1 visual column). Explicit px height so
-                // totalRows * (thumbH + gap) ≤ containerH — no overflow, no scroll.
-                // aspect-ratio:auto overrides the CSS 4/3 rule so the explicit height
-                // doesn't collapse the card width.
-                card.style.setProperty('grid-column', 'span 2', 'important');
+                // Thumbnail: exactly one cell. When the video's real dimensions are
+                // known, the card keeps the VIDEO's aspect ratio centered in its cell
+                // so the karma outline hugs the feed instead of framing letterbox
+                // bars. Wider-than-cell feeds pin to full width, taller ones to full
+                // height. Unknown dims fall back to stretching to fill the cell.
+                card.style.setProperty('grid-column', 'span 1', 'important');
                 card.style.removeProperty('grid-row');
-                card.style.setProperty('aspect-ratio', 'auto', 'important');
-                if (thumbH !== null) {
-                    card.style.setProperty('height', `${thumbH}px`, 'important');
-                } else {
-                    card.style.removeProperty('height');
-                }
                 card.style.removeProperty('max-height');
                 card.style.removeProperty('min-height');
-                card.style.setProperty('align-self', 'start', 'important');
+                if (layout) {
+                    const v = card.querySelector('video');
+                    const ar = (v && v.videoWidth > 0 && v.videoHeight > 0)
+                        ? v.videoWidth / v.videoHeight : 0;
+                    if (ar > 0) {
+                        const cellAR = layout.cellW / layout.rowH;
+                        card.style.setProperty('aspect-ratio', String(ar), 'important');
+                        if (ar >= cellAR) {
+                            card.style.setProperty('width', '100%', 'important');
+                            card.style.setProperty('height', 'auto', 'important');
+                            card.style.setProperty('justify-self', 'stretch', 'important');
+                            card.style.setProperty('align-self', 'center', 'important');
+                        } else {
+                            card.style.setProperty('height', '100%', 'important');
+                            card.style.setProperty('width', 'auto', 'important');
+                            card.style.setProperty('justify-self', 'center', 'important');
+                            card.style.setProperty('align-self', 'stretch', 'important');
+                        }
+                    } else {
+                        card.style.removeProperty('width');
+                        card.style.setProperty('aspect-ratio', 'auto', 'important');
+                        card.style.setProperty('height', 'auto', 'important');
+                        card.style.setProperty('align-self', 'stretch', 'important');
+                        card.style.setProperty('justify-self', 'stretch', 'important');
+                    }
+                } else {
+                    card.style.removeProperty('width');
+                    card.style.setProperty('aspect-ratio', '4 / 3', 'important');
+                    card.style.removeProperty('height');
+                    card.style.setProperty('align-self', 'start', 'important');
+                    card.style.removeProperty('justify-self');
+                }
             } else {
                 card.style.removeProperty('grid-column');
                 card.style.removeProperty('grid-row');
                 card.style.removeProperty('aspect-ratio');
                 card.style.removeProperty('height');
+                card.style.removeProperty('width');
                 card.style.removeProperty('max-height');
                 card.style.removeProperty('align-self');
+                card.style.removeProperty('justify-self');
                 card.style.removeProperty('min-height');
             }
             const button = card.querySelector('.ichc-spotlight-btn');
@@ -7919,12 +8133,8 @@
             saveCurrentOrder();
         }
 
-        applyFeaturedCam();
-        updateCamDensity();
         layoutChat();
         window.requestAnimationFrame(() => {
-            applyFeaturedCam();
-            updateCamDensity();
             layoutChat();
         });
     }
@@ -8133,8 +8343,6 @@
         const stage = document.getElementById('ichc-room-stage');
         if (!container) { return; }
 
-        updateCamDensity();
-
         if (window.innerWidth <= 780) {
             const compact = Math.max(360, Math.min(window.innerHeight * 0.54, 720));
             const compactText = String(compact);
@@ -8155,6 +8363,8 @@
                 camsPanel.style.removeProperty('min-height');
                 camsPanel.style.removeProperty('max-height');
             }
+            updateCamDensity();
+            applyFeaturedCam();
             return;
         }
 
@@ -8187,6 +8397,8 @@
                 camsPanel.style.setProperty('max-height', target + 'px', 'important');
             }
         }
+        updateCamDensity();
+        applyFeaturedCam();
     }
 
     function initDynamicLayout() {

@@ -25,6 +25,7 @@
         pointerSaveBound: false,
         resizeHandle: null,
         pollTimer: null,
+        attentionTimer: null,
     };
 
     // ─── Shared helpers ──────────────────────────────────────────────────────────
@@ -553,7 +554,11 @@
     function activatePmTab(root, key) {
         if (!root || !key) { return; }
         _D('activatePmTab', key);
-        showPmRoot(root);
+        if (_userHiddenPm) {
+            hidePmRoot(root);
+        } else {
+            showPmRoot(root);
+        }
         _updatePmHeader(root, key);
         window.dispatchEvent(new CustomEvent('ichc-pm-active', { detail: { nick: key } }));
         getPmTabItems(root).forEach(tab => {
@@ -665,7 +670,12 @@
         if (!(row instanceof HTMLElement)) { return; }
         for (const child of row.childNodes) {
             if (child.nodeType !== Node.TEXT_NODE) { continue; }
-            const stripped = child.textContent.replace(/^\s*\[\d{1,2}:\d{2}:\d{2}\]\s*/, '');
+            const match = child.textContent.match(/^\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*/);
+            if (match?.[1] && !row.dataset.ichcPmTime) {
+                const parts = match[1].split(':');
+                row.dataset.ichcPmTime = parts.length > 2 ? parts.slice(0, 2).join(':') : match[1];
+            }
+            const stripped = child.textContent.replace(/^\s*\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, '');
             if (stripped !== child.textContent) {
                 child.textContent = stripped;
                 break;
@@ -676,12 +686,11 @@
     function stampPmRow(row) {
         if (!(row instanceof HTMLElement)) { return; }
         if (row.classList.contains('ichc-pm-date-sep')) { return; }
-        if (!row.dataset.ichcPmIncoming) { return; }
         if (!row.dataset.ichcDate) { row.dataset.ichcDate = _todayDateStr(); }
         if (row.querySelector('.ichc-pm-ts')) { return; }
         const ts = document.createElement('span');
         ts.className = 'ichc-pm-ts';
-        ts.textContent = fmtTime();
+        ts.textContent = row.dataset.ichcPmTime || fmtTime();
         row.appendChild(ts);
     }
 
@@ -1026,7 +1035,8 @@
     }
     function _saveVisState(hidden, root) {
         try {
-            let geo = null;
+            const prev = _loadVisState();
+            let geo = prev.geo ?? null;
             if (root) {
                 const g = getPmGeometry(root);
                 if (g.width > 0 && g.height > 0) { geo = g; }
@@ -1036,6 +1046,18 @@
     }
 
     let _userHiddenPm = _loadVisState().hidden;
+
+    function _refreshUserHiddenPm() {
+        _userHiddenPm = _loadVisState().hidden;
+        return _userHiddenPm;
+    }
+
+    window.addEventListener('pagehide', () => {
+        const root = getPmRoot();
+        if (root && root.style.getPropertyValue('display') === 'none') {
+            _saveVisState(true, root);
+        }
+    });
 
     // Avatar strip × button — close a specific PM conversation from modernize.js
     window.addEventListener('ichc-pm-close-nick', e => {
@@ -1080,7 +1102,7 @@
     function syncPmVisibility(root = getPmRoot()) {
         if (!root || !root.isConnected) { return; }
         // Respect user-requested hide — don't fight the toggle button.
-        if (_userHiddenPm) { hidePmRoot(root); return; }
+        if (_refreshUserHiddenPm()) { hidePmRoot(root); return; }
         const tabs = getPmTabItems(root);
         _D('syncPmVisibility tabs:', tabs.length, tabs.map(t => t.id),
             'display:', root.style.getPropertyValue('display'), root.style.getPropertyPriority('display'));
@@ -1179,6 +1201,10 @@
 
             // If the window has PM tabs but isn't flex-displayed with !important,
             // something overrode our style — fix it.
+            if (_refreshUserHiddenPm()) {
+                hidePmRoot(root);
+                return;
+            }
             const disp = root.style.getPropertyValue('display');
             const prio = root.style.getPropertyPriority('display');
             if (disp !== 'flex' || prio !== 'important') {
@@ -1220,6 +1246,11 @@
         root.dataset.ichcPmObserved = '1';
 
         pmState.tabsObserver = new MutationObserver(() => {
+            if (root.style.getPropertyValue('display') === 'none') {
+                _userHiddenPm = true;
+                _saveVisState(true, root);
+                window.dispatchEvent(new CustomEvent('ichc-pm-hidden'));
+            }
             // Any mutation inside #tabs: re-sync soon.
             schedulePmSync(100);
         });
@@ -1392,7 +1423,13 @@
         ensurePmConversation(root, { key: nick, title: nick });
 
         // forceShow (e.g. avatar strip click) overrides the user-hidden state.
-        if (forceShow) { _userHiddenPm = false; }
+        if (forceShow) {
+            _userHiddenPm = false;
+            try {
+                const prev = _loadVisState();
+                localStorage.setItem(PM_VIS_KEY, JSON.stringify({ hidden: false, geo: prev.geo }));
+            } catch (_) {}
+        }
 
         // Show the window unless the user has manually hidden PMs via the toggle button.
         if (!_userHiddenPm) {
@@ -1441,10 +1478,15 @@
         if (!nick || !isRoomPage()) { return; }
         _D('incoming PM nick=', nick, 'msg=', (messageHtml || '').slice(0, 80));
 
-        openPmForNick(nick);
+        openPmForNick(nick, { forceShow: true });
 
         const root = getPmRoot();
         if (!root) { return; }
+        root.classList.add('ichc-pm-attention');
+        window.clearTimeout(pmState.attentionTimer);
+        pmState.attentionTimer = window.setTimeout(() => {
+            root.classList.remove('ichc-pm-attention');
+        }, 4200);
         const msgs = root.querySelector(`#msgs_${CSS.escape(nick)}`);
         if (!msgs) { return; }
 

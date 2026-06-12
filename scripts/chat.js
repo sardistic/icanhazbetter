@@ -871,6 +871,8 @@
         mouseIsDown: false,
         scrollbarFadeDeferred: false,
         _mouseTracking: false,
+        scrollRAF: null,
+        pendingScrollTarget: null,
     };
 
     const chatEventCollector = {
@@ -1052,7 +1054,11 @@
             }, { passive: true });
         }
 
-        target.addEventListener('scroll', () => {
+        const handleScroll = () => {
+            const target = chatScrollState.pendingScrollTarget;
+            chatScrollState.pendingScrollTarget = null;
+            chatScrollState.scrollRAF = null;
+            if (!target || !target.isConnected) { return; }
             if (Date.now() < chatScrollState.programmaticUntil) { return; }
 
             // Rainbow scrollbar hue: violet(300) at bottom → red(0) at top — full spectrum
@@ -1106,6 +1112,12 @@
             chatScrollState.followTicket += 1;
             cancelScheduledChatFollow();
             _updateScrollIndicator();
+        };
+
+        target.addEventListener('scroll', () => {
+            chatScrollState.pendingScrollTarget = target;
+            if (chatScrollState.scrollRAF !== null) { return; }
+            chatScrollState.scrollRAF = requestAnimationFrame(handleScroll);
         }, { passive: true });
     }
 
@@ -1267,6 +1279,12 @@
             row.classList.add('ichc-mention');
             re.lastIndex = 0;
             _wrapMentionSpans(row, re);
+            if (row.dataset.ichcMentionAlerted !== '1') {
+                row.dataset.ichcMentionAlerted = '1';
+                window.dispatchEvent(new CustomEvent('ichc-mention-alert', {
+                    detail: { nick: _myNick, text: (row.textContent || '').trim().slice(0, 240) },
+                }));
+            }
         });
     }
 
