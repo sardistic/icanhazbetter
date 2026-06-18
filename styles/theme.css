@@ -209,7 +209,6 @@
     #chat_container {
         background: #18191c !important;
         border: none !important;
-        border-right: 1px solid rgba(255,255,255,0.06) !important;
         border-radius: 8px !important;
         display: flex !important;
         flex-direction: column !important;
@@ -727,6 +726,29 @@
     #txt .ichc-chat-oncam  { border-left: 2px solid rgba(52,211,100,0.75) !important; }
     #txt .ichc-chat-camoff { border-left: 2px solid rgba(200,60,60,0.65) !important; }
 
+    /* ── Moderator-clear retention divider ── */
+    #txt .ichc-chat-cleared-divider {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        margin: 6px 2px !important;
+        padding: 0 !important;
+        font-size: 9px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        color: rgba(200,88,138,0.75) !important;
+        opacity: 0.85 !important;
+        white-space: nowrap !important;
+    }
+    #txt .ichc-chat-cleared-divider::before,
+    #txt .ichc-chat-cleared-divider::after {
+        content: '' !important;
+        flex: 1 !important;
+        height: 1px !important;
+        background: rgba(200,88,138,0.28) !important;
+    }
+
     /* ── Consecutive same-user message grouping ── */
     /* Row that continues from the row above (same user) */
     #txt .ichc-chat-same-above {
@@ -764,8 +786,9 @@
         border-radius: 2px !important;
     }
     #ichc-userlist .ichc-ul-year-badge .ichc-year-badge-img {
-        height: 20px !important;
+        height: 11px !important;
         width: auto !important;
+        display: block !important;
     }
 
     /* Cam year badge and karma outline are injected via #ichc-cam-decor <style>
@@ -811,23 +834,9 @@
         position: relative !important;
         background-image: none !important;
     }
+    /* Old full-row karma fill replaced by the right-aligned .ichc-ul-karma-bar (§4). */
     #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"]::after {
-        content: '' !important;
-        position: absolute !important;
-        bottom: 0 !important;
-        right: 0 !important;
-        left: auto !important;
-        height: 2px !important;
-        pointer-events: none !important;
-        z-index: 0 !important;
-        width: clamp(0%, calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 100%), 100%) !important;
-        background: linear-gradient(to right,
-            transparent 0%,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.55 + 0.10)) 50%,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.85 + 0.15)) 100%) !important;
-        box-shadow:
-            0 -6px 14px 2px rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.55)),
-            0  0   6px 1px rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.45)) !important;
+        content: none !important;
     }
     /* Lurker de-visualisation: old accounts with low karma fade and desaturate */
     #ichc-userlist .ichc-ul-user[style*="--ichc-lurker"] {
@@ -2846,7 +2855,7 @@
         overflow: hidden !important;
         isolation: isolate !important;
         aspect-ratio: var(--ichc-card-aspect, var(--ichc-cam-aspect, 4 / 3)) !important;
-        border-radius: 12px !important;
+        border-radius: 0 !important;
         border: 1px solid rgba(255,255,255,0.07) !important;
         background: linear-gradient(180deg, #18191c, #111214) !important;
         box-shadow: 0 4px 16px rgba(0,0,0,0.32) !important;
@@ -3337,7 +3346,7 @@
         overflow-y: auto !important;
         overflow-x: hidden !important;
         scrollbar-width: thin !important;
-        padding: 0 6px 10px 0 !important;
+        padding: 0 3px 10px 0 !important;
     }
     /* PM pop-out button — small, pinned to bottom-right of the pm-avatar strip */
     #ichc-pm-avatars #ichc-pm-toggle-btn {
@@ -3583,48 +3592,108 @@
         box-shadow: 0 0 0 2px rgba(125,80,205,0.12), 0 0 8px rgba(65,145,215,0.12) !important;
         color: #dbdee1 !important;
     }
-    #ichc-userlist .ichc-ul-user {
+    /* ── Section headers (§1: ON CAM / ACTIVE / IDLE) ── */
+    #ichc-userlist .ichc-ul-section {
         display: flex !important;
-        flex-direction: row !important;
         align-items: center !important;
-        gap: 6px !important;
+        gap: 7px !important;
+        min-height: 18px !important;
+        font: 800 9px/18px -apple-system, "Inter", "Segoe UI", sans-serif !important;
+        letter-spacing: 0.12em !important;
+        text-transform: uppercase !important;
+        margin: 9px 5px 1px !important;
+        padding: 0 !important;
+        pointer-events: none !important;
+        user-select: none !important;
+    }
+    #ichc-userlist .ichc-ul-section:first-child { margin-top: 4px !important; }
+    /* trailing rule fills the row to the right of the label */
+    #ichc-userlist .ichc-ul-section::after {
+        content: '' !important;
+        flex: 1 !important;
+        height: 1px !important;
+        background: rgba(255,255,255,0.05) !important;
+    }
+    #ichc-userlist .ichc-ul-section.cam    { color: #6cbf8a !important; }
+    #ichc-userlist .ichc-ul-section.active { color: #878d99 !important; }
+    #ichc-userlist .ichc-ul-section.idle   { color: #5a5d66 !important; }
+
+    /* ── Row: 2-col grid (name | right-aligned meta); 3-col when avatars on ── */
+    #ichc-userlist .ichc-ul-user {
+        display: grid !important;
+        grid-template-columns: 24px 1fr auto !important;
+        align-items: center !important;
+        gap: 7px !important;
         width: 100% !important;
         box-sizing: border-box !important;
-        border-radius: 4px !important;
-        padding: 0 6px !important;
-        background: rgba(26,28,31,0.6) !important;
-        border: 1px solid rgba(255,255,255,0.04) !important;
-        border-left: 2px solid rgba(255,255,255,0.1) !important;
+        border-radius: 0 !important;
+        padding: 0 4px !important;
+        margin: 0 0 5px !important;
+        background: rgba(255,255,255,0.025) !important;
+        border-top: 1px solid rgba(255,255,255,0.05) !important;
+        border-left: 1px solid rgba(255,255,255,0.05) !important;
+        border-right: 1px solid rgba(0,0,0,0.32) !important;
+        border-bottom: 1px solid rgba(0,0,0,0.32) !important;
         cursor: pointer !important;
         color: #c8ccd2 !important;
-        font-size: 11px !important;
-        line-height: 1.15 !important;
+        font-size: 12px !important;
+        line-height: 1.05 !important;
         font-weight: 500 !important;
         letter-spacing: 0 !important;
         text-align: left !important;
-        position: relative !important;
         user-select: none !important;
         text-decoration: none !important;
         position: relative !important;
         z-index: 1 !important;
         pointer-events: auto !important;
-        transition: background 0.1s, border-color 0.1s !important;
+        transition: background 0.1s !important;
     }
+    #ichc-userlist.ichc-ul-no-avatars .ichc-ul-user {
+        grid-template-columns: 1fr auto !important;
+    }
+    /* Cozy density (§11) */
+    #ichc-userlist.ichc-ul-cozy .ichc-ul-user { padding: 3px 9px !important; }
+    /* Name + inline role icons */
+    #ichc-userlist .ichc-ul-name-wrap {
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }
+    /* Right-hand stack: year (hover) over karma over bar */
+    #ichc-userlist .ichc-ul-meta {
+        display: grid !important;
+        grid-template-rows: 11px auto auto !important;
+        justify-items: end !important;
+        align-content: center !important;
+        gap: 2px !important;
+    }
+    #ichc-userlist .ichc-ul-karma-bar {
+        height: 2px !important;
+        border-radius: 2px !important;
+        width: 0;
+        background: rgba(var(--ichc-kt-color, 120,124,138), var(--ichc-bar-alpha, 0.45)) !important;
+    }
+    /* Profile-background wash (§10): anchored to the right edge, very low contrast
+       so the name reads first. Masked to fade out toward the left. */
     #ichc-userlist .ichc-ul-user::before {
         content: '' !important;
         position: absolute !important;
         inset: 0 !important;
         background-image: var(--ichc-bg-img, none) !important;
         background-size: cover !important;
-        background-position: center top !important;
-        opacity: 0.38 !important;
+        background-position: right center !important;
+        opacity: 0.20 !important;
+        -webkit-mask-image: linear-gradient(to left, #000 0%, transparent 72%) !important;
+        mask-image: linear-gradient(to left, #000 0%, transparent 72%) !important;
         pointer-events: none !important;
         z-index: -1 !important;
         border-radius: inherit !important;
     }
+    #ichc-userlist .ichc-ul-user.idle::before { opacity: 0.10 !important; }
     #ichc-userlist .ichc-ul-user:hover {
-        background: rgba(40,42,48,0.9) !important;
-        border-color: rgba(255,255,255,0.1) !important;
+        background: rgba(255,255,255,0.045) !important;
     }
     #ichc-userlist .ichc-ul-user:focus-visible {
         outline: 2px solid rgba(255,255,255,0.24) !important;
@@ -3699,18 +3768,52 @@
         background: rgba(255, 72, 176, 0.855) !important;
         filter: blur(7px) !important;
     }
-    /* ── Supporter (hearted) left-bar indicator ── */
-    /* ::after is used by the karma bar — use border-left instead. */
-    /* Hearted only — muted pink left border */
-    #ichc-userlist .ichc-ul-supporter-row {
-        border-left: 2px solid rgba(200, 90, 140, 0.38) !important;
+    /* Supporter presence is shown by the inline heart (§6) + avatar ring — no left bar. */
+    /* ── Inline supporter heart ── */
+    #ichc-userlist .ichc-ul-supporter-heart {
+        display: inline-flex !important;
+        align-items: center !important;
+        flex-shrink: 0 !important;
+        color: #e0759f !important;
+        font-size: 10px !important;
+        line-height: 1 !important;
     }
-    /* Hearted + broadcasting — gradient split: pink top / green bottom */
-    #ichc-userlist .ichc-ul-supporter-row.cammed {
-        border-image: linear-gradient(to bottom,
-            rgba(200, 90, 140, 0.42) 50%,
-            rgba(52, 195, 90, 0.42) 50%) 0 0 0 1 !important;
+    #ichc-userlist .ichc-ul-user.idle .ichc-ul-supporter-heart {
+        color: rgba(224,117,159,0.7) !important;
     }
+    /* ── Inline mod shield ── */
+    #ichc-userlist .ichc-ul-mod-badge {
+        display: inline-flex !important;
+        align-items: center !important;
+        flex-shrink: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        color: #7c8cde !important;
+        opacity: 0.85 !important;
+        font-size: 11px !important;
+        line-height: 1 !important;
+    }
+    /* ── Inline cam eye toggle (§7) ── */
+    #ichc-userlist .ichc-ul-eye {
+        background: none !important;
+        border: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        cursor: pointer !important;
+        color: #787d87 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        flex-shrink: 0 !important;
+        font-size: 12px !important;
+        line-height: 1 !important;
+        transition: opacity 0.12s ease, color 0.12s ease !important;
+    }
+    /* open-eye: "hide this cam" affordance — only on row hover */
+    #ichc-userlist .ichc-ul-eye.reveal { opacity: 0 !important; }
+    #ichc-userlist .ichc-ul-user:hover .ichc-ul-eye.reveal { opacity: 0.5 !important; }
+    /* eye-slash: currently hidden — always visible */
+    #ichc-userlist .ichc-ul-eye.on { opacity: 0.9 !important; }
+    #ichc-userlist .ichc-ul-eye:hover { color: #d4d8df !important; opacity: 1 !important; }
 
     /* (sidebar avatars removed — no sidebar strip) */
     .ichc-ul-sidebar-avatar-img {
@@ -3723,59 +3826,54 @@
         display: block !important;
     }
     #ichc-userlist .ichc-ul-user-name {
-        display: inline-flex !important;
-        flex: 1 1 0 !important;
-        align-items: center !important;
-        gap: 4px !important;
+        flex: 0 1 auto !important;
         min-width: 0 !important;
         overflow: hidden !important;
         white-space: nowrap !important;
         text-overflow: ellipsis !important;
-        color: inherit !important;
-        font: 600 11px/1.15 "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
+        font: 600 12px/1.1 "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
         text-align: left !important;
     }
+    /* Year badge — top row of the meta stack (11px track), revealed on row hover (§5).
+       No layout shift: the track is always reserved. */
     #ichc-userlist .ichc-ul-year-badge {
-        display: inline-block !important;
+        display: inline-flex !important;
+        align-items: center !important;
         box-sizing: border-box !important;
+        height: 11px !important;
         font-size: 9px !important;
         font-weight: 700 !important;
-        color: #c9a227;
-        background: rgba(201, 162, 39, 0.22);
-        border: 1px solid rgba(201, 162, 39, 0.65) !important;
-        border-radius: 3px !important;
-        padding: 0 3px !important;
-        line-height: 1.6 !important;
+        color: #8a8f98 !important;
         white-space: nowrap !important;
-        flex-shrink: 0 !important;
-        align-self: center !important;
         letter-spacing: 0.01em !important;
-        /* Collapsed — no space, no border outline */
-        max-width: 0 !important;
-        border-width: 0 !important;
-        overflow: hidden !important;
         opacity: 0 !important;
-        transition: max-width 0.2s ease, opacity 0.15s ease !important;
+        transition: opacity 0.12s ease !important;
     }
     #ichc-userlist .ichc-ul-user:hover .ichc-ul-year-badge {
-        max-width: 50px !important;
-        border-width: 1px !important;
         opacity: 1 !important;
-    }
-    #ichc-userlist .ichc-ul-year-badge:empty {
-        display: none !important;
     }
     #ichc-userlist .ichc-ul-guest .ichc-ul-user-name {
         font-style: italic !important;
         opacity: 0.55 !important;
     }
+    /* Karma-tinted drop shadow on the row box (not the name text) — scales with
+       tier intensity (--ichc-kt-i). */
+    /* Sticker lift: crisp hard offset shadow; on hover the row pops up-left and the
+       shadow grows for an obvious raised effect. */
+    #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"] {
+        box-shadow: 1px 1px 0 0 rgba(var(--ichc-kt-color), calc(0.14 + var(--ichc-kt-i, 0.5) * 0.20)) !important;
+        transition: background 0.1s, transform 0.13s ease, box-shadow 0.13s ease !important;
+    }
+    #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"]:hover {
+        transform: translate(-1px, -1px) !important;
+        box-shadow: 3px 3px 0 0 rgba(var(--ichc-kt-color), calc(0.40 + var(--ichc-kt-i, 0.5) * 0.35)) !important;
+    }
     #ichc-userlist .ichc-ul-karma {
-        font-size: 9px !important;
+        font: 700 11px/1 -apple-system, "Inter", "Segoe UI", sans-serif !important;
+        font-variant-numeric: tabular-nums !important;
         color: #8e949c !important;
-        font-weight: 500 !important;
         white-space: nowrap !important;
-        flex-shrink: 0 !important;
-        letter-spacing: 0.02em !important;
+        letter-spacing: 0.01em !important;
         text-shadow: 0 1px 3px rgba(0,0,0,0.9) !important;
     }
     #ichc-userlist .ichc-ul-karma:empty { display: none !important; }
@@ -3796,39 +3894,35 @@
         flex-shrink: 0 !important;
         opacity: 0.9 !important;
     }
-    /* Active (default): slightly more visible than idle */
-    #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed):not(.mod) {
-        color: #c8ccd2 !important;
-        border-left-color: rgba(255,255,255,0.18) !important;
-    }
-    /* Cammed: brighter white + green left indicator; no green bg */
-    #ichc-userlist .ichc-ul-user.cammed {
-        color: #e8eaed !important;
-        border-color: rgba(255,255,255,0.12) !important;
-        border-left-color: rgba(52,211,100,1) !important;
-        padding: 4px 6px !important;
+    /* Presence is carried by name brightness + section grouping (§2) — no left dot. */
+    /* Active (default) */
+    #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) .ichc-ul-user-name {
+        color: #cfd3da !important;
         font-weight: 600 !important;
     }
-    /* Hidden cammed: green indicator only — keep muted hidden appearance */
-    #ichc-userlist .ichc-ul-user.cammed.ichc-ul-hidden-live {
-        background-color: rgba(22,23,26,0.45) !important;
-        border-left-color: rgba(52,211,100,1) !important;
-        color: #6b7280 !important;
+    /* Cammed: brightest */
+    #ichc-userlist .ichc-ul-user.cammed .ichc-ul-user-name {
+        color: #f4f6f8 !important;
+        font-weight: 600 !important;
+    }
+    /* Hidden cammed: dimmed name, still in ON CAM */
+    #ichc-userlist .ichc-ul-user.cammed.ichc-ul-hidden-live .ichc-ul-user-name {
+        color: #9298a4 !important;
         font-weight: 500 !important;
     }
-    /* Mod: blurple */
-    #ichc-userlist .ichc-ul-user.mod {
+    /* Mod: keep blurple tint on the name (role, not presence) */
+    #ichc-userlist .ichc-ul-user.mod .ichc-ul-user-name {
         color: #9aa8e0 !important;
-        border-left-color: rgba(114,137,218,0.7) !important;
-        background: rgba(88,101,242,0.06) !important;
     }
-    /* Idle: muted, clearly de-emphasized */
-    #ichc-userlist .ichc-ul-user.idle {
-        color: #4e5058 !important;
-        border-left-color: rgba(78,80,88,0.45) !important;
-        background: transparent !important;
-        opacity: 0.75 !important;
+    /* Idle: muted, de-emphasized */
+    #ichc-userlist .ichc-ul-user.idle .ichc-ul-user-name {
+        color: #777c85 !important;
+        font-weight: 500 !important;
     }
+    /* Bar alpha by section (§4) */
+    #ichc-userlist .ichc-ul-user.cammed                  { --ichc-bar-alpha: 0.55; }
+    #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) { --ichc-bar-alpha: 0.45; }
+    #ichc-userlist .ichc-ul-user.idle                    { --ichc-bar-alpha: 0.32; }
     /* ── Solari board counters — per-digit flip cells ── */
     .ichc-ul-count-cams,
     .ichc-ul-count-users {
@@ -3840,8 +3934,8 @@
         align-items: stretch !important;
         vertical-align: middle !important;
     }
-    .ichc-ul-count-cams  { color: rgba(34,195,85,1)  !important; }
-    .ichc-ul-count-users { color: rgba(85,105,215,1) !important; }
+    .ichc-ul-count-cams  { color: #3fce72 !important; }
+    .ichc-ul-count-users { color: #8e98c4 !important; }
     /* One cell per digit — sized by ghost char, flip panel fills it */
     .ichc-fh-digit {
         position: relative !important;
@@ -4422,12 +4516,14 @@
         padding: 4px 8px !important;
         gap: 6px !important;
         border-radius: 6px !important;
+        opacity: 0.62 !important;
     }
-    .ichc-ul-offline-hidden-row:hover { background: rgba(255,255,255,0.03) !important; }
+    .ichc-ul-offline-hidden-row:hover { background: rgba(255,255,255,0.03) !important; opacity: 1 !important; }
     .ichc-ul-offline-hidden-name {
         flex: 1 !important;
         font-size: 12px !important;
-        color: #80848e !important;
+        color: #6b7079 !important;
+        text-decoration: line-through !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;

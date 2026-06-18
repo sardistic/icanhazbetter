@@ -867,6 +867,7 @@
         lastMessageAt: 0,
         newMessageCount: 0,
         savedScrollTop: null,
+        lastScrollTop: 0,
         scrollbarHideTimer: null,
         mouseIsDown: false,
         scrollbarFadeDeferred: false,
@@ -881,6 +882,85 @@
         leaveNames: [],
         sealTimer:  null,
     };
+
+    // ── Chat retention: survive moderator "clear chat" ──────────────────────────
+    // When a mod clears the room, the site empties #txt. We capture the removed
+    // rows and re-insert them (after confirming the log stays empty, so a normal
+    // cam-refresh refill doesn't trigger a false restore and duplicate content).
+    const CHAT_CLEAR_MIN_REMOVED = 6;   // batch must drop at least this many rows
+    const CHAT_CLEAR_CONFIRM_MS  = 350; // wait this long to confirm it's a real clear
+    const chatRetention = {
+        confirmTimer: null,
+        pendingRows: null,
+    };
+    // Live read so a menu toggle takes effect without a reload. Default: on.
+    function _chatRetentionEnabled() {
+        return localStorage.getItem('ichc_chat_retain') !== 'false';
+    }
+
+    function _isRetainableRow(node) {
+        if (!(node instanceof HTMLElement)) { return false; }
+        if (!node.matches('table, div, p, ul, .line')) { return false; }
+        // Skip our own injected helper nodes — only real chat rows are retained.
+        if (node.classList.contains('ichc-event-collector') ||
+            node.classList.contains('ichc-chat-inline-img') ||
+            node.classList.contains('ichc-og-card') ||
+            node.classList.contains('ichc-chat-cleared-divider')) { return false; }
+        return true;
+    }
+
+    function _restoreClearedChat(log, rows) {
+        if (!log || !rows || !rows.length) { return; }
+        const observer = chatScrollState.observer;
+        // Detach so re-inserting the salvaged rows doesn't re-enter the observer
+        // (which would treat them as new messages and force an autoscroll).
+        observer?.disconnect();
+        try {
+            const frag = document.createDocumentFragment();
+            rows.forEach(r => frag.appendChild(r));
+            const divider = document.createElement('div');
+            divider.className = 'line ichc-chat-event ichc-chat-cleared-divider';
+            divider.dataset.ichcEventProcessed = '1';
+            divider.textContent = '— chat cleared by moderator · history retained —';
+            frag.appendChild(divider);
+            log.insertBefore(frag, log.firstChild);
+        } finally {
+            // Drop the mutation records our own insert generated, then re-observe.
+            observer?.takeRecords();
+            if (observer && chatScrollState.observedRoot) {
+                observer.observe(chatScrollState.observedRoot, { childList: true, subtree: true });
+            }
+        }
+    }
+
+    // Inspect a mutation batch for a mass row removal (a clear). Returns true if it
+    // handled a clear (caller should skip its normal new-row processing).
+    function _handleChatClear(log, mutations) {
+        if (!_chatRetentionEnabled() || !log) { return false; }
+        const removed = [];
+        mutations.forEach(m => {
+            m.removedNodes.forEach(n => { if (_isRetainableRow(n)) { removed.push(n); } });
+        });
+        if (removed.length < CHAT_CLEAR_MIN_REMOVED) { return false; }
+        const remaining = [...log.children].filter(_isRetainableRow).length;
+        if (remaining > 2) { return false; }
+
+        // Hold the salvaged rows and confirm the log stays empty before restoring —
+        // a cam-refresh that empties then refills #txt should NOT trigger a restore.
+        chatRetention.pendingRows = (chatRetention.pendingRows || []).concat(removed);
+        if (chatRetention.confirmTimer) { clearTimeout(chatRetention.confirmTimer); }
+        chatRetention.confirmTimer = setTimeout(() => {
+            chatRetention.confirmTimer = null;
+            const liveLog = getChatLog();
+            const rows = chatRetention.pendingRows;
+            chatRetention.pendingRows = null;
+            if (!liveLog || !rows) { return; }
+            const now = [...liveLog.children].filter(_isRetainableRow).length;
+            if (now > 2) { return; } // site refilled — genuine refresh, not a clear
+            _restoreClearedChat(liveLog, rows);
+        }, CHAT_CLEAR_CONFIRM_MS);
+        return true;
+    }
 
     function _sealChatEvents() {
         // Null out the reference so the next join/leave starts a fresh row at the new position.
@@ -1082,6 +1162,23 @@
             }
 
             hideChatPauseNotice();
+
+            // Detect upward intent: a user-initiated scroll that moved the view up
+            // (or simply isn't pinned to the very bottom) must pause auto-follow even
+            // while still inside the 56px "near bottom" band — otherwise every scroll
+            // event re-follows to the bottom and the user can never escape it.
+            const prevTop = chatScrollState.lastScrollTop;
+            chatScrollState.lastScrollTop = target.scrollTop;
+            if (userInitiated && !isNearChatBottom(target, 4) &&
+                    (target.scrollTop < prevTop || !chatScrollState.auto)) {
+                chatScrollState.savedScrollTop = target.scrollTop;
+                chatScrollState.auto = false;
+                chatScrollState.nativePaused = true;
+                chatScrollState.followTicket += 1;
+                cancelScheduledChatFollow();
+                _updateScrollIndicator();
+                return;
+            }
 
             if (isNearChatBottom(target, 56)) {
                 if (chatScrollState.auto) {
@@ -1531,6 +1628,9 @@
             chatScrollState.observedRoot = log;
             chatScrollState.observer = new MutationObserver(mutations => {
                 let sawNewRows = false;
+
+                // Moderator "clear chat" — salvage the wiped rows before anything else.
+                if (_handleChatClear(log, mutations)) { return; }
 
                 mutations.forEach(mutation => {
                     mutation.addedNodes.forEach(node => {

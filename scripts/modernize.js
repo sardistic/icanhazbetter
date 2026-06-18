@@ -12,6 +12,7 @@
         eye:        `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" clip-rule="evenodd"/></svg>`,
         eyeSlash:   `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M3.28 2.22a.75.75 0 0 0-1.06 1.06l14.5 14.5a.75.75 0 1 0 1.06-1.06l-1.745-1.745a10.029 10.029 0 0 0 3.3-4.38 1.651 1.651 0 0 0 0-1.185A10.004 10.004 0 0 0 9.999 3a9.956 9.956 0 0 0-4.744 1.194L3.28 2.22zM7.752 6.69l1.092 1.092a2.5 2.5 0 0 1 3.374 3.373l1.091 1.092a4 4 0 0 0-5.557-5.557z" clip-rule="evenodd"/><path d="M10.748 13.93l2.523 2.524a9.987 9.987 0 0 1-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 0 1 0-1.186A10.007 10.007 0 0 1 2.839 6.02L6.07 9.252a4 4 0 0 0 4.678 4.678z"/></svg>`,
         xmark:      `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22z"/></svg>`,
+        heart:      `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M9.653 16.915l-.005-.003-.019-.01a20.759 20.759 0 0 1-1.162-.682 22.045 22.045 0 0 1-2.582-1.9C4.045 12.733 2 10.352 2 7.5a4.5 4.5 0 0 1 8-2.828A4.5 4.5 0 0 1 18 7.5c0 2.852-2.044 5.233-3.885 6.82a22.049 22.049 0 0 1-3.744 2.582l-.019.01-.005.003h-.002a.739.739 0 0 1-.69.001l-.002-.001z"/></svg>`,
         rotateRight:`<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.389z" clip-rule="evenodd"/></svg>`,
         cog:         `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M7.84 1.804A1 1 0 0 1 8.82 1h2.36a1 1 0 0 1 .98.804l.331 1.652a6.993 6.993 0 0 1 1.929 1.115l1.598-.54a1 1 0 0 1 1.186.447l1.18 2.044a1 1 0 0 1-.205 1.251l-1.267 1.113a7.047 7.047 0 0 1 0 2.228l1.267 1.113a1 1 0 0 1 .206 1.25l-1.18 2.045a1 1 0 0 1-1.187.447l-1.598-.54a6.993 6.993 0 0 1-1.929 1.115l-.33 1.652a1 1 0 0 1-.98.804H8.82a1 1 0 0 1-.98-.804l-.331-1.652a6.993 6.993 0 0 1-1.929-1.115l-1.598.54a1 1 0 0 1-1.186-.447l-1.18-2.044a1 1 0 0 1 .205-1.251l1.267-1.114a7.05 7.05 0 0 1 0-2.227L1.821 7.773a1 1 0 0 1-.206-1.25l1.18-2.045a1 1 0 0 1 1.187-.447l1.598.54A6.993 6.993 0 0 1 7.51 3.456l.33-1.652zM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" clip-rule="evenodd"/></svg>`,
         bell:        `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M4 8a6 6 0 1 1 12 0v2.917c0 .703.228 1.387.648 1.954l1.288 1.718A1.75 1.75 0 0 1 16.6 17.25H3.4a1.75 1.75 0 0 1-1.394-2.796l1.288-1.718A3.25 3.25 0 0 0 4 10.917V8zm6 12a3 3 0 0 1-2.83-2h5.66A3 3 0 0 1 10 20z" clip-rule="evenodd"/></svg>`,
@@ -374,25 +375,11 @@
     function _setBadgeYear(badgeEl, year) {
         if (!badgeEl) { return; }
         if (year == null) { return; }
-        if (year >= 1 && year <= 20) {
-            let img = badgeEl.querySelector('.ichc-year-badge-img');
-            if (!img) {
-                img = document.createElement('img');
-                img.className = 'ichc-year-badge-img';
-                img.loading = 'eager';
-                badgeEl.textContent = '';
-                badgeEl.classList.add('ichc-year-badge-has-img');
-                badgeEl.appendChild(img);
-            }
-            img.src = chrome.runtime.getURL(`images/year-badges/${year}yr.svg`);
-            img.alt = `${year}yr`;
-            img.title = `${year}yr`;
-        } else {
-            badgeEl.classList.remove('ichc-year-badge-has-img');
-            const img = badgeEl.querySelector('.ichc-year-badge-img');
-            if (img) { img.remove(); }
-            badgeEl.textContent = `${year}yr`;
-        }
+        // Text-only badge (no SVG year icon).
+        badgeEl.classList.remove('ichc-year-badge-has-img');
+        const img = badgeEl.querySelector('.ichc-year-badge-img');
+        if (img) { img.remove(); }
+        badgeEl.textContent = `${year}yr`;
     }
 
     function _scheduleAvatarFetch(fn) {
@@ -3141,14 +3128,16 @@
             const spectral = _karmaToSpectral(karma);
             if (spectral) {
                 const [rgb, i] = spectral;
-                const w  = i < 0.65 ? 1 : 2;
-                const oA = (0.22 + i * 0.42).toFixed(2); // 0.22→0.64, subtle
-                const gA = (i * 0.16).toFixed(2);        // 0→0.16 glow
-                const gPx = Math.round(4 + i * 14);
-                let decl = `outline:${w}px solid rgba(${rgb},${oA})`;
-                if (i > 0.52) { decl += `;box-shadow:0 0 ${gPx}px rgba(${rgb},${gA})`; }
+                // Karma-tinted border + crisp hard offset shadow (sticker-lift style,
+                // matches the userlist). Hover grows the shadow for an obvious lift.
+                const bA = (0.30 + i * 0.50).toFixed(2); // border alpha 0.30→0.80
+                const sA = (0.16 + i * 0.24).toFixed(2); // rest shadow alpha (subtle)
+                const sH = (0.34 + i * 0.34).toFixed(2); // hover shadow alpha
+                let decl = `border-color:rgba(${rgb},${bA});box-shadow:1px 1px 0 0 rgba(${rgb},${sA});z-index:2`;
                 if (i >= 0.9)  { decl += ';animation:ichc-cam-aura 2.2s ease-in-out infinite'; }
                 rules.push(`${cardSel}{${decl}!important}`);
+                // Raise on hover so the offset shadow paints over adjacent cams.
+                rules.push(`${cardSel}:hover{box-shadow:4px 4px 0 0 rgba(${rgb},${sH})!important;z-index:50!important;transition:box-shadow 0.13s ease!important}`);
             }
             if (bgUrl) {
                 // Profile background fills behind the video as a subtle wash.
@@ -4083,6 +4072,33 @@
             buildUserList();
             layoutChat();
         }
+    }
+
+    // Hide a broadcasting user's cam from the user list eye toggle. Mirrors the
+    // per-card "disable/stop" path: block the name and hide its videocontainer.
+    function hideUserCam(username) {
+        const key = (username || '').trim().toLowerCase();
+        if (!key) { return; }
+        let card = null;
+        document.querySelectorAll('#cams .videocontainer').forEach(vc => {
+            const camId = vc.id.replace(/^id-/, '');
+            const name = document.getElementById('name-' + camId)?.textContent.trim().toLowerCase();
+            if (name === key) {
+                vc.style.setProperty('display', 'none', 'important');
+                card = vc.closest('.rounded_square') || card;
+            }
+        });
+        if (card) {
+            setBlockedStateForCard(card, true);
+        } else {
+            const blocked = loadBlockedUsers();
+            blocked.add(key);
+            saveBlockedUsers(blocked);
+        }
+        syncCamCards();
+        buildHiddenCamManager();
+        buildUserList();
+        layoutChat();
     }
 
     // New-cam detection is intentionally disabled — the auto-reload caused random
@@ -6191,6 +6207,22 @@
         const idleCount      = users.filter(u => u.idle).length;
         const cammedCount    = users.filter(u => u.cammed).length;
         const hiddenCamCount = users.filter(u => u.hidden && u.cammed).length;
+
+        // Highest karma currently in the list — used to scale the per-row karma
+        // underline bar on a log scale. Recomputed every render.
+        const maxKarma = users.reduce((m, u) => {
+            const k = profileKarmaCache.get(u.name.toLowerCase()) ?? u.karma ?? 0;
+            return k > m ? k : m;
+        }, 1);
+        // Set the karma underline bar width (log-scaled, ~6..30px). Right-aligned in CSS.
+        const _setKarmaBar = (span, karma) => {
+            const bar = span.querySelector('.ichc-ul-karma-bar');
+            if (!bar) { return; }
+            if (karma == null || karma <= 0) { bar.style.width = '0px'; return; }
+            const barW = 6 + 24 * (Math.log(karma + 1) / Math.log(maxKarma + 1));
+            bar.style.width = barW.toFixed(1) + 'px';
+        };
+
         const _prevCammed = userListState.prevCammedCount ?? null;
         const _prevUsers  = userListState.prevUserCount  ?? null;
         const _totalUsers = activeCount + idleCount;
@@ -6207,7 +6239,8 @@
         header.className = 'ichc-ul-header';
 
         const userMeta = idleCount > 0 ? `<span class="ichc-ul-count-meta"> (${idleCount} idle)</span>` : '';
-        const camMeta  = hiddenCamCount > 0 ? `<span class="ichc-ul-count-meta"> (${hiddenCamCount} hidden)</span>` : '';
+        // §8 — header carries digits only; no hidden-count chip.
+        const camMeta  = '';
 
         // Single-row header: [metrics (flex:1)] [search | more | collapse]
         const titleRow = document.createElement('div');
@@ -6351,8 +6384,15 @@
                 });
             }
             if (profileGuestCache.get(imgKey) === true) { span.classList.add('ichc-ul-guest'); }
-            span.innerHTML = `<span class="ichc-ul-year-badge" data-year-key=""></span><span class="ichc-ul-user-name"></span><span class="ichc-ul-karma" data-karma-key=""></span>`;
+            // Layout: [avatar?] [name + inline icons] [meta: year / karma / bar]
+            span.innerHTML = `<span class="ichc-ul-name-wrap"><span class="ichc-ul-user-name"></span></span>` +
+                `<span class="ichc-ul-meta">` +
+                `<span class="ichc-ul-year-badge" data-year-key=""></span>` +
+                `<span class="ichc-ul-karma" data-karma-key=""></span>` +
+                `<span class="ichc-ul-karma-bar"></span>` +
+                `</span>`;
             span.querySelector('.ichc-ul-user-name').textContent = u.name;
+            const nameWrap = span.querySelector('.ichc-ul-name-wrap');
 
             const yearEl = span.querySelector('.ichc-ul-year-badge');
             yearEl.dataset.yearKey = imgKey;
@@ -6366,6 +6406,7 @@
             if (initKarma != null) { karmaEl.textContent = initKarma.toLocaleString(); }
             _setKarmaTierClass(span, initKarma ?? null);
             _setUserViz(span, initKarma ?? null, initYear ?? null);
+            _setKarmaBar(span, initKarma ?? null);
 
             // Profile avatar — reuse <img> element across rebuilds; src is only set
             // after the row enters the viewport (IntersectionObserver below) to avoid
@@ -6416,27 +6457,57 @@
                 u.karma != null && `${u.karma} karma`,
             ].filter(Boolean).join(' · ') || u.name;
 
+            // Inline role icons — rendered right after the name (§6).
             if (u.mod) {
                 const modBadge = document.createElement('span');
                 modBadge.className = 'ichc-ul-mod-badge';
                 modBadge.setAttribute('aria-label', 'Moderator');
                 modBadge.innerHTML = ICONS.shield;
-                span.appendChild(modBadge);
+                nameWrap.appendChild(modBadge);
+            }
+            if (u.supporter) {
+                const heart = document.createElement('span');
+                heart.className = 'ichc-ul-supporter-heart';
+                heart.setAttribute('aria-label', 'Get Hearted');
+                heart.title = 'Get Hearted';
+                heart.innerHTML = ICONS.heart;
+                nameWrap.appendChild(heart);
             }
 
+            // Cam-hidden users stay in ON CAM (§7). Eye-slash toggles cam visibility.
             if (u.hidden) {
                 const enableBtn = document.createElement('button');
                 enableBtn.type = 'button';
-                enableBtn.className = 'ichc-ul-enable-btn';
-                enableBtn.title = 'Enable cam';
-                enableBtn.innerHTML = ICONS.eye;
+                enableBtn.className = 'ichc-ul-eye on';
+                enableBtn.title = 'Show cam';
+                enableBtn.setAttribute('aria-label', 'Show cam');
+                enableBtn.innerHTML = ICONS.eyeSlash;
                 enableBtn.addEventListener('click', e => {
                     e.preventDefault();
                     e.stopPropagation();
                     revealBlockedUser(u.name.toLowerCase());
                 });
-                span.insertBefore(enableBtn, span.firstElementChild);
+                nameWrap.insertBefore(enableBtn, nameWrap.firstChild);
+                span.addEventListener('click', event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openUserDropdown(u, span);
+                });
             } else {
+                if (u.cammed) {
+                    const hideBtn = document.createElement('button');
+                    hideBtn.type = 'button';
+                    hideBtn.className = 'ichc-ul-eye reveal';
+                    hideBtn.title = 'Hide cam';
+                    hideBtn.setAttribute('aria-label', 'Hide cam');
+                    hideBtn.innerHTML = ICONS.eye;
+                    hideBtn.addEventListener('click', e => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        hideUserCam(u.name);
+                    });
+                    nameWrap.insertBefore(hideBtn, nameWrap.firstChild);
+                }
                 span.addEventListener('click', event => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -6486,8 +6557,10 @@
                 const imgKey = u.name.toLowerCase();
                 let span = existingRows.get(imgKey);
                 const hiddenChanged = span && (span.classList.contains('ichc-ul-hidden-live') !== !!u.hidden);
+                // Cam state drives which inline eye button (hide vs show) the row carries.
+                const cammedChanged = span && (span.classList.contains('cammed') !== !!u.cammed);
 
-                if (span && !hiddenChanged) {
+                if (span && !hiddenChanged && !cammedChanged) {
                     // Update dynamic attributes on the existing row without detaching it.
                     span.className = 'ichc-ul-user userlink' +
                         (u.hidden ? ' ichc-ul-hidden-live' : '') +
@@ -6500,6 +6573,7 @@
                     const initKarma = profileKarmaCache.get(imgKey) ?? u.karma;
                     if (karmaEl && initKarma != null) { karmaEl.textContent = initKarma.toLocaleString(); }
                     _setKarmaTierClass(span, initKarma ?? null);
+                    _setKarmaBar(span, initKarma ?? null);
                     const yearEl = span.querySelector('.ichc-ul-year-badge');
                     if (yearEl) {
                         const initYear = profileYearCache.get(imgKey);
@@ -6527,16 +6601,46 @@
                 return span;
             });
 
-            // Pass 2: position rows in correct order with minimal DOM moves.
-            // Walk from the first slot in the scroll body and only move a span when
-            // it isn't already sitting at the cursor position.
-            // Rows already in order are never touched, so their CSS transitions survive.
+            // Partition rows into presence buckets (§1): ON CAM / ACTIVE / IDLE.
+            // Within each bucket the existing sort order (from `filtered`) is preserved.
+            const buckets = { cam: [], active: [], idle: [] };
+            filtered.forEach((u, i) => {
+                const span = spans[i];
+                if (u.cammed)      { buckets.cam.push(span); }
+                else if (u.idle)   { buckets.idle.push(span); }
+                else               { buckets.active.push(span); }
+            });
+
+            // Drop stale section headers — they're cheap to recreate each render.
+            scrollBody.querySelectorAll(':scope > .ichc-ul-section').forEach(h => h.remove());
+
+            // Build the ordered node list: a header before each non-empty bucket.
+            const desired = [];
+            const sections = [
+                ['cam',    'On Cam'],
+                ['active', 'Active'],
+                ['idle',   'Idle'],
+            ];
+            sections.forEach(([key, label]) => {
+                const rows = buckets[key];
+                if (!rows.length) { return; }
+                const hd = document.createElement('div');
+                hd.className = `ichc-ul-section ${key}`;
+                hd.textContent = label;
+                desired.push(hd);
+                rows.forEach(r => desired.push(r));
+            });
+
+            // Pass 2: position nodes in correct order with minimal DOM moves.
+            // Walk from the first slot in the scroll body and only move a node when
+            // it isn't already sitting at the cursor position. Rows already in order
+            // are never touched, so their CSS transitions survive.
             let cursor = scrollBody.firstChild;
-            for (const span of spans) {
-                if (span === cursor) {
+            for (const node of desired) {
+                if (node === cursor) {
                     cursor = cursor.nextElementSibling;
                 } else {
-                    scrollBody.insertBefore(span, cursor);
+                    scrollBody.insertBefore(node, cursor);
                 }
             }
         };
@@ -6550,6 +6654,8 @@
             if (k != null) {
                 const el = panel.querySelector(`.ichc-ul-karma[data-karma-key="${CSS.escape(key)}"]`);
                 if (el) { el.textContent = k.toLocaleString(); }
+                const barRow = panel.querySelector(`.ichc-ul-user[data-ichc-av-key="${CSS.escape(key)}"]`);
+                if (barRow) { _setKarmaBar(barRow, k); }
             }
             const yearEl = panel.querySelector(`.ichc-ul-year-badge[data-year-key="${CSS.escape(key)}"]`);
             if (yearEl) {
@@ -6676,8 +6782,13 @@
                 header.type = 'button';
                 header.className = 'ichc-ul-offline-hidden-toggle';
                 header.innerHTML = `${ICONS.eyeSlash}<span>Hidden offline</span><span class="ichc-ul-offline-count">${offlineHiddenKeys.length}</span>${ICONS.chevronDown}`;
-                if (prevOfflineOpen) { section.classList.add('is-open'); }
-                header.addEventListener('click', () => section.classList.toggle('is-open'));
+                // §9 — collapsed by default; persist expanded flag across reloads.
+                const _offOpen = prevOfflineOpen || localStorage.getItem('ichc_ul_hidden_open') === 'true';
+                if (_offOpen) { section.classList.add('is-open'); }
+                header.addEventListener('click', () => {
+                    const open = section.classList.toggle('is-open');
+                    localStorage.setItem('ichc_ul_hidden_open', String(open));
+                });
                 section.appendChild(header);
 
                 const list = document.createElement('div');
@@ -6895,6 +7006,25 @@
                     _refreshWcItem();
                 });
                 moreMenu.appendChild(wcItem);
+
+                // Retain chat through moderator clears
+                const retainItem = document.createElement('button');
+                retainItem.type = 'button';
+                retainItem.className = 'ichc-ul-more-item';
+                const _retainOn = () => localStorage.getItem('ichc_chat_retain') !== 'false';
+                const _refreshRetainItem = () => {
+                    const on = _retainOn();
+                    const label = on ? 'Don’t retain cleared chat' : 'Retain cleared chat';
+                    retainItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${on ? ICONS.eye : ICONS.eyeSlash}</span><span>${label}</span>`;
+                };
+                _refreshRetainItem();
+                retainItem.addEventListener('click', e => {
+                    e.stopPropagation();
+                    moreMenu.hidden = true;
+                    localStorage.setItem('ichc_chat_retain', String(!_retainOn()));
+                    _refreshRetainItem();
+                });
+                moreMenu.appendChild(retainItem);
 
                 document.body.appendChild(moreMenu);
 
