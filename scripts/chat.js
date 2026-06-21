@@ -1335,47 +1335,58 @@
         return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
+    // Nav/menu links in the page header that are NOT the logged-in username.
+    const _NAV_LINK_RE = /^(sign\s?out|sign\s?in|log\s?out|log\s?in|messages?|groups?|post(\s+\w+)?|help|faq|support|store|terms?|privacy|credits?|contact|developers?|directory|safety|status|settings?|emotimemes?|text.?only|dashboard|home|profile|account|report)$/i;
+
+    function _readMyNickFromDom() {
+        // modernize.js extracts the logged-in username into this element — use it
+        // directly when present.
+        const ident = document.getElementById('ichc-userinfo-username');
+        if (ident && ident.textContent.trim()) { return ident.textContent.trim(); }
+        // Fall back to the native header: the first link that isn't a nav item is
+        // the logged-in user's own profile link.
+        const links = document.querySelector('.page_header_userlinks');
+        if (links) {
+            for (const a of links.querySelectorAll('a')) {
+                const t = a.textContent.trim();
+                if (t && !_NAV_LINK_RE.test(t)) { return t; }
+            }
+        }
+        return '';
+    }
+
     function _fetchMyNick() {
         if (_myNick) { return; }
-        window.addEventListener('message', e => {
-            if (e.source !== window || e.data?.type !== 'ichc-ext-my-nick') { return; }
-            const nick = String(e.data.nick || '').trim();
-            if (!nick || nick === _myNick) { return; }
+        function _trySet() {
+            const nick = _readMyNickFromDom();
+            if (!nick || nick === _myNick) { return !!_myNick; }
             _myNick = nick;
             const log = getChatLog();
             if (log) { _markMentions(log); }
-        });
-        function _tryFetch() {
-            runInPageContext(`
-                (function() {
-                    var nick = '';
-                    ['myNick','nick','username','chatNick','currentNick','myUsername'].some(function(k) {
-                        return typeof window[k] === 'string' && window[k].trim() && (nick = window[k].trim());
-                    });
-                    if (!nick) {
-                        var el = document.querySelector('#username,[name="Nick"],[name="username"],#nick,[data-nick],[data-username]');
-                        if (el) { nick = (el.value || el.textContent || el.dataset.nick || el.dataset.username || '').trim(); }
-                    }
-                    if (nick) { window.postMessage({ type: 'ichc-ext-my-nick', nick: nick }, '*'); }
-                })();
-            `);
+            return true;
         }
-        _tryFetch();
-        window.setTimeout(_tryFetch, 2000);
+        if (_trySet()) { return; }
+        // Header can load late — retry a few times, then give up.
+        let tries = 0;
+        const timer = window.setInterval(() => {
+            if (_trySet() || ++tries >= 10) { window.clearInterval(timer); }
+        }, 1000);
     }
 
     function _markMentions(root) {
         if (!_myNick) { return; }
-        const re = new RegExp('@' + _escapeRegex(_myNick) + '\\b', 'gi');
+        // Match the nick with an optional leading @, bounded so it doesn't match
+        // inside longer words. The author's own name lives in the row's userlink
+        // <a>, which _wrapMentionSpans skips — so a match only counts when the name
+        // appears in the message body, not when you're the one talking.
+        const re = new RegExp('@?\\b' + _escapeRegex(_myNick) + '\\b', 'gi');
         getChatRowsInScope(root).forEach(row => {
             if (row.classList.contains('ichc-chat-event') || row.classList.contains('ichc-bcast-event')) { return; }
             if (row.dataset.ichcMentionNick === _myNick) { return; }
             row.dataset.ichcMentionNick = _myNick;
-            re.lastIndex = 0;
-            if (!re.test(row.textContent || '')) { return; }
+            const wrapped = _wrapMentionSpans(row, re);
+            if (!wrapped) { return; }
             row.classList.add('ichc-mention');
-            re.lastIndex = 0;
-            _wrapMentionSpans(row, re);
             if (row.dataset.ichcMentionAlerted !== '1') {
                 row.dataset.ichcMentionAlerted = '1';
                 window.dispatchEvent(new CustomEvent('ichc-mention-alert', {
@@ -1394,6 +1405,7 @@
             re.lastIndex = 0;
             if (re.test(n.textContent)) { hits.push(n); }
         }
+        let wrappedCount = 0;
         hits.forEach(textNode => {
             if (!textNode.parentNode) { return; }
             const text = textNode.textContent;
@@ -1407,10 +1419,12 @@
                 span.textContent = m[0];
                 frag.appendChild(span);
                 last = m.index + m[0].length;
+                wrappedCount++;
             }
             if (last < text.length) { frag.appendChild(document.createTextNode(text.slice(last))); }
             textNode.parentNode.replaceChild(frag, textNode);
         });
+        return wrappedCount;
     }
 
     function _wrapNativeSiteEmotes(scope) {

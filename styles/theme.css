@@ -681,46 +681,19 @@
     }
 
     /* ── Chat row karma indicator — right border + bottom bar, all driven by --ichc-kt-color ── */
-    /* Border width per tier; color comes from the exact spectral value set by JS */
+    /* Karma indicator is the bottom bar only (::before). The old colored right
+       border collided with the right-aligned timestamps (double-line). */
     #txt > [style*="--ichc-kt-color"] {
-        border-color: transparent !important;
-        border-right-color: rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.90)) !important;
+        border-right-color: transparent !important;
+        border-right-width: 1px !important;
     }
-    #txt > [data-ichc-kt="1"], #txt > [data-ichc-kt="2"], #txt > [data-ichc-kt="3"] { border-right-width: 2px !important; }
-    #txt > [data-ichc-kt="4"], #txt > [data-ichc-kt="5"], #txt > [data-ichc-kt="6"] { border-right-width: 3px !important; }
-    #txt > [data-ichc-kt="7"], #txt > [data-ichc-kt="8"]                          { border-right-width: 4px !important; }
     #txt > [data-ichc-kt="7"],
     #txt > [data-ichc-kt="8"] { box-shadow: none !important; }
 
-    /* Bottom bar: same spectral color, width ∝ tier, soft glow blooms upward.
-       --ichc-age-mult (set by _setUserViz) dims everything for old low-karma lurkers. */
-    #txt > [style*="--ichc-kt-color"]::before {
-        content: '' !important;
-        position: absolute !important;
-        bottom: 0 !important;
-        right: 0 !important;
-        left: auto !important;
-        height: 1px !important;
-        border-radius: 0 0 4px 0 !important;
-        pointer-events: none !important;
-        z-index: 0 !important;
-        background: linear-gradient(to right,
-            transparent 0%,
-            rgba(var(--ichc-kt-color), calc(var(--ichc-kt-i, 0.5) * var(--ichc-age-mult, 1) * 0.68 + 0.06)) 100%) !important;
-        box-shadow: none !important;
-    }
-    /* Lurker desaturation: grayscale the bar proportional to --ichc-lurker */
-    #txt > [style*="--ichc-lurker"]::before {
-        filter: grayscale(calc(var(--ichc-lurker) * 0.70)) !important;
-    }
-    #txt > [data-ichc-kt="1"][style*="--ichc-kt-color"]::before { width: 16%; }
-    #txt > [data-ichc-kt="2"][style*="--ichc-kt-color"]::before { width: 28%; }
-    #txt > [data-ichc-kt="3"][style*="--ichc-kt-color"]::before { width: 40%; }
-    #txt > [data-ichc-kt="4"][style*="--ichc-kt-color"]::before { width: 52%; }
-    #txt > [data-ichc-kt="5"][style*="--ichc-kt-color"]::before { width: 64%; }
-    #txt > [data-ichc-kt="6"][style*="--ichc-kt-color"]::before { width: 76%; }
-    #txt > [data-ichc-kt="7"][style*="--ichc-kt-color"]::before { width: 90%; height: 2px !important; }
-    #txt > [data-ichc-kt="8"][style*="--ichc-kt-color"]::before { width: 100%; height: 2px !important; }
+    /* Karma bottom bar removed — the colored horizontal lines stacked across
+       consecutive high-karma rows and ran under the timestamps. Karma is shown
+       by the username underline tier instead. */
+    #txt > [style*="--ichc-kt-color"]::before { content: none !important; }
 
     /* ── Chat row cam status indicator (left border) ── */
     #txt .ichc-chat-oncam  { border-left: 2px solid rgba(52,211,100,0.75) !important; }
@@ -2762,6 +2735,56 @@
     .ichc-cam-resume-btn:active {
         transform: translateY(0) !important;
     }
+    .ichc-cam-resume-toggle {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 9px !important;
+        margin-top: 14px !important;
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        color: #b9bdc7 !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        cursor: pointer !important;
+    }
+    .ichc-cam-resume-toggle-track {
+        position: relative !important;
+        flex: 0 0 auto !important;
+        width: 32px !important;
+        height: 18px !important;
+        border-radius: 999px !important;
+        background: #3a3d44 !important;
+        transition: background 0.15s !important;
+    }
+    .ichc-cam-resume-toggle-knob {
+        position: absolute !important;
+        top: 2px !important;
+        left: 2px !important;
+        width: 14px !important;
+        height: 14px !important;
+        border-radius: 50% !important;
+        background: #fff !important;
+        transition: transform 0.15s !important;
+    }
+    .ichc-cam-resume-toggle.ichc-on .ichc-cam-resume-toggle-track {
+        background: #ea580c !important;
+    }
+    .ichc-cam-resume-toggle.ichc-on .ichc-cam-resume-toggle-knob {
+        transform: translateX(14px) !important;
+    }
+    .ichc-cam-resume-toggle:hover { color: #e6e8ee !important; }
+    .ichc-cam-resume-countdown {
+        margin-top: 8px !important;
+        min-height: 14px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        color: #fb923c !important;
+    }
+    html.ichc-light-theme .ichc-cam-resume-toggle { color: #5c6070 !important; }
+    html.ichc-light-theme .ichc-cam-resume-toggle-track { background: #c7ccd6 !important; }
     #cams > * {
         width: 100% !important;
         max-width: none !important;
@@ -3597,12 +3620,14 @@
         display: flex !important;
         align-items: center !important;
         gap: 7px !important;
-        min-height: 18px !important;
-        font: 800 9px/18px -apple-system, "Inter", "Segoe UI", sans-serif !important;
+        min-height: 16px !important;
+        font: 800 9px/1 -apple-system, "Inter", "Segoe UI", sans-serif !important;
         letter-spacing: 0.12em !important;
         text-transform: uppercase !important;
-        margin: 9px 5px 1px !important;
-        padding: 0 !important;
+        margin: 7px 5px 3px !important;
+        /* uppercase caps render low in the line box; bottom padding lifts the
+           flex-centered content so the label reads vertically centered */
+        padding: 0 0 3px !important;
         pointer-events: none !important;
         user-select: none !important;
     }
@@ -5735,6 +5760,19 @@
     }
     html.ichc-light-theme #ichc-userlist .ichc-ul-username { color: #313338 !important; }
     html.ichc-light-theme #ichc-userlist .ichc-ul-username.ichc-ul-mod { color: #c27c0e !important; }
+    /* Username text (current redesign) — presence states default to light colors
+       for dark mode; flip them dark for light mode. */
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) .ichc-ul-user-name { color: #313338 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user.cammed .ichc-ul-user-name { color: #1b1d21 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user.cammed.ichc-ul-hidden-live .ichc-ul-user-name { color: #6b7280 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user.mod .ichc-ul-user-name { color: #4752c4 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user.idle .ichc-ul-user-name { color: #9298a4 !important; }
+    html.ichc-light-theme .ichc-wc-nick {
+        background: rgba(0,0,0,0.05) !important;
+        color: #313338 !important;
+    }
+    html.ichc-light-theme .ichc-wc-nick:hover { background: rgba(88,101,242,0.22) !important; color: #1b1d21 !important; }
+    html.ichc-light-theme .ichc-wc-nick.ichc-wc-mod { color: #c27c0e !important; }
     html.ichc-light-theme #ichc-userlist .ichc-ul-dot-online { background: #3ba55c !important; }
     html.ichc-light-theme #ichc-userlist .ichc-ul-dot-cam { background: #5865f2 !important; }
     html.ichc-light-theme #ichc-userlist .ichc-ul-section-header {

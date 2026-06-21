@@ -45,6 +45,7 @@
     const PREF_KEY = 'ichc_layout_prefs';
     const ORDER_KEY = 'ichc_cam_order';
     const FEATURED_KEY = 'ichc_featured_cam';
+    const AUTO_RESTART_KEY = 'ichc_auto_restart_cams';
     const SIDE_WIDTH_KEY = 'ichc_stage_side_width';
     const UL_WIDTH_KEY   = 'ichc_ul_width';
     const CAM_SPAN_KEY = 'ichc_cam_spans_v1';
@@ -88,6 +89,11 @@
     };
     const lurkState = {
         pollTimer: null,
+        wasVisible: false,
+        autoTimer: null,
+        countdownTimer: null,
+        restartAt: 0,
+        lastActiveAt: 0,   // last time the inactivity pause was showing
     };
     const camLayoutState = {
         timer: null,
@@ -3720,6 +3726,87 @@
         if (inputRow) { inputRow.classList.toggle('ichc-has-mention', !!active); }
     }
 
+    // Play the site's own notification sound when the local user is @mentioned.
+    // Runs in the page's main world so we can reuse whatever audio the site
+    // already loads (an <audio>/<embed> element or a global play function). Falls
+    // back to a short synthesized WebAudio chime if nothing site-native is found.
+    let _mentionSoundLast = 0;
+    function _playMentionSound() {
+        const now = Date.now();
+        if (now - _mentionSoundLast < 1500) { return; } // throttle bursts
+        _mentionSoundLast = now;
+        runInPageContext(`
+(() => {
+    try {
+        if (window.__ichcPlayMentionSound) { return window.__ichcPlayMentionSound(); }
+
+        function playEl(el) {
+            try {
+                const node = el.cloneNode(true);
+                node.volume = (typeof el.volume === 'number') ? el.volume : 1;
+                node.muted = false;
+                const p = node.play();
+                if (p && typeof p.catch === 'function') { p.catch(() => {}); }
+                return true;
+            } catch (_) { return false; }
+        }
+
+        function findSiteSound() {
+            // Prefer audio elements whose source looks like a notification ping.
+            const audios = Array.from(document.querySelectorAll('audio, embed[src]'));
+            const scored = audios.map(el => {
+                const src = (el.currentSrc || el.src || '').toLowerCase();
+                let score = 0;
+                if (/notif|ping|beep|alert|message|chat|sound|pop|chime/.test(src)) { score += 2; }
+                if (/\\.(mp3|wav|ogg|m4a)/.test(src)) { score += 1; }
+                return { el, score };
+            }).filter(x => x.el.tagName === 'AUDIO' ? true : x.score > 0)
+              .sort((a, b) => b.score - a.score);
+            return scored.length ? scored[0].el : null;
+        }
+
+        function fallbackBeep() {
+            try {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) { return; }
+                const ctx = window.__ichcAudioCtx || (window.__ichcAudioCtx = new Ctx());
+                if (ctx.state === 'suspended') { ctx.resume().catch(() => {}); }
+                const t = ctx.currentTime;
+                [880, 1320].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+                    const start = t + i * 0.12;
+                    gain.gain.setValueAtTime(0.0001, start);
+                    gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+                    osc.connect(gain).connect(ctx.destination);
+                    osc.start(start);
+                    osc.stop(start + 0.2);
+                });
+            } catch (_) {}
+        }
+
+        window.__ichcPlayMentionSound = function() {
+            // Try a site-provided play function first.
+            const fns = ['playNotificationSound', 'playNotifySound', 'playChatSound',
+                         'playSound', 'playPmSound', 'notifySound', 'playBeep', 'playPing'];
+            for (const name of fns) {
+                if (typeof window[name] === 'function') {
+                    try { window[name](); return; } catch (_) {}
+                }
+            }
+            const el = findSiteSound();
+            if (el && playEl(el)) { return; }
+            fallbackBeep();
+        };
+        window.__ichcPlayMentionSound();
+    } catch (_) {}
+})();
+        `);
+    }
+
     function _injectPmAvStyles() {
         if (document.getElementById('ichc-pm-av-styles')) { return; }
         const s = document.createElement('style');
@@ -3845,6 +3932,7 @@
 
         window.addEventListener('ichc-mention-alert', e => {
             _setMentionIndicator(true, e.detail || null);
+            _playMentionSound();
         });
         document.addEventListener('focusin', e => {
             if (e.target?.id === 'txtMsg') { _setMentionIndicator(false); }
@@ -4694,6 +4782,26 @@
             },
             { label: 'Sounds',          icon: ICONS.volume,    fn: 'toggleChatSound()' },
             {
+                label: 'Auto-restart cams: ' + (_autoRestartEnabled() ? 'On' : 'Off'),
+                icon: ICONS.rotate,
+                keepOpen: true,
+                action(labelEl) {
+                    const on = !_autoRestartEnabled();
+                    _setAutoRestart(on);
+                    if (on) {
+                        // If cams are currently paused, start the countdown now.
+                        if (document.getElementById('cams')?.classList.contains('ichc-lurk-active')) {
+                            _scheduleCamAutoRestart();
+                        }
+                    } else {
+                        _cancelCamAutoRestart();
+                    }
+                    if (labelEl) { labelEl.textContent = 'Auto-restart cams: ' + (on ? 'On' : 'Off'); }
+                    // Keep the on-screen paused toggle (if visible) in sync.
+                    document.querySelector('.ichc-cam-resume-toggle')?.classList.toggle('ichc-on', on);
+                },
+            },
+            {
                 label: 'Text color',
                 icon: ICONS.palette,
                 swatch: true,
@@ -5291,6 +5399,57 @@
         }
     }
 
+    // ── Auto-restart cams after the inactivity ("cams paused") timeout ───────────
+    // The site disables cams ~every 10 min of inactivity. When enabled (opt-in,
+    // off by default), we auto-click the native restart link after a random 2–10s
+    // delay so cams come back on their own. Toggle lives on the paused screen.
+    function _autoRestartEnabled() {
+        try { return localStorage.getItem(AUTO_RESTART_KEY) === '1'; } catch (_) { return false; }
+    }
+    function _setAutoRestart(on) {
+        try { localStorage.setItem(AUTO_RESTART_KEY, on ? '1' : '0'); } catch (_) {}
+    }
+
+    function _cancelCamAutoRestart() {
+        if (lurkState.autoTimer) { window.clearTimeout(lurkState.autoTimer); lurkState.autoTimer = null; }
+        if (lurkState.countdownTimer) { window.clearInterval(lurkState.countdownTimer); lurkState.countdownTimer = null; }
+        lurkState.restartAt = 0;
+        _updateCamResumeCountdown();
+    }
+
+    function _triggerCamRestart() {
+        document.getElementById('lurkMessageDiv')?.querySelector('a')?.click();
+    }
+
+    function _scheduleCamAutoRestart() {
+        if (lurkState.autoTimer) { return; } // already counting down
+        const delay = 2000 + Math.floor(Math.random() * 8001); // 2–10s
+        lurkState.restartAt = Date.now() + delay;
+        lurkState.autoTimer = window.setTimeout(() => {
+            lurkState.autoTimer = null;
+            _cancelCamAutoRestart();
+            _triggerCamRestart();
+        }, delay);
+        if (!lurkState.countdownTimer) {
+            lurkState.countdownTimer = window.setInterval(_updateCamResumeCountdown, 500);
+        }
+        _updateCamResumeCountdown();
+    }
+
+    function _updateCamResumeCountdown() {
+        const el = document.querySelector('.ichc-cam-resume-countdown');
+        if (!el) { return; }
+        if (!lurkState.restartAt) {
+            el.textContent = _autoRestartEnabled() ? 'Auto-restart is on.' : '';
+            return;
+        }
+        const secs = Math.max(0, Math.ceil((lurkState.restartAt - Date.now()) / 1000));
+        const mmss = secs >= 60
+            ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
+            : `${secs}s`;
+        el.textContent = `Auto-restarting in ${mmss}…`;
+    }
+
     function syncLurkBanner() {
         const lurkDiv = document.getElementById('lurkMessageDiv');
         if (!lurkDiv) { return; }
@@ -5310,6 +5469,8 @@
             normalizeText(lurkDiv.textContent || '').includes('cams disabled due to inactivity');
 
         lurkDiv.classList.toggle('ichc-visible', visible);
+
+        if (visible) { lurkState.lastActiveAt = Date.now(); }
 
         const actionLink = lurkDiv.querySelector('a');
         if (actionLink) {
@@ -5360,15 +5521,53 @@
                 btn.className = 'ichc-cam-resume-btn';
                 btn.innerHTML = ICONS.rotate + '<span>Restart Cams</span>';
                 btn.addEventListener('click', () => {
-                    document.getElementById('lurkMessageDiv')?.querySelector('a')?.click();
+                    _cancelCamAutoRestart();
+                    _triggerCamRestart();
                 });
                 wrap.appendChild(btn);
+
+                // Opt-in auto-restart toggle. Once enabled, future inactivity
+                // timeouts auto-restart after a random 5–30s delay.
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'ichc-cam-resume-toggle';
+                const _renderToggle = () => {
+                    const on = _autoRestartEnabled();
+                    toggle.classList.toggle('ichc-on', on);
+                    toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+                    toggle.innerHTML =
+                        `<span class="ichc-cam-resume-toggle-track"><span class="ichc-cam-resume-toggle-knob"></span></span>` +
+                        `<span>Auto-restart cams when idle</span>`;
+                };
+                _renderToggle();
+                toggle.addEventListener('click', () => {
+                    const on = !_autoRestartEnabled();
+                    _setAutoRestart(on);
+                    _renderToggle();
+                    if (on) { _scheduleCamAutoRestart(); } else { _cancelCamAutoRestart(); }
+                });
+                wrap.appendChild(toggle);
+
+                const countdown = document.createElement('div');
+                countdown.className = 'ichc-cam-resume-countdown';
+                wrap.appendChild(countdown);
+
                 cams.appendChild(wrap);
+                _updateCamResumeCountdown();
             }
             cams.classList.add('ichc-lurk-active');
         } else {
             existing?.remove();
             cams?.classList.remove('ichc-lurk-active');
+        }
+
+        // Schedule/cancel auto-restart on the visibility transition.
+        if (visible && !lurkState.wasVisible) {
+            lurkState.wasVisible = true;
+            if (_autoRestartEnabled()) { _scheduleCamAutoRestart(); }
+        } else if (!visible && lurkState.wasVisible) {
+            lurkState.wasVisible = false;
+            _cancelCamAutoRestart();
         }
     }
 
@@ -8231,9 +8430,14 @@
 
         if (found) {
             _featuredWasFound = true;
-        } else if (featured && _featuredWasFound && Date.now() - _featuredSetAt > 8000) {
+        } else if (featured && _featuredWasFound && Date.now() - _featuredSetAt > 8000 &&
+                   !document.getElementById('cams')?.classList.contains('ichc-lurk-active') &&
+                   Date.now() - lurkState.lastActiveAt > 600000) {
             // Only clear the key once the cam has been confirmed present and then
             // gone for >8 seconds — prevents clearing during initial card loading.
+            // Skip while cams are paused for inactivity AND for 10min after the pause
+            // ends: every cam vanishes during the timeout and they take a while to
+            // re-stream after restart, so the focused cam must survive that window.
             localStorage.removeItem(FEATURED_KEY);
             _featuredWasFound = false;
         }
