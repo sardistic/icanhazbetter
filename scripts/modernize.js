@@ -2103,6 +2103,106 @@
 
         const primaryLinks = [];
 
+        // Rolodex broadcast toggle — restyles a.ichc-broadcast-btn as a 3D prism that
+        // spins on click and idle-fidgets. Reads the site's own .ichc-live class for state
+        // (the publish handler still drives the actual broadcast). Build is idempotent.
+        function ichcBuildRolodex(btn) {
+            if (btn.querySelector('.ichc-rolo')) { return; }    // build once
+            btn.classList.add('ichc-rolo-btn');
+            const GO   = '<span class="ichc-face go">GO LIVE</span>';
+            const STOP = '<span class="ichc-face stop"><i class="ichc-rec"></i>STOP LIVE</span>';
+            const GO2  = '<span class="ichc-face go2">' + ICONS.broadcast + 'GO LIVE</span>';
+            btn.innerHTML =
+                '<span class="ichc-rolo"><span class="ichc-tilt"><span class="ichc-prism">' +
+                    '<span class="ichc-f f0">' + GO   + '</span>' +
+                    '<span class="ichc-f f1">' + STOP + '</span>' +
+                    '<span class="ichc-f f2">' + GO2  + '</span>' +
+                    '<span class="ichc-f f3">' + STOP + '</span>' +
+                '</span></span></span>';
+
+            const prism = btn.querySelector('.ichc-prism');
+            const tilt  = btn.querySelector('.ichc-tilt');
+            let rot = 0;
+            // Pointer-tracked peek flag. A re-render on a state flip (go live / cam
+            // auto-restart) can drop the pointerleave so the flag alone gets stuck true;
+            // btn.matches(':hover') can independently get stuck stale-true. The peek is
+            // only "real" when BOTH agree — so a stuck either-one still clears the tilt.
+            let peeking = false;
+            const live = () => btn.classList.contains('ichc-live');
+            const reallyHover = () => {
+                try { return peeking && btn.matches(':hover'); } catch (_) { return peeking; }
+            };
+            const rnd  = () => (Math.random() < 0.5 ? -1 : 1);
+            const apply = (ms, ease) => {
+                prism.style.transition = 'transform ' + ms + 'ms ' + ease;
+                prism.style.transform  = 'rotateX(' + rot + 'deg)';
+            };
+            const clearTilt = () => { if (tilt.style.transform) { tilt.style.transform = ''; } };
+
+            // Peek from top OR bottom at random, each hover
+            btn.addEventListener('pointerenter', () => {
+                peeking = true;
+                const d = rnd();
+                tilt.style.transform = 'rotateX(' + (22 * d) + 'deg) translateY(' + (-d) + 'px)';
+            });
+            const endPeek = () => { peeking = false; clearTilt(); };
+            btn.addEventListener('pointerleave', endPeek);
+            btn.addEventListener('pointercancel', endPeek);
+            btn.addEventListener('blur', endPeek);
+            // The prism settles after its transition — if the pointer isn't genuinely on
+            // the button anymore, make sure no foreshortening tilt lingers.
+            tilt.addEventListener('transitionend', () => { if (!reallyHover()) { clearTilt(); } });
+
+            // The prism follows the REAL broadcast state (.ichc-live), never the click.
+            // Clicking Go Live only opens the camera/mic picker — broadcasting starts
+            // (and .ichc-live lands) only after you confirm. Spinning optimistically on
+            // click left the button stuck on STOP if you cancelled/clicked out. So the
+            // satisfying 1¼-turn roll happens here, when state actually flips.
+            // Faces alternate GO (even ×90°) / STOP (odd ×90°).
+            let wasLive = live();
+            const faceMatchesState = () =>
+                (Math.abs(Math.round(rot / 90)) % 2 === 1) === live(); // odd step == STOP
+            // Align the resting face with the current state at build time (e.g. page
+            // loaded while already broadcasting) — no animation, just snap.
+            if (!faceMatchesState()) { rot += 90; apply(0, 'linear'); }
+            new MutationObserver(() => {
+                peeking = false;
+                clearTilt();
+                const nowLive = live();
+                if (nowLive !== wasLive) {
+                    // Real state change: roll 1¼ turns, correcting parity so it lands on
+                    // the face for the new state.
+                    const dir = rnd();
+                    rot += 450 * dir;
+                    if (!faceMatchesState()) { rot += 90 * dir; }
+                    apply(950, 'cubic-bezier(.5,.04,.18,1)');
+                    wasLive = nowLive;
+                } else if (!faceMatchesState()) {
+                    // No state change but the face drifted out of sync (re-render) —
+                    // snap a clean quarter-turn back onto the correct face.
+                    rot += 90 * rnd();
+                    apply(600, 'cubic-bezier(.4,.12,.22,1)');
+                }
+            }).observe(btn, { attributes: true, attributeFilter: ['class'] });
+
+            // Click only drops a pending peek so it doesn't stick post-toggle; the spin
+            // is driven by the .ichc-live observer above.
+            btn.addEventListener('click', clearTilt, true);
+
+            // Watchdog + idle fidget. Always unstick a stray tilt when not genuinely
+            // hovered (covers the stuck-:hover/stuck-flag case that left STOP LIVE
+            // foreshortened). When NOT live and idle, roll ±180° to the 2nd GO face.
+            // Skipped under prefers-reduced-motion.
+            if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                setInterval(() => {
+                    if (!reallyHover()) { clearTilt(); }
+                    if (live() || reallyHover()) { return; }
+                    rot += 180 * rnd();
+                    apply(1200, 'cubic-bezier(.4,.12,.22,1)');
+                }, 5000);
+            }
+        }
+
         // Find broadcast button: may already be in primaryActions (moved on a previous call)
         // or still in camControl (first call). Look for broadcast/live URL; fall back to first link.
         const broadcastBtn = primaryActions.querySelector('a.ichc-broadcast-btn') ||
@@ -2112,10 +2212,8 @@
             ) ||
             [...camControl.querySelectorAll('a')][0];
         if (broadcastBtn) {
-            if (!broadcastBtn.classList.contains('ichc-broadcast-btn')) {
-                broadcastBtn.innerHTML = '<span class="ichc-btn-icon-lg">' + ICONS.broadcast + '</span><span>Go Live</span>';
-                broadcastBtn.classList.add('ichc-broadcast-btn');
-            }
+            broadcastBtn.classList.add('ichc-broadcast-btn');
+            ichcBuildRolodex(broadcastBtn);
             primaryLinks.push(broadcastBtn);
         }
 
@@ -4996,7 +5094,111 @@
             gifBtn.type = 'button';
             gifBtn.id = 'ichc-gif-toggle-btn';
             gifBtn.title = 'GIFs & Emotes';
-            gifBtn.innerHTML = ICONS.gifIcon;
+
+            // 3D prism (flip-cube) of your top emotes — same rolodex animation as the
+            // broadcast button. Idle-cycles through the 4 most-used emotes; clicking
+            // still opens the picker below.
+            gifBtn.innerHTML =
+                '<span class="ichc-gif-cube"><span class="ichc-gif-cube-tilt">' +
+                '<span class="ichc-gif-cube-prism">' +
+                    '<span class="ichc-gcf gcf0"><span class="ichc-gif-cube-face"></span></span>' +
+                    '<span class="ichc-gcf gcf1"><span class="ichc-gif-cube-face"></span></span>' +
+                    '<span class="ichc-gcf gcf2"><span class="ichc-gif-cube-face"></span></span>' +
+                    '<span class="ichc-gcf gcf3"><span class="ichc-gif-cube-face"></span></span>' +
+                '</span></span></span>';
+
+            (function setupGifCube() {
+                // Recommended emotes shown until usage history exists.
+                const DEFAULTS = [
+                    { type: 'emoji', char: '😂' },
+                    { type: 'emoji', char: '🔥' },
+                    { type: 'emoji', char: '❤️' },
+                    { type: 'emoji', char: '👍' },
+                ];
+                const prism = gifBtn.querySelector('.ichc-gif-cube-prism');
+                const tilt  = gifBtn.querySelector('.ichc-gif-cube-tilt');
+                const faceEls = [...gifBtn.querySelectorAll('.ichc-gif-cube-face')];
+                let rot = 0, peeking = false;
+                const reallyHover = () => {
+                    try { return peeking && gifBtn.matches(':hover'); } catch (_) { return peeking; }
+                };
+                const panelOpen = () => {
+                    const p = document.getElementById('ichc-gif-panel');
+                    return !!p && !p.hidden;
+                };
+                const rnd = () => (Math.random() < 0.5 ? -1 : 1);
+                const apply = (ms, ease) => {
+                    prism.style.transition = 'transform ' + ms + 'ms ' + ease;
+                    prism.style.transform  = 'rotateX(' + rot + 'deg)';
+                };
+                const clearTilt = () => { if (tilt.style.transform) { tilt.style.transform = ''; } };
+
+                const refreshFaces = () => {
+                    // Make sure gif metadata is loading so :code: emotes resolve to images
+                    // instead of falling back to their raw text.
+                    if (!_gifDataCache) { _prefetchGifData(); }
+                    const top = _getTopEmotes(4);
+                    for (let i = 0; i < 4; i++) {
+                        const item = top[i] || DEFAULTS[i];
+                        const el = faceEls[i];
+                        if (!el) { continue; }
+                        // Key on type+src too, so a face first drawn as text upgrades to
+                        // the real image once the gif cache finishes loading.
+                        const sig = (item.type || '') + '|' + (item.src || item.char || item.code || '');
+                        if (el.dataset.sig === sig) { continue; }
+                        el.dataset.sig = sig;
+                        el.innerHTML = '';
+                        if (item.type === 'gif' && item.src) {
+                            const img = new Image();
+                            img.src = item.src; img.alt = item.code || ''; img.loading = 'lazy';
+                            el.appendChild(img);
+                        } else {
+                            el.textContent = item.char || item.code || '';
+                        }
+                    }
+                };
+                refreshFaces();
+                // The gif cache may still be loading on first build — re-render the faces
+                // a few times so text placeholders flip to images once codes resolve.
+                let _gifFaceTries = 0;
+                const _gifFacePoll = setInterval(() => {
+                    refreshFaces();
+                    if (_gifDataCache || ++_gifFaceTries > 20) { clearInterval(_gifFacePoll); }
+                }, 500);
+
+                // Peek on hover.
+                gifBtn.addEventListener('pointerenter', () => {
+                    peeking = true;
+                    const d = rnd();
+                    tilt.style.transform = 'rotateX(' + (20 * d) + 'deg) translateY(' + (-d) + 'px)';
+                });
+                const endPeek = () => { peeking = false; clearTilt(); };
+                gifBtn.addEventListener('pointerleave', endPeek);
+                gifBtn.addEventListener('pointercancel', endPeek);
+                gifBtn.addEventListener('blur', endPeek);
+                tilt.addEventListener('transitionend', () => { if (!reallyHover()) { clearTilt(); } });
+
+                // Click gives a quick spin for feedback (panel toggling is handled by the
+                // existing gifBtn click handler).
+                gifBtn.addEventListener('click', () => {
+                    clearTilt();
+                    rot += 90 * rnd();
+                    apply(500, 'cubic-bezier(.34,1.4,.5,1)');
+                    refreshFaces();
+                }, true);
+
+                // Idle rotation: roll to the next emote face every few seconds when not
+                // hovered and the picker is closed. Skipped under reduced-motion.
+                if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    setInterval(() => {
+                        if (!reallyHover()) { clearTilt(); }
+                        if (reallyHover() || panelOpen()) { return; }
+                        refreshFaces();
+                        rot += 90;
+                        apply(900, 'cubic-bezier(.5,.04,.18,1)');
+                    }, 3200);
+                }
+            })();
 
             // Panel lives directly on body so it's never inside #ichc-room-root's stacking context
             let gifPanel = document.getElementById('ichc-gif-panel');
@@ -7159,7 +7361,19 @@
                 const pmItem = document.createElement('button');
                 pmItem.type = 'button';
                 pmItem.className = 'ichc-ul-more-item';
-                pmItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.chat}</span><span>Toggle PM panel</span>`;
+                pmItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.chat}</span><span>Toggle PM panel</span><span class="ichc-ul-more-toggle" aria-hidden="true"></span>`;
+                const _pmHidden = () => {
+                    try {
+                        const raw = localStorage.getItem('ichc_pm_vis_v1');
+                        return raw ? JSON.parse(raw)?.hidden === true : false;
+                    } catch (_) { return false; }
+                };
+                const _refreshPmItem = () => {
+                    pmItem.classList.toggle('ichc-on', !_pmHidden());
+                };
+                _refreshPmItem();
+                window.addEventListener('ichc-pm-shown', _refreshPmItem);
+                window.addEventListener('ichc-pm-hidden', _refreshPmItem);
                 pmItem.addEventListener('click', e => {
                     e.stopPropagation();
                     moreMenu.hidden = true;
@@ -7174,7 +7388,8 @@
                 const _refreshAvatarItem = () => {
                     const icon = userListState.showAvatars ? ICONS.eyeSlash : ICONS.eye;
                     const label = userListState.showAvatars ? 'Hide avatars' : 'Show avatars';
-                    avatarItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+                    avatarItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${icon}</span><span>${label}</span><span class="ichc-ul-more-toggle" aria-hidden="true"></span>`;
+                    avatarItem.classList.toggle('ichc-on', !!userListState.showAvatars);
                 };
                 _refreshAvatarItem();
                 avatarItem.addEventListener('click', e => {
@@ -7195,7 +7410,8 @@
                 wcItem.className = 'ichc-ul-more-item';
                 const _refreshWcItem = () => {
                     const label = _wordCloudMode ? 'Hide word cloud' : 'Show word cloud';
-                    wcItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.cloud}</span><span>${label}</span>`;
+                    wcItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.cloud}</span><span>${label}</span><span class="ichc-ul-more-toggle" aria-hidden="true"></span>`;
+                    wcItem.classList.toggle('ichc-on', !!_wordCloudMode);
                 };
                 _refreshWcItem();
                 wcItem.addEventListener('click', e => {
@@ -7214,7 +7430,8 @@
                 const _refreshRetainItem = () => {
                     const on = _retainOn();
                     const label = on ? 'Don’t retain cleared chat' : 'Retain cleared chat';
-                    retainItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${on ? ICONS.eye : ICONS.eyeSlash}</span><span>${label}</span>`;
+                    retainItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${on ? ICONS.eye : ICONS.eyeSlash}</span><span>${label}</span><span class="ichc-ul-more-toggle" aria-hidden="true"></span>`;
+                    retainItem.classList.toggle('ichc-on', on);
                 };
                 _refreshRetainItem();
                 retainItem.addEventListener('click', e => {
@@ -7614,6 +7831,19 @@
     //   4 = cinema  — 1/-1, full row, 16:9 with height cap
     function _applySpanLevel(card, level) {
         const hasFeatured = !!document.querySelector('#cams .ichc-featured');
+        // Clear explicit-placement styles left over from featured/focus mode. Without
+        // this, a card that was previously the focused cam (or a focus thumbnail) keeps
+        // its inline grid-row/align-self/etc. and gets placed on top of its neighbors in
+        // the normal auto-flow grid — cams visibly overlap. Featured mode owns these
+        // props, so only strip them when no cam is focused.
+        if (!hasFeatured) {
+            card.style.removeProperty('grid-row');
+            card.style.removeProperty('align-self');
+            card.style.removeProperty('justify-self');
+            card.style.removeProperty('width');
+            card.style.removeProperty('height');
+            card.style.removeProperty('min-width');
+        }
         if (level === 4) {
             card.style.setProperty('grid-column', '1 / -1', 'important');
             if (!hasFeatured) {
@@ -8086,26 +8316,29 @@
             const aspectValue = 4 / 3;
             const maxCols = Math.max(1, Math.min(densityCount, Math.floor((availableWidth + gap) / (160 + gap))));
 
-            // Prefer column counts where cams fit at natural 4:3 height (feasible = cams
-            // won't overflow vertically without fill mode). Fall back to max-area selection
-            // if no column count is feasible at natural height.
-            let bestFeasibleArea = -1;
-            let bestFallbackArea = -1;
-            let fallbackColumns = 1;
+            // Cams fill the COLUMN width (each track is 1fr) and the card's aspect-ratio
+            // then sets the height — so for c columns a 4:3 cam renders cellW wide and
+            // cellW*3/4 tall, and the whole grid is rows*that-height. Goal: make cams as
+            // LARGE as possible while the whole grid still fits the panel height (no cams
+            // cut off, no big empty bands above/below from an over-columned tiny grid).
+            //
+            // Bigger cams = fewer columns, so we pick the FEWEST columns whose rows still
+            // fit the available height. If nothing fits (very short panel), fall back to
+            // the most-columns / fewest-rows option to minimize how much is cut off.
+            let fitFewest = 0;     // fewest cols that fit vertically (= biggest cams)
+            let overflow = 1;      // nothing fits — fewest rows to minimize overflow
+            let overflowRows = Infinity;
             for (let c = 1; c <= maxCols; c++) {
                 const rows = Math.ceil(densityCount / c);
-                const slotW = (availableWidth - gap * (c - 1)) / c;
-                const naturalH = slotW / aspectValue;
-                const totalGridH = rows * naturalH + (rows - 1) * gap;
-                const area = slotW * naturalH;
-                if (totalGridH <= availableHeight) {
-                    if (area > bestFeasibleArea) { bestFeasibleArea = area; columns = c; }
-                } else if (area > bestFallbackArea) {
-                    bestFallbackArea = area;
-                    fallbackColumns = c;
+                const cellW = (availableWidth - gap * (c - 1)) / c;
+                const totalH = rows * (cellW / aspectValue) + (rows - 1) * gap;
+                if (totalH <= availableHeight) {
+                    if (fitFewest === 0) { fitFewest = c; } // loop ascends → first = fewest
+                } else if (rows < overflowRows) {
+                    overflow = c; overflowRows = rows;
                 }
             }
-            if (bestFeasibleArea < 0) { columns = fallbackColumns; }
+            columns = fitFewest || overflow;
 
             camMin = Math.max(160, Math.floor((availableWidth - gap * (columns - 1)) / columns));
         }

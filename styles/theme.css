@@ -960,6 +960,87 @@
         background: rgba(185,28,28,0.9) !important;
         border-color: rgba(239,68,68,0.7) !important;
     }
+    /* ── Reply button + local reply preview bar ── */
+    #txt .ichc-reply-btn {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: absolute !important;
+        top: 2px !important;
+        right: 6px !important;
+        width: 22px !important;
+        height: 22px !important;
+        padding: 0 !important;
+        border-radius: 4px !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: rgba(40,42,54,0.85) !important;
+        color: #cbd5e1 !important;
+        font-size: 13px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        z-index: 3 !important;
+        transition: opacity 0.1s ease, background 0.1s ease !important;
+    }
+    /* Show only while the row that directly contains the button is hovered.
+       Depth-independent: *:hover matches the button's immediate parent (the
+       row), never #txt itself, so buttons stay hidden unless a row is hovered. */
+    #txt *:hover > .ichc-reply-btn {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+    #txt .ichc-reply-btn:hover {
+        background: rgba(59,130,246,0.85) !important;
+        border-color: rgba(96,165,250,0.7) !important;
+        color: #fff !important;
+    }
+    html.ichc-light-theme #txt .ichc-reply-btn {
+        background: rgba(255,255,255,0.92) !important;
+        border-color: rgba(0,0,0,0.12) !important;
+        color: #5c6070 !important;
+    }
+
+    #ichc-reply-bar {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        margin: 0 0 4px 0 !important;
+        padding: 4px 8px !important;
+        border-radius: 6px !important;
+        border-left: 3px solid rgba(96,165,250,0.8) !important;
+        background: rgba(59,130,246,0.12) !important;
+        font-size: 12px !important;
+        color: #cbd5e1 !important;
+    }
+    #ichc-reply-bar .ichc-reply-bar-label {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    #ichc-reply-bar strong { color: #93c5fd !important; }
+    #ichc-reply-bar .ichc-reply-bar-snippet { opacity: 0.7 !important; }
+    #ichc-reply-bar .ichc-reply-bar-close {
+        flex: 0 0 auto !important;
+        width: 18px !important;
+        height: 18px !important;
+        padding: 0 !important;
+        border: none !important;
+        border-radius: 4px !important;
+        background: transparent !important;
+        color: inherit !important;
+        font-size: 14px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+    }
+    #ichc-reply-bar .ichc-reply-bar-close:hover {
+        background: rgba(255,255,255,0.12) !important;
+    }
+    html.ichc-light-theme #ichc-reply-bar {
+        background: rgba(59,130,246,0.1) !important;
+        color: #5c6070 !important;
+    }
+    html.ichc-light-theme #ichc-reply-bar strong { color: #2563eb !important; }
+
     #txt .ichc-emote-disabled-label {
         display: inline-block !important;
         margin: 2px 2px 2px 0 !important;
@@ -1689,23 +1770,46 @@
     #camControl a:hover svg:first-child {
         filter: drop-shadow(0 0 5px rgba(52,211,100,0.85)) drop-shadow(0 0 2px rgba(52,211,100,0.55)) !important;
     }
-    @keyframes ichc-golive-glow {
-        0%, 100% { box-shadow: 0 0 8px rgba(237,66,69,0.5), 0 0 0 1px rgba(237,66,69,0.3) !important; filter: brightness(1); }
-        50%       { box-shadow: 0 0 18px rgba(237,66,69,0.85), 0 0 0 2px rgba(237,66,69,0.5) !important; filter: brightness(1.15); }
+    /* ── Rolodex broadcast toggle (replaces the old .ichc-live glow) ── */
+    /* neutralise the base button chrome when the rolodex is mounted */
+    #ichc-primary-actions > a.ichc-broadcast-btn.ichc-rolo-btn {
+        padding: 0 !important; background: transparent !important; border: 0 !important;
+        box-shadow: none !important; overflow: visible !important; animation: none !important;
+        transform: none !important;
     }
-    @keyframes ichc-golive-icon-pulse {
-        0%, 100% { transform: scale(1); }
-        50%       { transform: scale(1.18); }
+    #ichc-primary-actions > a.ichc-broadcast-btn.ichc-rolo-btn:hover {
+        background: transparent !important; border: 0 !important;
+        box-shadow: none !important; transform: none !important;
     }
-    #ichc-primary-actions > a.ichc-broadcast-btn.ichc-live {
-        background: rgba(237,66,69,0.18) !important;
-        color: #f87171 !important;
-        border-color: rgba(237,66,69,0.45) !important;
-        animation: ichc-golive-glow 1.4s ease-in-out infinite !important;
+
+    /* Sized to match the other header buttons (~34px tall). translateZ = height/2 = 17px. */
+    .ichc-rolo  { position: relative; display: block; width: 116px; height: 34px; perspective: 600px; }
+    .ichc-tilt  { position: absolute; inset: 0; transform-style: preserve-3d;
+                  transition: transform .35s cubic-bezier(.34,1.4,.5,1); }   /* peek easing; set by JS */
+    .ichc-prism { position: absolute; inset: 0; transform-style: preserve-3d; }
+
+    .ichc-f     { position: absolute; inset: 0; backface-visibility: hidden; }
+    .ichc-f.f0 { transform: rotateX(0deg)   translateZ(17px); }   /* GO  */
+    .ichc-f.f1 { transform: rotateX(90deg)  translateZ(17px); }   /* STOP */
+    .ichc-f.f2 { transform: rotateX(180deg) translateZ(17px); }   /* GO (2nd) */
+    .ichc-f.f3 { transform: rotateX(270deg) translateZ(17px); }   /* STOP */
+
+    .ichc-face {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        gap: 6px; border: 1.5px solid; box-sizing: border-box; border-radius: 0;
+        font: 800 12px/1 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 1.5px;
     }
-    #ichc-primary-actions > a.ichc-broadcast-btn.ichc-live .ichc-btn-icon-lg svg {
-        animation: ichc-golive-icon-pulse 1.4s ease-in-out infinite !important;
-    }
+    .ichc-face.go, .ichc-face.go2 { color:#7fe6a4; background:#0d1712; border-color:rgba(53,211,106,.55); }
+    .ichc-face.go2 { font-size:11px; letter-spacing:1px; }
+    .ichc-face.go2 svg { width:13px; height:13px; }
+    .ichc-face.stop { color:#f3a8aa; background:#170c0d; border-color:rgba(237,90,93,.6); }
+    .ichc-rec { width:6px; height:6px; border-radius:50%; background:#f8595c;
+                box-shadow:0 0 6px rgba(248,90,92,.7); }
+
+    /* optional light theme */
+    html.ichc-light-theme .ichc-face.go,
+    html.ichc-light-theme .ichc-face.go2 { background:#eaf7ee; color:#1c7a44; }
+    html.ichc-light-theme .ichc-face.stop { background:#fdeaea; color:#b3261e; }
     /* ── Leave ── */
     #signout a,
     #ichc-primary-actions > a.ichc-leave-btn,
@@ -4602,6 +4706,35 @@
         width: 100% !important;
     }
     .ichc-ul-more-item:hover { background: rgba(255,255,255,0.06) !important; color: #fff !important; }
+    /* On/off state indicator pill for toggleable view items */
+    .ichc-ul-more-toggle {
+        margin-left: auto !important;
+        flex-shrink: 0 !important;
+        width: 26px !important;
+        height: 14px !important;
+        border-radius: 8px !important;
+        background: rgba(255,255,255,0.14) !important;
+        position: relative !important;
+        transition: background 0.15s !important;
+    }
+    .ichc-ul-more-toggle::after {
+        content: "" !important;
+        position: absolute !important;
+        top: 2px !important;
+        left: 2px !important;
+        width: 10px !important;
+        height: 10px !important;
+        border-radius: 50% !important;
+        background: #9aa0a6 !important;
+        transition: left 0.15s, background 0.15s !important;
+    }
+    .ichc-ul-more-item.ichc-on .ichc-ul-more-toggle {
+        background: rgba(88,101,242,0.55) !important;
+    }
+    .ichc-ul-more-item.ichc-on .ichc-ul-more-toggle::after {
+        left: 14px !important;
+        background: #fff !important;
+    }
     /* Sort items — checkmark visibility */
     .ichc-ul-sort-item .ichc-ul-sort-check {
         width: 14px !important;
@@ -5470,6 +5603,53 @@
     #ichc-gif-toggle-btn svg {
         width: 24px !important;
         height: 24px !important;
+    }
+
+    /* 3D emote prism inside the GIF button (rolodex-style flip cube of top emotes).
+       Inner cube is 30px; translateZ = 15px = half the cube size so faces meet flush. */
+    .ichc-gif-cube  {
+        position: relative !important; display: block !important;
+        width: 30px !important; height: 30px !important; perspective: 320px !important;
+    }
+    .ichc-gif-cube-tilt {
+        position: absolute !important; inset: 0 !important;
+        transform-style: preserve-3d !important;
+        transition: transform .3s cubic-bezier(.34,1.4,.5,1) !important;
+    }
+    .ichc-gif-cube-prism {
+        position: absolute !important; inset: 0 !important;
+        transform-style: preserve-3d !important;
+    }
+    .ichc-gcf {
+        position: absolute !important; inset: 0 !important;
+        backface-visibility: hidden !important;
+    }
+    .ichc-gcf.gcf0 { transform: rotateX(0deg)   translateZ(15px) !important; }
+    .ichc-gcf.gcf1 { transform: rotateX(90deg)  translateZ(15px) !important; }
+    .ichc-gcf.gcf2 { transform: rotateX(180deg) translateZ(15px) !important; }
+    .ichc-gcf.gcf3 { transform: rotateX(270deg) translateZ(15px) !important; }
+    .ichc-gif-cube-face {
+        position: absolute !important; inset: 0 !important;
+        display: flex !important; align-items: center !important; justify-content: center !important;
+        font-size: 20px !important; line-height: 1 !important;
+        border: 1px solid rgba(255,255,255,0.10) !important;
+        border-radius: 7px !important;
+        background: rgba(255,255,255,0.05) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        user-select: none !important;
+    }
+    #ichc-gif-toggle-btn:hover .ichc-gif-cube-face {
+        border-color: rgba(255,255,255,0.20) !important;
+        background: rgba(255,255,255,0.10) !important;
+    }
+    .ichc-gif-cube-face img {
+        width: 100% !important; height: 100% !important;
+        object-fit: cover !important; border-radius: 6px !important;
+    }
+    html.ichc-light-theme .ichc-gif-cube-face {
+        border-color: rgba(0,0,0,0.12) !important;
+        background: rgba(0,0,0,0.04) !important;
     }
 
     /* Quickbar flyout — most-used emotes/gifs, appears to the left of the GIF button */

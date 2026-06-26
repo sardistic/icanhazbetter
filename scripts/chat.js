@@ -525,6 +525,110 @@
         }
     }
 
+    // ── Reply button + local reply preview (client-side only) ────────────────
+    // Adds a hover ↩ button to each chat row. Clicking inserts "@nick " into the
+    // native message input (#txtMsg) and shows a local "Replying to…" bar above
+    // the input. Nothing is encoded into the sent message — only you see this.
+    let _replyContext = null;        // { nick, snippet }
+    let _replyInputWired = false;
+
+    function _getMsgInput() {
+        return document.getElementById('txtMsg');
+    }
+
+    function _rowReplySnippet(row, nick) {
+        let text = (row.textContent || '').replace(/\s+/g, ' ').trim();
+        // Strip a leading "nick" / "nick:" prefix so the snippet is just the message.
+        const lower = text.toLowerCase();
+        const idx = lower.indexOf(nick.toLowerCase());
+        if (idx !== -1 && idx < 40) {
+            text = text.slice(idx + nick.length).replace(/^[\s:]+/, '');
+        }
+        return text.slice(0, 80);
+    }
+
+    function _ensureReplyButton(row, nick) {
+        if (row.querySelector(':scope > .ichc-reply-btn')) { return; }
+        const btn = document.createElement('button');
+        btn.className = 'ichc-reply-btn';
+        btn.title = 'Reply to ' + nick;
+        btn.textContent = '↩';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            _startReply(nick, _rowReplySnippet(row, nick));
+        });
+        // Anchor the absolutely-positioned button to the row.
+        row.style.position = row.style.position || 'relative';
+        row.appendChild(btn);
+    }
+
+    function _wireReplyInput(input) {
+        if (_replyInputWired || !input) { return; }
+        _replyInputWired = true;
+        // The site sends on Enter; clear our local reply context once it's sent.
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { setTimeout(_clearReply, 0); }
+        });
+    }
+
+    function _startReply(nick, snippet) {
+        _replyContext = { nick, snippet };
+        const input = _getMsgInput();
+        if (input) {
+            _wireReplyInput(input);
+            const mention = '@' + nick + ' ';
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? input.value.length;
+            const v = input.value;
+            input.value = v.slice(0, start) + mention + v.slice(end);
+            const pos = start + mention.length;
+            input.focus();
+            try { input.setSelectionRange(pos, pos); } catch (_) {}
+        }
+        _renderReplyBar();
+    }
+
+    function _clearReply() {
+        _replyContext = null;
+        _renderReplyBar();
+    }
+
+    function _renderReplyBar() {
+        let bar = document.getElementById('ichc-reply-bar');
+        const input = _getMsgInput();
+        if (!_replyContext || !input) {
+            if (bar) { bar.remove(); }
+            return;
+        }
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'ichc-reply-bar';
+            input.parentNode.insertBefore(bar, input);
+        }
+        bar.textContent = '';
+
+        const label = document.createElement('span');
+        label.className = 'ichc-reply-bar-label';
+        const who = document.createElement('strong');
+        who.textContent = '@' + _replyContext.nick;
+        label.append(document.createTextNode('↩ Replying to '), who);
+        if (_replyContext.snippet) {
+            const snip = document.createElement('span');
+            snip.className = 'ichc-reply-bar-snippet';
+            snip.textContent = ' — ' + _replyContext.snippet;
+            label.appendChild(snip);
+        }
+
+        const close = document.createElement('button');
+        close.className = 'ichc-reply-bar-close';
+        close.textContent = '×';
+        close.title = 'Cancel reply';
+        close.addEventListener('click', _clearReply);
+
+        bar.append(label, close);
+    }
+
     function reGroupChatRows(log) {
         if (!log) { return; }
         const allRows = [...log.children].filter(node =>
@@ -557,6 +661,7 @@
                 _updateGroupNickWrap(row, false);
                 return;
             }
+            _ensureReplyButton(row, nick);
             const prevNick = i > 0 ? nickOf.get(allRows[i - 1]) : null;
             const nextNick = i < allRows.length - 1 ? nickOf.get(allRows[i + 1]) : null;
             const sameAsPrev = prevNick === nick;

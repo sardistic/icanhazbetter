@@ -1246,11 +1246,12 @@
         root.dataset.ichcPmObserved = '1';
 
         pmState.tabsObserver = new MutationObserver(() => {
-            if (root.style.getPropertyValue('display') === 'none') {
-                _userHiddenPm = true;
-                _saveVisState(true, root);
-                window.dispatchEvent(new CustomEvent('ichc-pm-hidden'));
-            }
+            // NOTE: do NOT infer a user-hide from display:none here.  display:none
+            // is also the normal empty state (no live tabs) and a transient state
+            // while a new PM tab is being inserted.  Latching _userHiddenPm from a
+            // transient/empty none caused the window to flash open then immediately
+            // hide.  User-hide is recorded only by explicit paths (minimize button,
+            // toggle event, pagehide).
             // Any mutation inside #tabs: re-sync soon.
             schedulePmSync(100);
         });
@@ -1422,13 +1423,20 @@
         // Create the conversation panel + tab if not already present.
         ensurePmConversation(root, { key: nick, title: nick });
 
-        // forceShow (e.g. avatar strip click) overrides the user-hidden state.
+        // forceShow (e.g. avatar strip click, incoming PM) overrides — and auto-
+        // recovers from — a stale user-hidden state, including one persisted to
+        // localStorage from a previous session.
         if (forceShow) {
+            const wasHidden = _userHiddenPm || _loadVisState().hidden;
             _userHiddenPm = false;
             try {
                 const prev = _loadVisState();
                 localStorage.setItem(PM_VIS_KEY, JSON.stringify({ hidden: false, geo: prev.geo }));
             } catch (_) {}
+            // Broadcast so toggle indicators / sidebar PM button re-sync.
+            if (wasHidden) {
+                window.dispatchEvent(new CustomEvent('ichc-pm-shown'));
+            }
         }
 
         // Show the window unless the user has manually hidden PMs via the toggle button.
