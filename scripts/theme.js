@@ -88,8 +88,13 @@
         const btn = document.querySelector('a.ichc-broadcast-btn');
         if (!btn) { return; }
         btn.classList.toggle('ichc-live', isLive);
-        const label = btn.querySelector('span:not(.ichc-btn-icon-lg)');
-        if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
+        // When the 3D rolodex prism is mounted, its faces show GO/STOP and it flips
+        // itself off the .ichc-live class — writing textContent here would clobber the
+        // whole prism with a plain text label. Only update the label on the plain button.
+        if (!btn.classList.contains('ichc-rolo-btn')) {
+            const label = btn.querySelector('span:not(.ichc-btn-icon-lg)');
+            if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
+        }
         if (!isLive) {
             window.setTimeout(() => document.dispatchEvent(new CustomEvent('ichc-trigger-reload')), 1500);
         }
