@@ -1062,9 +1062,125 @@
             if (!liveLog || !rows) { return; }
             const now = [...liveLog.children].filter(_isRetainableRow).length;
             if (now > 2) { return; } // site refilled — genuine refresh, not a clear
-            _restoreClearedChat(liveLog, rows);
+            // Salvaged rows are the freshest copy — keep them as the cache and reveal
+            // the restore button (manual restore; auto-restore proved unreliable).
+            if (rows.length >= chatCache.count) {
+                chatCache.rows = rows.map(r => r.cloneNode(true));
+                chatCache.count = rows.length;
+            }
+            _showChatRestoreBar();
         }, CHAT_CLEAR_CONFIRM_MS);
         return true;
+    }
+
+    // ── Rolling chat cache + restore button ─────────────────────────────────────
+    // A debounced snapshot of the live chat survives a moderator clear regardless of
+    // HOW the site wipes it (innerHTML, node removal, or replacing #txt). When the log
+    // goes empty while we hold a cache, a restore button appears (manual, not auto).
+    const CHAT_CACHE_MAX = 400;
+    const chatCache = { rows: [], count: 0, snapTimer: null, lossShown: false, lastContentAt: 0, lossCheckTimer: null };
+
+    function _snapshotChatCache() {
+        const log = getChatLog();
+        if (!log) { return; }
+        const rows = [...log.children].filter(_isRetainableRow);
+        if (rows.length < 3) { return; }   // nothing worth caching yet
+        let snap = rows.map(r => r.cloneNode(true));
+        if (snap.length > CHAT_CACHE_MAX) { snap = snap.slice(snap.length - CHAT_CACHE_MAX); }
+        chatCache.rows = snap;
+        chatCache.count = snap.length;
+        chatCache.lastContentAt = Date.now();
+    }
+    function _scheduleChatSnapshot() {
+        if (!_chatRetentionEnabled() || chatCache.snapTimer) { return; }
+        chatCache.snapTimer = setTimeout(() => {
+            chatCache.snapTimer = null;
+            _snapshotChatCache();
+        }, 1500);
+    }
+
+    // Periodic safety net — catches a clear even if the mutation observer missed it
+    // (e.g. the site swapped out #txt entirely).
+    function _checkChatLoss() {
+        if (!_chatRetentionEnabled()) { return; }
+        const log = getChatLog();
+        const live = log ? [...log.children].filter(_isRetainableRow).length : 0;
+        if (live > 2) {
+            if (chatCache.lossShown) { _hideChatRestoreBar(); }   // real content returned
+            return;
+        }
+        // Empty/near-empty: only a clear if we held real content that settled ≥1.2s ago
+        // (so a cam-refresh empty→refill doesn't false-fire).
+        if (chatCache.count >= CHAT_CLEAR_MIN_REMOVED &&
+            Date.now() - chatCache.lastContentAt > 1200 &&
+            !chatCache.lossShown) {
+            _showChatRestoreBar();
+        }
+    }
+    function _startChatLossWatcher() {
+        if (chatCache.lossCheckTimer) { return; }
+        chatCache.lossCheckTimer = setInterval(_checkChatLoss, 1000);
+    }
+
+    function _ensureChatRestoreBar() {
+        let bar = document.getElementById('ichc-chat-restore-bar');
+        if (bar) { return bar; }
+        bar = document.createElement('div');
+        bar.id = 'ichc-chat-restore-bar';
+        bar.className = 'ichc-chat-restore-bar';
+        bar.hidden = true;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ichc-chat-restore-btn';
+        btn.addEventListener('click', _restoreChatFromCache);
+        const dismiss = document.createElement('button');
+        dismiss.type = 'button';
+        dismiss.className = 'ichc-chat-restore-dismiss';
+        dismiss.title = 'Dismiss';
+        dismiss.textContent = '✕';
+        dismiss.addEventListener('click', _hideChatRestoreBar);
+        bar.appendChild(btn);
+        bar.appendChild(dismiss);
+        const host = document.getElementById('chat_container') || getChatLog()?.parentElement || document.body;
+        host.insertBefore(bar, host.firstChild);
+        return bar;
+    }
+    function _showChatRestoreBar() {
+        if (!chatCache.count) { return; }
+        const bar = _ensureChatRestoreBar();
+        const n = chatCache.count;
+        bar.querySelector('.ichc-chat-restore-btn').textContent =
+            '↺ Restore ' + n + ' cleared message' + (n === 1 ? '' : 's');
+        bar.hidden = false;
+        chatCache.lossShown = true;
+    }
+    function _hideChatRestoreBar() {
+        const bar = document.getElementById('ichc-chat-restore-bar');
+        if (bar) { bar.hidden = true; }
+        chatCache.lossShown = false;
+    }
+    function _restoreChatFromCache() {
+        const log = getChatLog();
+        if (!log || !chatCache.rows.length) { _hideChatRestoreBar(); return; }
+        const observer = chatScrollState.observer;
+        observer?.disconnect();
+        try {
+            // Clone again so the cache survives for repeat restores / further clears.
+            const frag = document.createDocumentFragment();
+            chatCache.rows.forEach(r => frag.appendChild(r.cloneNode(true)));
+            const divider = document.createElement('div');
+            divider.className = 'line ichc-chat-event ichc-chat-cleared-divider';
+            divider.dataset.ichcEventProcessed = '1';
+            divider.textContent = '— restored ' + chatCache.count + ' messages cleared by moderator —';
+            frag.appendChild(divider);
+            log.insertBefore(frag, log.firstChild);
+        } finally {
+            observer?.takeRecords();
+            if (observer && chatScrollState.observedRoot) {
+                observer.observe(chatScrollState.observedRoot, { childList: true, subtree: true });
+            }
+        }
+        _hideChatRestoreBar();
     }
 
     function _sealChatEvents() {
@@ -1720,6 +1836,8 @@
         bindChatScrollTargets();
         hideChatPauseNotice();
         clearNativeChatPause();
+        _snapshotChatCache();        // seed the cache from whatever is already loaded
+        _startChatLossWatcher();     // periodic clear/loss safety net
 
         const input = document.getElementById('txtMsg');
         if (input && input.dataset.ichcFollowBound !== '1') {
@@ -1808,6 +1926,7 @@
 
                 if (!sawNewRows) { return; }
                 chatScrollState.lastMessageAt = Date.now();
+                _scheduleChatSnapshot();
                 bindChatScrollTargets();
                 if (!chatScrollState.auto) {
                     chatScrollState.newMessageCount++;

@@ -40,6 +40,7 @@
         popIn:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M14.78 5.22a.75.75 0 0 0-1.06 0L6 12.94V7.5a.75.75 0 0 0-1.5 0v6.75c0 .414.336.75.75.75H12a.75.75 0 0 0 0-1.5H6.56l7.72-7.72a.75.75 0 0 0 0-1.06z" clip-rule="evenodd"/></svg>`,
         terminal:    `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M3.25 3A2.25 2.25 0 0 0 1 5.25v9.5A2.25 2.25 0 0 0 3.25 17h13.5A2.25 2.25 0 0 0 19 14.75v-9.5A2.25 2.25 0 0 0 16.75 3H3.25zm.896 3.97a.75.75 0 0 0-1.06 1.06l1.72 1.72-1.72 1.72a.75.75 0 0 0 1.06 1.06l2.25-2.25a.75.75 0 0 0 0-1.06l-2.25-2.25zm4.729 1.28a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 0-1.5h-3.5z" clip-rule="evenodd"/></svg>`,
         cloud:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M1 12.5A4.5 4.5 0 0 0 5.5 17H15a4 4 0 0 0 1.866-7.539 3.504 3.504 0 0 0-4.504-4.272A4.5 4.5 0 0 0 4.5 8H4a3 3 0 0 0-3 3v1.5z"/></svg>`,
+        gauge:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M3 12.75a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0V13.5a.75.75 0 0 1 .75-.75zM7 8.25a.75.75 0 0 1 .75.75v6.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75zM11 10.75a.75.75 0 0 1 .75.75v4.25a.75.75 0 0 1-1.5 0V11.5a.75.75 0 0 1 .75-.75zM15 4.25a.75.75 0 0 1 .75.75v10.75a.75.75 0 0 1-1.5 0V5a.75.75 0 0 1 .75-.75z"/></svg>`,
     };
 
     const PREF_KEY = 'ichc_layout_prefs';
@@ -86,6 +87,10 @@
         sortMode: localStorage.getItem('ichc_ul_sort') || 'karma',  // 'alpha' | 'karma' | 'age'
         showAvatars: localStorage.getItem('ichc_ul_show_avatars') === 'true',
         lastBuildSig: null,  // content signature — skip rebuild when source data unchanged
+        scrollTop: 0,            // last known scroll-body offset (user or programmatic)
+        _lastUserScrollAt: 0,    // perf-time of the last user-initiated scroll
+        _programmaticScrollAt: 0,// perf-time of our last scrollTop write (to ignore its echo)
+        _programmaticScrollTo: -1,// target px of our last scrollTop write (echo lands here)
     };
     const lurkState = {
         pollTimer: null,
@@ -445,7 +450,75 @@
             } catch (_) {}
         });
     }
-    window.setInterval(_updateCamTimers, 1000);
+    window.setInterval(() => { _updateCamTimers(); _reapplyCamAudio(); }, 1000);
+
+    // ── Cam-up session history (debug) ──────────────────────────────────────────
+    // Each time a broadcast session ends, fold its duration into a per-nick aggregate
+    // in localStorage. Inspect from the page console with ichcCamTime().
+    const _CAMTIME_LS = 'ichc_camtime';
+    function _loadCamTime() { try { return JSON.parse(localStorage.getItem(_CAMTIME_LS) || '{}') || {}; } catch (_) { return {}; } }
+    function _saveCamTime(d) { try { localStorage.setItem(_CAMTIME_LS, JSON.stringify(d)); } catch (_) {} }
+    function _recordCamSession(name) {
+        const key = (name || '').trim().toLowerCase();
+        if (!key) { return; }
+        let startMs = 0;
+        try { startMs = parseInt(localStorage.getItem(_BCAST_LS + key) || '0', 10); } catch (_) { return; }
+        if (!startMs) { return; }
+        const dur = Date.now() - startMs;
+        if (dur < 3000 || dur > 86400000) { return; }   // ignore <3s blips and >24h stale entries
+        const d = _loadCamTime();
+        const e = d[key] || { totalMs: 0, sessions: 0, longestMs: 0, lastMs: 0, lastEndedAt: 0 };
+        e.totalMs += dur; e.sessions += 1;
+        e.longestMs = Math.max(e.longestMs, dur);
+        e.lastMs = dur; e.lastEndedAt = Date.now();
+        d[key] = e; _saveCamTime(d);
+    }
+
+    // ── Per-cam audio — the site mutes cam <video> elements; this un-mutes one on demand.
+    // Sticky across cam refreshes via an in-memory set (re-applied each second).
+    const _camAudioOn = new Set();
+    function _camNick(card) { try { return getCardName(card)?.trim().toLowerCase() || ''; } catch (_) { return ''; } }
+    function _toggleCamAudio(card) {
+        const v = card.querySelector('video');
+        if (!v) { return; }
+        const nick = _camNick(card);
+        if (v.muted) {
+            v.muted = false; v.volume = 1;
+            if (nick) { _camAudioOn.add(nick); }
+            const p = v.play && v.play(); if (p && p.catch) { p.catch(() => {}); }
+        } else {
+            v.muted = true;
+            if (nick) { _camAudioOn.delete(nick); }
+        }
+        card.classList.toggle('ichc-cam-audio-on', !v.muted);
+    }
+    function _reapplyCamAudio() {
+        if (!_camAudioOn.size) { return; }
+        document.querySelectorAll('#cams .rounded_square').forEach(card => {
+            const on = !!(_camNick(card) && _camAudioOn.has(_camNick(card)));
+            card.classList.toggle('ichc-cam-audio-on', on);
+            if (on) { const v = card.querySelector('video'); if (v && v.muted) { v.muted = false; v.volume = 1; } }
+        });
+    }
+
+    // ── Broadcast-quality presets (cog-menu UI → page-context applier) ──
+    // NB: key must NOT start with _BCAST_LS ('ichc_bcast_') or _reconcileBcastTimers
+    // would evict it as a stale per-cam timer on every relayout.
+    const _BCAST_Q_KEY = 'ichc_bq';
+    const _BCAST_Q = {
+        off:   { label: 'Off',   apply: 'window.ichcResetBroadcastQuality&&ichcResetBroadcastQuality()' },
+        sharp: { label: 'Sharp', apply: 'window.ichcSetBroadcastQuality&&ichcSetBroadcastQuality({maxKbps:1200,maxFps:30,width:640,height:480})' },
+        max:   { label: 'Max',   apply: 'window.ichcSetBroadcastQuality&&ichcSetBroadcastQuality({maxKbps:2500,maxFps:30,width:1280,height:720})' },
+    };
+    function _bcastQKey() { try { return localStorage.getItem(_BCAST_Q_KEY) || 'off'; } catch (_) { return 'off'; } }
+    function _bcastQLabel() { return (_BCAST_Q[_bcastQKey()] || _BCAST_Q.off).label; }
+    function _cycleBcastQuality() {
+        const order = ['off', 'sharp', 'max'];
+        const next = order[(order.indexOf(_bcastQKey()) + 1) % order.length];
+        try { localStorage.setItem(_BCAST_Q_KEY, next); } catch (_) {}
+        runInPageContext(_BCAST_Q[next].apply);
+        return _BCAST_Q[next];
+    }
 
     // ─── Emoji dataset ───────────────────────────────────────────────────────────
     // Each entry: { e: char, n: search name (lowercase) }
@@ -913,6 +986,7 @@
         initDynamicLayout();
         transformCommandBar();
         installCamDiagnostics();
+        installCamMonitor();
         // Coalesce refreshCams in page context. The site can call it in quick bursts;
         // keep deliberate extension reloads immediate, but queue one skipped site call
         // instead of swallowing refreshes that may keep cams/chat state alive.
@@ -1972,7 +2046,16 @@
             `;
         }
         const root = document.getElementById('ichc-room-root');
-        if (root && root.firstElementChild !== topbar) {
+        // Topbar lives at the top of the cams column so it spans only the cams width
+        // and ends at the chat's left edge — the chat/userlist then run full height,
+        // with the user/GO-LIVE/cog actions sitting at the topbar's right end (just
+        // left of the chat). Fall back to room-root until the cams column exists.
+        const camsColForBar = document.getElementById('ichc-cams-col');
+        if (camsColForBar) {
+            if (camsColForBar.firstElementChild !== topbar) {
+                camsColForBar.insertBefore(topbar, camsColForBar.firstChild);
+            }
+        } else if (root && root.firstElementChild !== topbar) {
             root.prepend(topbar);
         }
 
@@ -2072,6 +2155,11 @@
                     karmaEl.textContent = karmaText;
 
                     const karmaNum = parseInt(karmaText.replace(/,/g, ''), 10);
+                    // Tint the header to match the userlist tier color: set the same
+                    // --ichc-kt-color / --ichc-kt-i vars (and ichc-ktN class) the rows use
+                    // on the IDENT container, so both the username and karma number can read
+                    // them (custom props inherit) and the block can carry a subtle accent.
+                    if (!isNaN(karmaNum)) { _setKarmaTierClass(identEl, karmaNum); }
                     const lsKey = 'ichc_karma_seen_' + username.toLowerCase();
                     let deltaEl = null;
                     try {
@@ -4390,6 +4478,743 @@
         `);
     }
 
+    // ── Live per-cam feed stats (WebRTC getStats overlay + console) ──────────────
+    // A page-context collector hooks RTCPeerConnection, samples getStats once a
+    // second, maps each inbound video track to its cam card, and posts compact
+    // per-feed metrics (resolution, fps, bitrate, packet loss, jitter, codec, RTT)
+    // back to the content script via window.postMessage. The content side draws an
+    // overlay on each matching cam and mirrors the data to the console + window.ichcCamStats.
+    let _camStatsOn = (() => { try { return localStorage.getItem('ichc_cam_stats') === '1'; } catch (_) { return false; } })();
+    let _camStatsBridged = false;
+    let _camStatsBootstrapped = false;
+    let _camStatsTick = 0;
+
+    const CAM_STATS_SRC = `
+(() => {
+  if (window.__ichcCamStatsCollector) { return; }
+  window.__ichcCamStatsCollector = true;
+
+  const PCS = new Set();
+  const prev = new Map();   // ssrc -> { ts, bytes, packets, lost, frames }
+  let timer = null;
+
+  // Capture every RTCPeerConnection created from here on (existing ones are missed,
+  // but cams reconnect often so the set fills quickly).
+  try {
+    const Native = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (Native && !Native.__ichcStatsHooked) {
+      const Hooked = function(...a) {
+        const pc = new Native(...a);
+        register(pc);
+        return pc;
+      };
+      Hooked.prototype = Native.prototype;
+      try { Object.setPrototypeOf(Hooked, Native); } catch (e) {}
+      Hooked.__ichcStatsHooked = true;
+      window.RTCPeerConnection = Hooked;
+      try { window.webkitRTCPeerConnection = Hooked; } catch (e) {}
+    }
+    // Also register instances via prototype methods — catches connections the site
+    // built from a constructor reference cached before our hook. Runs once (the whole
+    // collector is guarded), so no wrapper chaining.
+    const proto = (Native && Native.prototype) || null;
+    if (proto) {
+      ['setRemoteDescription', 'setLocalDescription', 'addTrack', 'createAnswer'].forEach(meth => {
+        const orig = proto[meth];
+        if (typeof orig !== 'function' || orig.__ichcStatsWrapped) { return; }
+        const wrapped = function(...a) { register(this); return orig.apply(this, a); };
+        wrapped.__ichcStatsWrapped = true;
+        proto[meth] = wrapped;
+      });
+    }
+  } catch (e) {}
+
+  function findVideoForTrack(trackId) {
+    if (!trackId) { return null; }
+    const vids = document.querySelectorAll('#cams video, video');
+    for (const v of vids) {
+      const ms = v.srcObject;
+      if (!ms || !ms.getTracks) { continue; }
+      for (const t of ms.getTracks()) { if (t.id === trackId) { return v; } }
+    }
+    return null;
+  }
+  function cardNameForVideo(v) {
+    if (!v) { return ''; }
+    const card = v.closest('.rounded_square');
+    const nameEl = card && card.querySelector('.name-on-cam');
+    return nameEl ? (nameEl.textContent || '').trim() : '';
+  }
+
+  // ── Failure / server monitoring (event-driven — runs even when the overlay is off) ──
+  function register(pc) {
+    try { PCS.add(pc); } catch (e) {}
+    watch(pc);
+  }
+  function watch(pc) {
+    if (!pc || pc.__ichcWatched) { return; }
+    pc.__ichcWatched = true;
+    const onChange = () => {
+      const st = pc.connectionState || pc.iceConnectionState || '';
+      if (st === pc.__ichcState) { return; }
+      pc.__ichcState = st;
+      if (st === 'closed' || st === 'failed') { PCS.delete(pc); }
+      if (st === 'failed' || st === 'disconnected' || st === 'connected' || st === 'completed') { emitEvent(pc, st); }
+    };
+    try { pc.addEventListener('connectionstatechange', onChange); } catch (e) {}
+    try { pc.addEventListener('iceconnectionstatechange', onChange); } catch (e) {}
+  }
+  function pcName(pc) {
+    const ids = new Set();
+    try { (pc.getReceivers ? pc.getReceivers() : []).forEach(r => { if (r.track && r.track.kind === 'video') { ids.add(r.track.id); } }); } catch (e) {}
+    if (!ids.size) { return ''; }
+    const vids = document.querySelectorAll('#cams video, video');
+    for (const v of vids) {
+      const ms = v.srcObject;
+      if (!ms || !ms.getVideoTracks) { continue; }
+      for (const t of ms.getVideoTracks()) { if (ids.has(t.id)) { return cardNameForVideo(v); } }
+    }
+    return '';
+  }
+  async function pcServer(pc) {
+    let addr = '', ctype = '', proto = '';
+    try {
+      const r = await pc.getStats();
+      let pairId = null;
+      r.forEach(s => { if (s.type === 'transport' && s.selectedCandidatePairId) { pairId = s.selectedCandidatePairId; } });
+      let remoteId = null;
+      r.forEach(s => { if (s.type === 'candidate-pair' && (s.id === pairId || s.nominated || s.state === 'succeeded')) { remoteId = s.remoteCandidateId; } });
+      r.forEach(s => {
+        if (s.type === 'remote-candidate' && (s.id === remoteId || !remoteId)) {
+          addr = (s.address || s.ip || '') + (s.port ? (':' + s.port) : '');
+          ctype = s.candidateType || ''; proto = s.protocol || '';
+        }
+      });
+    } catch (e) {}
+    let cfg = '';
+    try {
+      const urls = [];
+      ((pc.getConfiguration && pc.getConfiguration().iceServers) || []).forEach(se => {
+        const u = se.urls; (Array.isArray(u) ? u : [u]).forEach(x => { if (x) { urls.push(x); } });
+      });
+      cfg = urls.join(', ');
+    } catch (e) {}
+    return { addr: addr, ctype: ctype, proto: proto, cfg: cfg };
+  }
+  async function emitEvent(pc, state) {
+    let name = '';
+    try { name = pcName(pc); } catch (e) {}
+    if (name) { pc.__ichcName = name; } else if (pc.__ichcName) { name = pc.__ichcName; }
+    const srv = await pcServer(pc);
+    try {
+      window.postMessage({ __ichc: 'camstats-event', ev: {
+        state: state, name: name, server: srv.addr, candType: srv.ctype, proto: srv.proto, iceServers: srv.cfg, time: Date.now()
+      } }, '*');
+    } catch (e) {}
+  }
+
+  // ── Relay capability inspector ──────────────────────────────────────────────
+  // Read-only: parses the SDP already negotiated with the edge. The server's
+  // description lists what it supports/allows; comparing it to the browser's offer
+  // shows which codecs the relay rejected (i.e. won't do for this stream).
+  function parseSdpMedia(sdp, kind) {
+    if (!sdp) { return null; }
+    const lines = sdp.split(/\\r?\\n/);
+    let inSec = false, fmts = [], bAS = null, bTIAS = null;
+    const rtpmap = {}, fmtp = {}, fb = {};
+    const cands = [];
+    for (const ln of lines) {
+      if (ln.charAt(0) === 'm' && ln.indexOf('m=') === 0) {
+        if (ln.indexOf('m=' + kind) === 0) { inSec = true; fmts = ln.split(' ').slice(3); }
+        else if (inSec) { break; }
+        continue;
+      }
+      if (!inSec) { continue; }
+      let m;
+      if (ln.indexOf('b=AS:') === 0) { bAS = parseInt(ln.slice(5), 10); }
+      else if (ln.indexOf('b=TIAS:') === 0) { bTIAS = parseInt(ln.slice(7), 10); }
+      else if ((m = ln.match(/^a=rtpmap:(\\d+)\\s+([^\\/]+)\\/(\\d+)(?:\\/(\\d+))?/))) { rtpmap[m[1]] = { name: m[2], clock: +m[3] }; }
+      else if ((m = ln.match(/^a=fmtp:(\\d+)\\s+(.*)$/))) { fmtp[m[1]] = m[2]; }
+      else if ((m = ln.match(/^a=rtcp-fb:(\\S+)\\s+(.*)$/))) { (fb[m[1]] = fb[m[1]] || []).push(m[2]); }
+      else if ((m = ln.match(/^a=candidate:\\S+ \\d+ (udp|tcp)/i))) { cands.push(m[1].toLowerCase()); }
+    }
+    const codecs = fmts.filter(pt => rtpmap[pt]).map(pt => ({
+      name: rtpmap[pt].name, clock: rtpmap[pt].clock, fmtp: fmtp[pt] || '',
+      fb: (fb[pt] || []).concat(fb['*'] || [])
+    }));
+    return { codecs: codecs, bAS: bAS, bTIAS: bTIAS, protocols: [...new Set(cands)] };
+  }
+
+  window.ichcCamCaps = function(filter) {
+    const out = [];
+    PCS.forEach(pc => {
+     try {
+      let nm = pc.__ichcName || '';
+      try { nm = pcName(pc) || nm; } catch (e) {}
+      if (filter && nm.toLowerCase() !== String(filter).toLowerCase()) { return; }
+      const local = pc.localDescription, remote = pc.remoteDescription;
+      const sv = parseSdpMedia(remote && remote.sdp, 'video');
+      const sa = parseSdpMedia(remote && remote.sdp, 'audio');
+      const bv = parseSdpMedia(local && local.sdp, 'video');
+      const list = a => (a ? a.codecs.map(c => c.name + (c.fmtp ? ' [' + c.fmtp + ']' : '')) : []);
+      const names = a => (a ? a.codecs.map(c => c.name.toLowerCase()) : []);
+      const rejected = (bv && sv) ? bv.codecs.map(c => c.name).filter(n => names(sv).indexOf(n.toLowerCase()) === -1) : [];
+      const entry = {
+        cam: nm || '(unknown)',
+        serverVideoCodecs: list(sv), serverAudioCodecs: list(sa),
+        browserOfferedVideo: bv ? bv.codecs.map(c => c.name) : [],
+        relayRejected: rejected,
+        videoBitrateCapKbps: sv ? (sv.bAS || (sv.bTIAS ? Math.round(sv.bTIAS / 1000) : null)) : null,
+        transport: sv ? sv.protocols : [], offer: local && local.type, answer: remote && remote.type
+      };
+      out.push(entry);
+      console.group('%c[ichc caps] ' + entry.cam, 'color:#4ec8d7;font-weight:bold');
+      console.log('relay video codecs :', entry.serverVideoCodecs.join(', ') || '(none)');
+      console.log('relay audio codecs :', entry.serverAudioCodecs.join(', ') || '(none)');
+      console.log('browser offered    :', entry.browserOfferedVideo.join(', '));
+      console.log('%crelay REJECTED     : ' + (entry.relayRejected.join(', ') || '(none — relay took everything offered)'), 'color:#f0a020');
+      console.log('video bitrate cap  :', entry.videoBitrateCapKbps != null ? entry.videoBitrateCapKbps + ' kbps' : '(none in SDP)');
+      console.log('transport          :', entry.transport.join(', ') || '(n/a)');
+      console.groupEnd();
+     } catch (e) {}
+    });
+    try {
+      const v = RTCRtpReceiver.getCapabilities('video');
+      const a = RTCRtpReceiver.getCapabilities('audio');
+      console.log('%c[ichc caps] this browser CAN decode → video: ' +
+        [...new Set((v ? v.codecs : []).map(c => c.mimeType.replace(/^video\\//i, '')))].join(', ') +
+        ' · audio: ' + [...new Set((a ? a.codecs : []).map(c => c.mimeType.replace(/^audio\\//i, '')))].join(', '),
+        'color:#8fe3ef');
+    } catch (e) {}
+    window.ichcCamCapsData = out;
+    return out;
+  };
+
+  // ── Experiment: probe what the relay REALLY supports (opt-in; may blank a cam) ──
+  // icanhazchat offers VP8 only, so passive SDP can't reveal the relay's full support.
+  // When armed, we re-add VP9/H264/AV1 to the next offer and log what the relay keeps.
+  function probeRewriteOffer(sdp) {
+    const caps = ((RTCRtpReceiver.getCapabilities && RTCRtpReceiver.getCapabilities('video')) || {}).codecs || [];
+    const main = caps.filter(c => /VP8|VP9|H264|AV1/i.test(c.mimeType));
+    if (!main.length) { return sdp; }
+    const lines = sdp.split(/\\r?\\n/);
+    let mi = -1;
+    for (let i = 0; i < lines.length; i++) { if (lines[i].indexOf('m=video') === 0) { mi = i; break; } }
+    if (mi < 0) { return sdp; }
+    const existing = new Set();
+    const ex = parseSdpMedia(sdp, 'video');
+    if (ex) { ex.codecs.forEach(c => existing.add((c.name + '|' + (c.fmtp || '')).toLowerCase())); }
+    const mparts = lines[mi].split(' ');
+    const usedPts = new Set(mparts.slice(3).map(Number));
+    let nextPt = 96;
+    const freePt = () => { while (usedPts.has(nextPt)) { nextPt++; } usedPts.add(nextPt); return nextPt; };
+    const addPts = [], addLines = [];
+    main.forEach(c => {
+      const name = c.mimeType.split('/')[1];
+      if (existing.has((name + '|' + (c.sdpFmtpLine || '')).toLowerCase())) { return; }  // already offered
+      const pt = freePt();
+      addPts.push(pt);
+      addLines.push('a=rtpmap:' + pt + ' ' + name + '/' + (c.clockRate || 90000));
+      if (c.sdpFmtpLine) { addLines.push('a=fmtp:' + pt + ' ' + c.sdpFmtpLine); }
+      ['nack', 'nack pli', 'ccm fir', 'transport-cc'].forEach(fb => addLines.push('a=rtcp-fb:' + pt + ' ' + fb));
+    });
+    if (!addPts.length) { return sdp; }
+    lines[mi] = mparts.concat(addPts).join(' ');
+    let insertAt = lines.length;
+    for (let i = mi + 1; i < lines.length; i++) { if (lines[i].indexOf('m=') === 0) { insertAt = i; break; } }
+    lines.splice(insertAt, 0, ...addLines);
+    return lines.join('\\r\\n');
+  }
+
+  (function installProbeHooks() {
+    const RP = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    const proto = RP && RP.prototype;
+    if (!proto) { return; }
+    const oCreate = proto.createOffer;
+    if (oCreate && !oCreate.__ichcProbe) {
+      const w = function() {
+        const self = this;
+        const r = oCreate.apply(this, arguments);
+        if (r && typeof r.then === 'function') {
+          return r.then(off => {
+            if (window.__ichcProbeArm > 0 && off && off.sdp && off.sdp.indexOf('m=video') !== -1) {
+              window.__ichcProbeArm--;
+              const before = (parseSdpMedia(off.sdp, 'video') || { codecs: [] }).codecs.map(c => c.name);
+              try { off.sdp = probeRewriteOffer(off.sdp); } catch (e) {}
+              const after = (parseSdpMedia(off.sdp, 'video') || { codecs: [] }).codecs.map(c => c.name);
+              self.__ichcProbing = true;
+              console.log('%c[ichc probe] offer rewritten — was [' + [...new Set(before)].join(', ') + '] now offering [' + [...new Set(after)].join(', ') + ']', 'color:#f0a020;font-weight:bold');
+            }
+            return off;
+          });
+        }
+        return r;
+      };
+      w.__ichcProbe = true; proto.createOffer = w;
+    }
+    const oSRD = proto.setRemoteDescription;
+    if (oSRD && !oSRD.__ichcProbe) {
+      const w = function(desc) {
+        try {
+          if (this.__ichcProbing && desc && desc.sdp && desc.sdp.indexOf('m=video') !== -1) {
+            const ans = parseSdpMedia(desc.sdp, 'video');
+            if (ans) { console.log('%c[ichc probe] RELAY ANSWERED with video codecs: ' + [...new Set(ans.codecs.map(c => c.name))].join(', '), 'color:#4ec8d7;font-weight:bold'); }
+            this.__ichcProbing = false;
+          }
+        } catch (e) {}
+        return oSRD.apply(this, arguments);
+      };
+      w.__ichcProbe = true; proto.setRemoteDescription = w;
+    }
+  })();
+
+  window.ichcProbeRelay = function(n) {
+    window.__ichcProbeArm = (n && n > 0) ? n : 1;
+    console.log('%c[ichc probe] ARMED for the next ' + window.__ichcProbeArm + ' video offer(s). Trigger one: run refreshCams() or toggle a cam off/on. The probed cam may go black until you refresh it again — this only tests what the relay will negotiate.', 'color:#f0a020;font-weight:bold');
+    return 'armed:' + window.__ichcProbeArm;
+  };
+
+  // ── Broadcast quality control for your OWN outbound cam ──
+  async function applyBcastQuality() {
+    const q = window.__ichcBcastQ;
+    if (!q) { return; }
+    for (const pc of PCS) {
+      let senders = [];
+      try { senders = pc.getSenders ? pc.getSenders() : []; } catch (e) { continue; }
+      for (const s of senders) {
+        if (!s.track || s.track.kind !== 'video') { continue; }
+        // Encoder ceiling.
+        try {
+          const p = s.getParameters();
+          if (!p.encodings || !p.encodings.length) { p.encodings = [{}]; }
+          p.encodings.forEach(enc => {
+            if (q.maxKbps) { enc.maxBitrate = q.maxKbps * 1000; }
+            if (q.maxFps) { enc.maxFramerate = q.maxFps; }
+            enc.scaleResolutionDownBy = 1;
+          });
+          if (q.degradation) { p.degradationPreference = q.degradation; }
+          await s.setParameters(p);
+        } catch (e) {}
+        // Capture resolution — the real lever. Lift the LIVE track once per target
+        // (re-applying every tick would needlessly re-negotiate the camera). Uses
+        // ideal so a camera that can't reach it just settles at its max, no error.
+        if (q.width && q.height && s.track.applyConstraints && s.track.__ichcResTarget !== q.width) {
+          s.track.__ichcResTarget = q.width;
+          try {
+            await s.track.applyConstraints({
+              width: { ideal: q.width }, height: { ideal: q.height },
+              frameRate: { ideal: q.maxFps || 30 }
+            });
+          } catch (e) {}
+        }
+      }
+    }
+  }
+  window.ichcSetBroadcastQuality = function(opts) {
+    opts = opts || {};
+    window.__ichcBcastQ = {
+      maxKbps: opts.maxKbps || opts.kbps || null,
+      maxFps: opts.maxFps || opts.fps || null,
+      width: opts.width || null, height: opts.height || null,
+      degradation: opts.degradation || 'maintain-resolution'
+    };
+    applyBcastQuality();
+    if (!window.__ichcBcastTimer) { window.__ichcBcastTimer = setInterval(applyBcastQuality, 4000); }
+    console.log('%c[ichc broadcast] quality set ' + JSON.stringify(window.__ichcBcastQ) + ' — lifts your capture resolution + encode ceiling. Run ichcBroadcastInfo() to confirm capture moved (camera permitting).', 'color:#3ba55c;font-weight:bold');
+    return window.__ichcBcastQ;
+  };
+  window.ichcResetBroadcastQuality = function() {
+    window.__ichcBcastQ = null;
+    console.log('[ichc broadcast] reset to site default (cam down/up to fully clear).');
+    return 'reset';
+  };
+
+  // Inspect YOUR live broadcast: capture res vs encoded res vs what is limiting it.
+  // Shows whether 320x240 is your encoder (maybe fixable) or imposed elsewhere.
+  window.ichcBroadcastInfo = async function() {
+    const out = [];
+    for (const pc of PCS) {
+      let senders = [];
+      try { senders = pc.getSenders ? pc.getSenders() : []; } catch (e) { continue; }
+      for (const s of senders) {
+        if (!s.track || s.track.kind !== 'video') { continue; }
+        const info = {};
+        try {
+          const st = s.track.getSettings ? s.track.getSettings() : {};
+          info.capture = (st.width || '?') + 'x' + (st.height || '?') + ' @' + (st.frameRate ? Math.round(st.frameRate) : '?') + 'fps';
+        } catch (e) {}
+        try {
+          const p = s.getParameters();
+          const enc = (p.encodings && p.encodings[0]) || {};
+          info.maxBitrateKbps = enc.maxBitrate ? Math.round(enc.maxBitrate / 1000) : null;
+          info.scaleDownBy = (enc.scaleResolutionDownBy != null) ? enc.scaleResolutionDownBy : null;
+          info.maxFps = (enc.maxFramerate != null) ? enc.maxFramerate : null;
+          info.degradation = p.degradationPreference || null;
+        } catch (e) {}
+        try {
+          const r = await pc.getStats(s.track);
+          r.forEach(x => {
+            if (x.type === 'outbound-rtp' && x.kind === 'video') {
+              info.encoded = (x.frameWidth || '?') + 'x' + (x.frameHeight || '?');
+              info.encodeFps = (x.framesPerSecond != null) ? Math.round(x.framesPerSecond) : null;
+              info.encoderTargetKbps = x.targetBitrate ? Math.round(x.targetBitrate / 1000) : null;
+              info.qualityLimit = x.qualityLimitationReason || null;
+            }
+            if (x.type === 'media-source' && x.kind === 'video') {
+              if (x.width) { info.sourceRes = x.width + 'x' + x.height; }
+            }
+          });
+        } catch (e) {}
+        out.push(info);
+        console.log('%c[ichc broadcast]', 'color:#3ba55c;font-weight:bold', info);
+      }
+    }
+    if (!out.length) { console.warn('[ichc broadcast] no outbound video sender found — are you live? (or the broadcast PC was not captured by the collector)'); }
+    window.ichcBroadcastInfoData = out;
+    return out;
+  };
+
+  // Cam-up session history (data written by the content script; localStorage is shared).
+  window.ichcCamTime = function() {
+    let d = {};
+    try { d = JSON.parse(localStorage.getItem('ichc_camtime') || '{}') || {}; } catch (e) {}
+    const fmt = ms => {
+      const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+      return (h ? h + ':' + String(m).padStart(2, '0') : '' + m) + ':' + String(ss).padStart(2, '0');
+    };
+    const rows = Object.keys(d).map(k => ({
+      nick: k, sessions: d[k].sessions, total: fmt(d[k].totalMs),
+      longest: fmt(d[k].longestMs), last: fmt(d[k].lastMs),
+      endedAt: d[k].lastEndedAt ? new Date(d[k].lastEndedAt).toLocaleString() : ''
+    })).sort((a, b) => (d[b.nick].totalMs - d[a.nick].totalMs));
+    console.table(rows);
+    return d;
+  };
+
+  // Re-apply a persisted broadcast-quality preset on load.
+  try {
+    const bq = localStorage.getItem('ichc_bq');
+    if (bq === 'sharp') { window.ichcSetBroadcastQuality({ maxKbps: 1200, maxFps: 30, width: 640, height: 480 }); }
+    else if (bq === 'max') { window.ichcSetBroadcastQuality({ maxKbps: 2500, maxFps: 30, width: 1280, height: 720 }); }
+  } catch (e) {}
+
+  async function sample() {
+    const feeds = [];
+    const seen = new Set();
+    const byKey = new Map();   // key -> feed object, so the audio pass can attach to it
+    for (const pc of PCS) {
+      let report;
+      try { report = await pc.getStats(); } catch (e) { continue; }
+      let rttMs = null, availKbps = null, server = '', srvType = '', remoteCandId = null;
+      const codecs = new Map();
+      const remoteCands = new Map();
+      report.forEach(s => {
+        if (s.type === 'codec') { codecs.set(s.id, s); }
+        if (s.type === 'remote-candidate') { remoteCands.set(s.id, s); }
+        if (s.type === 'candidate-pair' && (s.nominated || s.state === 'succeeded')) {
+          if (typeof s.currentRoundTripTime === 'number') { rttMs = Math.round(s.currentRoundTripTime * 1000); }
+          if (typeof s.availableOutgoingBitrate === 'number') { availKbps = Math.round(s.availableOutgoingBitrate / 1000); }
+          if (s.remoteCandidateId) { remoteCandId = s.remoteCandidateId; }
+        }
+      });
+      // The selected remote candidate is the actual edge serving this cam — the one
+      // thing that genuinely differs cam-to-cam (separate play connections per stream).
+      const rc = remoteCandId ? remoteCands.get(remoteCandId) : null;
+      if (rc) { server = (rc.address || rc.ip || '') + (rc.port ? (':' + rc.port) : ''); srvType = rc.candidateType || ''; }
+      report.forEach(s => {
+        if ((s.type !== 'inbound-rtp' && s.type !== 'outbound-rtp') || s.kind !== 'video') { return; }
+        if (s.isRemote) { return; }
+        const dir = s.type === 'inbound-rtp' ? 'in' : 'out';
+        const ssrc = String(s.ssrc || s.id);
+        const now = (typeof s.timestamp === 'number') ? s.timestamp : Date.now();
+        const bytes = dir === 'in' ? (s.bytesReceived || 0) : (s.bytesSent || 0);
+        const packets = dir === 'in' ? (s.packetsReceived || 0) : (s.packetsSent || 0);
+        const lost = s.packetsLost || 0;
+        const frames = (s.framesDecoded != null) ? s.framesDecoded : (s.framesEncoded != null ? s.framesEncoded : 0);
+        const p = prev.get(ssrc);
+        const firstTs = (p && p.firstTs) ? p.firstTs : now;   // when we first saw this stream instance
+        let kbps = null, lossPct = null;
+        let fps = (typeof s.framesPerSecond === 'number') ? Math.round(s.framesPerSecond) : null;
+        if (p && now > p.ts) {
+          const dt = (now - p.ts) / 1000;
+          kbps = Math.round(((bytes - p.bytes) * 8) / dt / 1000);
+          if (fps == null) { fps = Math.round((frames - p.frames) / dt); }
+          const dPkt = (packets - p.packets) + (lost - p.lost);
+          if (dPkt > 0) { lossPct = +(((lost - p.lost) / dPkt) * 100).toFixed(1); }
+        }
+        prev.set(ssrc, { ts: now, bytes: bytes, packets: packets, lost: lost, frames: frames, firstTs: firstTs });
+
+        const codec = codecs.get(s.codecId);
+        const codecName = codec && codec.mimeType ? codec.mimeType.replace(/^video\\//i, '') : '';
+
+        let w = s.frameWidth || 0, h = s.frameHeight || 0, name = '';
+        const vid = dir === 'in' ? findVideoForTrack(s.trackIdentifier || '') : null;
+        if (vid && vid.videoWidth) { w = vid.videoWidth; h = vid.videoHeight; }
+        if (vid) { name = cardNameForVideo(vid); }
+        const key = name ? name.toLowerCase() : (dir === 'out' ? '__self__' : ('ssrc:' + ssrc));
+        if (seen.has(key)) { return; }
+        seen.add(key);
+
+        const feedObj = {
+          key: key, name: name, dir: dir, w: w, h: h,
+          fps: (fps != null && isFinite(fps)) ? fps : null,
+          kbps: (kbps != null && isFinite(kbps)) ? kbps : null,
+          loss: lost, lossPct: lossPct,
+          jitterMs: (typeof s.jitter === 'number') ? Math.round(s.jitter * 1000) : null,
+          codec: codecName,
+          nack: s.nackCount != null ? s.nackCount : null,
+          pli: s.pliCount != null ? s.pliCount : null,
+          freeze: s.freezeCount != null ? s.freezeCount : null,
+          framesDropped: (s.framesDropped != null) ? s.framesDropped : null,
+          upS: Math.round((now - firstTs) / 1000),
+          rttMs: rttMs,
+          server: server, srvType: srvType,
+          audio: false, audioKbps: null, audioLevel: null,
+          availKbps: dir === 'out' ? availKbps : null,
+          qualityLimit: dir === 'out' ? (s.qualityLimitationReason || null) : null
+        };
+        feeds.push(feedObj);
+        byKey.set(key, feedObj);
+      });
+      // Audio pass — attach presence / bitrate / level to the matching cam feed.
+      report.forEach(s => {
+        if (s.type !== 'inbound-rtp' || s.kind !== 'audio' || s.isRemote) { return; }
+        const assrc = 'a:' + String(s.ssrc || s.id);
+        const now = (typeof s.timestamp === 'number') ? s.timestamp : Date.now();
+        const bytes = s.bytesReceived || 0;
+        const p = prev.get(assrc);
+        let akbps = null;
+        if (p && now > p.ts) { const dt = (now - p.ts) / 1000; akbps = Math.round(((bytes - p.bytes) * 8) / dt / 1000); }
+        prev.set(assrc, { ts: now, bytes: bytes });
+        const vid = findVideoForTrack(s.trackIdentifier || '');
+        const nm = vid ? cardNameForVideo(vid) : '';
+        const f = nm ? byKey.get(nm.toLowerCase()) : null;
+        if (f) {
+          f.audio = true;
+          if (akbps != null && isFinite(akbps)) { f.audioKbps = akbps; }
+          if (typeof s.audioLevel === 'number') { f.audioLevel = +s.audioLevel.toFixed(3); }
+        }
+      });
+    }
+    try { window.ichcCamStats = feeds; } catch (e) {}
+    try { window.postMessage({ __ichc: 'camstats-data', feeds: feeds }, '*'); } catch (e) {}
+  }
+
+  window.addEventListener('message', ev => {
+    if (ev.source !== window || !ev.data || ev.data.__ichc !== 'camstats-cmd') { return; }
+    if (ev.data.cmd === 'start') {
+      if (!timer) { sample(); timer = setInterval(sample, 1000); }
+    } else if (ev.data.cmd === 'stop') {
+      if (timer) { clearInterval(timer); timer = null; }
+      prev.clear();
+    }
+  });
+})();
+`;
+
+    function _initCamStatsBridge() {
+        if (_camStatsBridged) { return; }
+        _camStatsBridged = true;
+        window.addEventListener('message', ev => {
+            if (ev.source !== window || !ev.data) { return; }
+            if (ev.data.__ichc === 'camstats-data') {
+                if (_camStatsOn) { _renderCamStats(ev.data.feeds || []); }
+            } else if (ev.data.__ichc === 'camstats-event') {
+                _handleCamEvent(ev.data.ev);
+            }
+        });
+    }
+
+    // Always-on failure monitor — injects the collector at startup so cam drops are
+    // caught (and the failing server reported) even when the live-stats overlay is off.
+    function installCamMonitor() {
+        _initCamStatsBridge();
+        runInPageContext(CAM_STATS_SRC);
+        window.setTimeout(() => runInPageContext(CAM_STATS_SRC), 1500);
+        window.setTimeout(() => runInPageContext(CAM_STATS_SRC), 4000);
+        // Restore a persisted live-overlay toggle (the footer button used to do this).
+        if (_camStatsOn && !_camStatsBootstrapped) { _camStatsBootstrapped = true; setCamStats(true); }
+    }
+
+    const _camFailState = new Map();   // nameKey -> last-known-failed bool
+
+    function _camCardByName(name) {
+        const key = (name || '').trim().toLowerCase();
+        if (!key) { return null; }
+        const el = [...document.querySelectorAll('#cams .name-on-cam')]
+            .find(n => (n.textContent || '').trim().toLowerCase() === key);
+        return el ? el.closest('.rounded_square') : null;
+    }
+
+    function _handleCamEvent(ev) {
+        if (!ev) { return; }
+        const failed = ev.state === 'failed' || ev.state === 'disconnected';
+        const who = ev.name || '(unknown cam)';
+        const key = (ev.name || '').toLowerCase();
+        const srv = ev.server || ev.iceServers || 'server unknown';
+        if (failed) {
+            const wasFailed = _camFailState.get(key);
+            _camFailState.set(key, true);
+            (window.ichcCamFailures = window.ichcCamFailures || []).push({
+                time: new Date().toISOString(), cam: who, state: ev.state,
+                server: ev.server || '', iceServers: ev.iceServers || '',
+                candType: ev.candType || '', proto: ev.proto || '',
+            });
+            console.warn('%c[ichc cam-fail]%c ' + who + ' · ' + ev.state + ' · server ' + srv +
+                (ev.candType ? ' (' + ev.candType + (ev.proto ? '/' + ev.proto : '') + ')' : '') +
+                (ev.iceServers ? ' · ice: ' + ev.iceServers : ''),
+                'color:#f85149;font-weight:bold', 'color:#9aa0a6', ev);
+            _showCamFailBadge(ev.name, ev.state === 'failed' ? 'feed failed' : 'reconnecting…', ev.server || '');
+            if (ev.state === 'failed' && !wasFailed) { _camToast('⚠ ' + who + ' — feed failed\n' + srv, 'fail'); }
+        } else {
+            const wasFailed = _camFailState.get(key);
+            _camFailState.set(key, false);
+            _clearCamFailBadge(ev.name);
+            if (wasFailed) {
+                console.info('%c[ichc cam-ok]%c ' + who + ' recovered (' + ev.state + ')', 'color:#3ba55c;font-weight:bold', 'color:#9aa0a6');
+                _camToast(who + ' — recovered', 'ok');
+            }
+        }
+    }
+
+    function _showCamFailBadge(name, label, server) {
+        const card = _camCardByName(name);
+        if (!card) { return; }
+        let b = card.querySelector('.ichc-cam-fail-badge');
+        if (!b) {
+            b = document.createElement('div');
+            b.className = 'ichc-cam-fail-badge';
+            card.appendChild(b);
+        }
+        b.innerHTML = '<span class="ichc-cam-fail-dot"></span><span>' + escapeHtml(label) + '</span>' +
+            (server ? '<span class="ichc-cam-fail-srv">' + escapeHtml(server) + '</span>' : '');
+    }
+    function _clearCamFailBadge(name) {
+        const card = _camCardByName(name);
+        if (card) { card.querySelector('.ichc-cam-fail-badge')?.remove(); }
+    }
+
+    let _camToastWrap = null;
+    function _camToast(msg, kind) {
+        if (!_camToastWrap || !_camToastWrap.isConnected) {
+            _camToastWrap = document.getElementById('ichc-cam-toasts');
+            if (!_camToastWrap) {
+                _camToastWrap = document.createElement('div');
+                _camToastWrap.id = 'ichc-cam-toasts';
+                const host = document.getElementById('ichc-cams-col') || document.getElementById('cams')?.parentElement || document.body;
+                host.appendChild(_camToastWrap);
+            }
+        }
+        const t = document.createElement('div');
+        t.className = 'ichc-cam-toast ichc-cam-toast-' + (kind || 'fail');
+        t.textContent = msg;
+        _camToastWrap.appendChild(t);
+        requestAnimationFrame(() => t.classList.add('ichc-show'));
+        window.setTimeout(() => { t.classList.remove('ichc-show'); window.setTimeout(() => t.remove(), 300); }, 6500);
+    }
+
+    function setCamStats(on) {
+        _camStatsOn = !!on;
+        try { localStorage.setItem('ichc_cam_stats', on ? '1' : '0'); } catch (_) {}
+        // The gauge toggle is the de-facto cam "debug" mode — gate debug-only chrome
+        // (e.g. the per-cam audio button) on it via a stable class.
+        document.documentElement.classList.toggle('ichc-cam-debug', _camStatsOn);
+        const btn = document.getElementById('ichc-cam-stats-btn');
+        if (btn) {
+            btn.classList.toggle('ichc-active', _camStatsOn);
+            btn.setAttribute('aria-pressed', String(_camStatsOn));
+        }
+        if (_camStatsOn) {
+            _initCamStatsBridge();
+            runInPageContext(CAM_STATS_SRC);
+            // Re-post start a few times so we beat the async page injection race.
+            [0, 300, 900].forEach(d => window.setTimeout(() => {
+                window.postMessage({ __ichc: 'camstats-cmd', cmd: 'start' }, '*');
+            }, d));
+            console.log('%c[ichc] cam stats ON — type ichcCamStats in this console for the latest sample', 'color:#4ec8d7;font-weight:bold');
+        } else {
+            window.postMessage({ __ichc: 'camstats-cmd', cmd: 'stop' }, '*');
+            _clearCamStatsOverlays();
+            console.log('%c[ichc] cam stats OFF', 'color:#80848e');
+        }
+    }
+
+    function _fmtDur(s) {
+        if (s == null) { return ''; }
+        if (s < 60) { return s + 's'; }
+        const m = Math.floor(s / 60), ss = s % 60;
+        if (m < 60) { return m + ':' + (ss < 10 ? '0' : '') + ss; }
+        const h = Math.floor(m / 60), mm = m % 60;
+        return h + 'h' + (mm < 10 ? '0' : '') + mm;
+    }
+
+    function _camStatsLines(feed) {
+        const lines = [];
+        // Line 1: resolution + fps + bitrate (often uniform across cams on this service).
+        const res = (feed.w && feed.h) ? (feed.w + '×' + feed.h) : '—';
+        let l1 = res + (feed.fps != null ? '  ' + feed.fps + 'fps' : '');
+        if (feed.kbps != null) { l1 += '  ' + feed.kbps.toLocaleString() + 'kbps'; }
+        lines.push(l1);
+        // Line 2: the per-path metrics that actually vary cam-to-cam.
+        const q = [];
+        if (feed.codec) { q.push(feed.codec); }
+        if (feed.rttMs != null) { q.push('rtt ' + feed.rttMs + 'ms'); }
+        if (feed.jitterMs != null) { q.push('jit ' + feed.jitterMs + 'ms'); }
+        if (feed.lossPct != null) { q.push('loss ' + feed.lossPct + '%'); }
+        if (q.length) { lines.push(q.join('  ')); }
+        // Line 3: health — uptime, dropped frames, freezes, audio (all genuinely per-cam).
+        const h = [];
+        if (feed.upS != null) { h.push('up ' + _fmtDur(feed.upS)); }
+        if (feed.framesDropped) { h.push('drop ' + feed.framesDropped); }
+        if (feed.freeze) { h.push('frz ' + feed.freeze); }
+        h.push(feed.audio ? ('🔊' + (feed.audioKbps != null ? feed.audioKbps + 'k' : '')) : '🔇');
+        lines.push(h.join('  '));
+        // Line 4: the edge/server serving this cam — the clearest per-cam differentiator.
+        if (feed.server) { lines.push('⇄ ' + feed.server + (feed.srvType ? ' (' + feed.srvType + ')' : '')); }
+        return lines;
+    }
+
+    function _renderCamStats(feeds) {
+        _camStatsTick++;
+        const tick = String(_camStatsTick);
+        // Console mirror — throttled so the overlay can refresh faster than the log spams.
+        if (feeds.length && _camStatsTick % 3 === 1) {
+            console.log('%c[ichc cam-stats]', 'color:#4ec8d7;font-weight:bold');
+            console.table(feeds.map(f => ({
+                cam: f.name || (f.dir === 'out' ? '(me)' : f.key),
+                res: (f.w && f.h) ? (f.w + 'x' + f.h) : '',
+                fps: f.fps, kbps: f.kbps, codec: f.codec,
+                rtt_ms: f.rttMs, jitter_ms: f.jitterMs, 'loss%': f.lossPct,
+                up_s: f.upS, dropped: f.framesDropped, freeze: f.freeze,
+                audio_kbps: f.audio ? f.audioKbps : null,
+                server: f.server, srvType: f.srvType,
+            })));
+        }
+        const nameEls = [...document.querySelectorAll('#cams .name-on-cam')];
+        for (const feed of feeds) {
+            if (!feed.name) { continue; }   // unmapped (e.g. own outbound) — console only
+            const match = nameEls.find(el => (el.textContent || '').trim().toLowerCase() === feed.key);
+            const card = match ? match.closest('.rounded_square') : null;
+            if (!card) { continue; }
+            let ov = card.querySelector('.ichc-cam-stats-overlay');
+            if (!ov) {
+                ov = document.createElement('div');
+                ov.className = 'ichc-cam-stats-overlay';
+                card.appendChild(ov);
+            }
+            ov.dataset.tick = tick;
+            ov.innerHTML = _camStatsLines(feed).map(l => '<span>' + escapeHtml(l) + '</span>').join('');
+        }
+        // Drop overlays for cams that didn't report this tick.
+        document.querySelectorAll('#cams .ichc-cam-stats-overlay').forEach(ov => {
+            if (ov.dataset.tick !== tick) { ov.remove(); }
+        });
+    }
+
+    function _clearCamStatsOverlays() {
+        document.querySelectorAll('.ichc-cam-stats-overlay').forEach(el => el.remove());
+    }
+
     function openCamDiagnostics() {
         let panel = document.getElementById('ichc-cam-diagnostics');
         if (!panel) {
@@ -4404,6 +5229,7 @@
                     <button type="button" class="ichc-camdiag-close" aria-label="Close">${ICONS.xmark}</button>
                 </div>
                 <div class="ichc-camdiag-actions">
+                    <button type="button" class="ichc-camdiag-stats" aria-pressed="false">${ICONS.gauge}<span>Live overlay</span></button>
                     <button type="button" class="ichc-camdiag-run">Run tests</button>
                     <button type="button" class="ichc-camdiag-copy">Copy report</button>
                 </div>
@@ -4413,12 +5239,32 @@
             panel.querySelector('.ichc-camdiag-close')?.addEventListener('click', () => panel.remove());
             panel.querySelector('.ichc-camdiag-run')?.addEventListener('click', () => runCamDiagnostics());
             panel.querySelector('.ichc-camdiag-copy')?.addEventListener('click', () => copyCamDiagnosticReport());
+            const statsBtn = panel.querySelector('.ichc-camdiag-stats');
+            statsBtn?.addEventListener('click', () => {
+                setCamStats(!_camStatsOn);
+                statsBtn.classList.toggle('ichc-active', _camStatsOn);
+                statsBtn.setAttribute('aria-pressed', String(_camStatsOn));
+            });
         }
+        // Reflect current live-overlay state each time the panel opens.
+        const sb = panel.querySelector('.ichc-camdiag-stats');
+        if (sb) { sb.classList.toggle('ichc-active', _camStatsOn); sb.setAttribute('aria-pressed', String(_camStatsOn)); }
         panel.classList.add('is-open');
         renderCamDiagnostics();
         if (!camDiagnosticState.rows.length && !camDiagnosticState.running) {
             runCamDiagnostics();
         }
+    }
+
+    // Console (terminal) button toggles the diagnostics panel open/closed.
+    function toggleCamDiagnostics() {
+        const panel = document.getElementById('ichc-cam-diagnostics');
+        if (panel && panel.classList.contains('is-open')) {
+            panel.classList.remove('is-open');
+            panel.remove();
+            return;
+        }
+        openCamDiagnostics();
     }
 
     function addCamDiagnosticRow(status, label, detail = '') {
@@ -4879,6 +5725,15 @@
                 },
             },
             { label: 'Sounds',          icon: ICONS.volume,    fn: 'toggleChatSound()' },
+            {
+                label: 'Broadcast quality: ' + _bcastQLabel(),
+                icon: ICONS.gauge,
+                keepOpen: true,
+                action(labelEl) {
+                    const next = _cycleBcastQuality();
+                    if (labelEl) { labelEl.textContent = 'Broadcast quality: ' + next.label; }
+                },
+            },
             {
                 label: 'Auto-restart cams: ' + (_autoRestartEnabled() ? 'On' : 'Off'),
                 icon: ICONS.rotate,
@@ -5560,11 +6415,17 @@
             camTestBtn.className = 'ichc-cam-test-btn';
             camTestBtn.title = 'Cam diagnostics';
             camTestBtn.innerHTML = ICONS.terminal;
-            camTestBtn.addEventListener('click', () => { openCamDiagnostics(); });
+            camTestBtn.addEventListener('click', () => { toggleCamDiagnostics(); });
         }
         if (footerLeft && !footerLeft.contains(camTestBtn)) {
             footerLeft.appendChild(camTestBtn);
         }
+
+        // The live cam-stats toggle now lives inside the cam-diagnostics ("console")
+        // panel (see openCamDiagnostics), not the footer. A stale footer button from an
+        // older build is removed here.
+        document.getElementById('ichc-cam-stats-btn')?.remove();
+
         let reloadCamsBtn = document.getElementById('ichc-reload-cams-btn');
         if (!reloadCamsBtn) {
             reloadCamsBtn = document.createElement('button');
@@ -6600,6 +7461,21 @@
             scrollBody = document.createElement('div');
             scrollBody.className = 'ichc-ul-scroll-body';
         }
+        // Track the user's scroll intent so rebuilds never yank an in-progress scroll.
+        // Our own programmatic restores also fire 'scroll', so ignore the echo for a
+        // short window after each write (see the restore block at the end of build).
+        if (!scrollBody.dataset.ichcScrollBound) {
+            scrollBody.dataset.ichcScrollBound = '1';
+            scrollBody.addEventListener('scroll', () => {
+                const top = scrollBody.scrollTop;
+                userListState.scrollTop = top;
+                // A user scroll lands on a different pixel than the one we just wrote,
+                // so value-match (not just timing) tells our restore echo apart from real input.
+                const isEcho = Math.abs(top - userListState._programmaticScrollTo) <= 1 &&
+                               performance.now() - userListState._programmaticScrollAt < 400;
+                if (!isEcho) { userListState._lastUserScrollAt = performance.now(); }
+            }, { passive: true });
+        }
         userListState._suppressBlur = false;
         if (prevSearchOpen) { panel.classList.add('ichc-ul-search-open'); }
         panel.classList.toggle('ichc-ul-no-avatars', !userListState.showAvatars);
@@ -7027,7 +7903,13 @@
                 if (!rows.length) { return; }
                 const hd = document.createElement('div');
                 hd.className = `ichc-ul-section ${key}`;
-                hd.textContent = label;
+                const lbl = document.createElement('span');
+                lbl.className = 'ichc-ul-section-label';
+                lbl.textContent = label;
+                const cnt = document.createElement('span');
+                cnt.className = 'ichc-ul-section-count';
+                cnt.textContent = rows.length;
+                hd.append(lbl, cnt);
                 desired.push(hd);
                 rows.forEach(r => desired.push(r));
             });
@@ -7498,11 +8380,24 @@
         }
 
         // Restore scroll position after all DOM mutations. Chrome resets scrollTop
-        // when children are removed/reordered inside a flex scroll container.
+        // when children are removed/reordered inside a flex scroll container. The
+        // synchronous set is safe (the user can't scroll mid-rebuild), but the
+        // deferred re-restore can land a frame later — mid-scroll — and yank the
+        // user back down. So the rAF only re-applies if (a) the user hasn't scrolled
+        // since, and (b) layout actually clobbered our value.
         if (_savedScrollTop > 0 && scrollBody) {
+            userListState._programmaticScrollTo = _savedScrollTop;
+            userListState._programmaticScrollAt = performance.now();
             scrollBody.scrollTop = _savedScrollTop;
-            // Second restore after layout settles — flex recalculation can re-reset after JS returns.
-            requestAnimationFrame(() => { if (scrollBody) { scrollBody.scrollTop = _savedScrollTop; } });
+            const _restoreAt = performance.now();
+            requestAnimationFrame(() => {
+                if (!scrollBody || !scrollBody.isConnected) { return; }
+                if (userListState._lastUserScrollAt > _restoreAt) { return; }
+                if (Math.abs(scrollBody.scrollTop - _savedScrollTop) > 1) {
+                    userListState._programmaticScrollAt = performance.now();
+                    scrollBody.scrollTop = _savedScrollTop;
+                }
+            });
         }
     }
 
@@ -7962,6 +8857,7 @@
         const tools = document.createElement('div');
         tools.className = 'ichc-card-tools';
         tools.innerHTML = `
+            <button type="button" class="ichc-overlay-btn ichc-cam-audio-btn" aria-label="Toggle audio" title="Toggle this cam's audio">${ICONS.volume}</button>
             <button type="button" class="ichc-overlay-btn ichc-cam-shrink-btn" aria-label="Smaller" title="Smaller">−</button>
             <button type="button" class="ichc-overlay-btn ichc-spotlight-btn" aria-label="Focus cam" title="Focus cam"></button>
             <button type="button" class="ichc-overlay-btn ichc-cam-grow-btn" aria-label="Larger" title="Larger">+</button>
@@ -7969,6 +8865,11 @@
         const spotlightButton = tools.querySelector('.ichc-spotlight-btn');
         const shrinkButton = tools.querySelector('.ichc-cam-shrink-btn');
         const growButton = tools.querySelector('.ichc-cam-grow-btn');
+        const audioButton = tools.querySelector('.ichc-cam-audio-btn');
+        if (audioButton) {
+            audioButton.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+            audioButton.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); _toggleCamAudio(card); });
+        }
 
         // Broadcast duration timer — appended directly to card (not inside .ichc-card-tools)
         // so it's always visible independent of the tools-overlay opacity animation.
@@ -8203,6 +9104,7 @@
             } catch (_) {}
         } else if (ghost) {
             if (hasRealName) {
+                _recordCamSession(name);
                 try { localStorage.removeItem(_BCAST_LS + name.trim().toLowerCase()); } catch (_) {}
             }
         }
@@ -8733,6 +9635,7 @@
             // in a for-loop is O(n²) in Firefox when localStorage is large.
             Object.keys(localStorage).forEach(key => {
                 if (key.startsWith(_BCAST_LS) && !liveNames.has(key.slice(_BCAST_LS.length))) {
+                    _recordCamSession(key.slice(_BCAST_LS.length));
                     localStorage.removeItem(key);
                 }
             });
