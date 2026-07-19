@@ -505,17 +505,25 @@
     // NB: key must NOT start with _BCAST_LS ('ichc_bcast_') or _reconcileBcastTimers
     // would evict it as a stale per-cam timer on every relayout.
     const _BCAST_Q_KEY = 'ichc_bq';
+    // Apply strings set window.__ichcBcastQ DIRECTLY (read by the always-on quality
+    // patch's bcastTarget at cam-up). No dependency on the diagnostics collector, so
+    // broadcast quality keeps working even with the collector's WebRTC hooks disabled.
+    const _AN = ';window.ichcApplyBcastNow&&ichcApplyBcastNow()';   // apply live to the current stream too
     const _BCAST_Q = {
-        off:   { label: 'Off',   apply: 'window.ichcResetBroadcastQuality&&ichcResetBroadcastQuality()' },
-        sharp: { label: 'Sharp', apply: 'window.ichcSetBroadcastQuality&&ichcSetBroadcastQuality({maxKbps:1200,maxFps:30,width:640,height:480})' },
-        max:   { label: 'Max',   apply: 'window.ichcSetBroadcastQuality&&ichcSetBroadcastQuality({maxKbps:2500,maxFps:30,width:1280,height:720})' },
+        off:    { label: 'Off',                apply: 'window.__ichcBcastQ=null' + _AN },
+        sharp:  { label: 'Sharp (480p)',       apply: 'window.__ichcBcastQ={width:640,height:480,maxFps:30,maxKbps:1500,degradation:"maintain-resolution"}' + _AN },
+        smooth: { label: 'Smooth (480p·30fps)', apply: 'window.__ichcBcastQ={width:640,height:480,maxFps:30,maxKbps:2500,degradation:"maintain-framerate"}' + _AN },
+        hd:     { label: 'HD (720p)',          apply: 'window.__ichcBcastQ={width:1280,height:720,maxFps:30,maxKbps:4000,degradation:"balanced"}' + _AN },
+        fhd:    { label: 'Full HD (1080p)',    apply: 'window.__ichcBcastQ={width:1920,height:1080,maxFps:30,maxKbps:6000,degradation:"balanced"}' + _AN },
     };
     function _bcastQKey() { try { return localStorage.getItem(_BCAST_Q_KEY) || 'off'; } catch (_) { return 'off'; } }
     function _bcastQLabel() { return (_BCAST_Q[_bcastQKey()] || _BCAST_Q.off).label; }
     function _cycleBcastQuality() {
-        const order = ['off', 'sharp', 'max'];
-        const next = order[(order.indexOf(_bcastQKey()) + 1) % order.length];
+        const order = ['off', 'sharp', 'smooth', 'hd', 'fhd'];
+        const cur = _bcastQKey();
+        const next = order[(order.indexOf(cur) + 1) % order.length];
         try { localStorage.setItem(_BCAST_Q_KEY, next); } catch (_) {}
+        console.log('%c[ichc] broadcast quality: ' + cur + ' → ' + next, 'color:#3ba55c;font-weight:bold');
         runInPageContext(_BCAST_Q[next].apply);
         return _BCAST_Q[next];
     }
@@ -977,6 +985,7 @@
     installBroadcastDeviceSwitchFix();
 
     document.addEventListener('DOMContentLoaded', () => {
+        _pruneProfileCaches();   // free localStorage early so the site's own writes never fail
         installStageLayout();
         installUnifiedHeader();
         initUserList();
@@ -987,6 +996,9 @@
         transformCommandBar();
         installCamDiagnostics();
         installCamMonitor();
+        // Push the saved broadcast-quality preset into the page (read by the quality
+        // patch at cam-up). Independent of the diagnostics collector.
+        try { runInPageContext(_BCAST_Q[_bcastQKey()].apply); } catch (_) {}
         // Coalesce refreshCams in page context. The site can call it in quick bursts;
         // keep deliberate extension reloads immediate, but queue one skipped site call
         // instead of swallowing refreshes that may keep cams/chat state alive.
@@ -1271,6 +1283,23 @@
         bitrate: 1500000,
     };
 
+    // Effective target: the user's broadcast-quality preset (window.__ichcBcastQ, set by
+    // the cam-stats collector) overrides the defaults. Read live so a preset change takes
+    // effect on the NEXT cam-up — we deliberately never touch the live broadcast track,
+    // which is what desyncs ICHC into the stuck "broadcasting audio" state.
+    function bcastTarget() {
+        const q = window.__ichcBcastQ;
+        if (q && q.width && q.height) {
+            return {
+                width:  { ideal: q.width,  max: q.width },
+                height: { ideal: q.height, max: q.height },
+                frameRate: { ideal: q.maxFps || 30, max: q.maxFps || 30 },
+                bitrate: q.maxKbps ? q.maxKbps * 1000 : target.bitrate,
+            };
+        }
+        return target;
+    }
+
     function liftNumber(value, minimum) {
         return typeof value === 'number' ? Math.max(value, minimum) : minimum;
     }
@@ -1352,10 +1381,11 @@
             return constraints;
         }
         if (video === true) {
+            const T = bcastTarget();
             next.video = {
-                width: Object.assign({}, target.width),
-                height: Object.assign({}, target.height),
-                frameRate: Object.assign({}, target.frameRate),
+                width: Object.assign({}, T.width),
+                height: Object.assign({}, T.height),
+                frameRate: Object.assign({}, T.frameRate),
             };
             // Inject the user-selected camera for broadcast-start getUserMedia calls
             const liveTrue = selectedVideoId();
@@ -1367,10 +1397,11 @@
         }
         if (typeof video !== 'object') { return constraints; }
 
+        const T = bcastTarget();
         next.video = Object.assign({}, video, {
-            width: liftConstraint(video.width, target.width),
-            height: liftConstraint(video.height, target.height),
-            frameRate: liftConstraint(video.frameRate, target.frameRate),
+            width: liftConstraint(video.width, T.width),
+            height: liftConstraint(video.height, T.height),
+            frameRate: liftConstraint(video.frameRate, T.frameRate),
         });
         const liveObj = selectedVideoId();
         if (liveObj) {
@@ -1386,14 +1417,15 @@
             if (!track || track.kind !== 'video') { return; }
             track.contentHint = 'detail';
             if (!sender.getParameters || !sender.setParameters) { return; }
+            const T = bcastTarget();
             const params = sender.getParameters() || {};
             params.encodings = params.encodings && params.encodings.length ? params.encodings : [{}];
             params.encodings.forEach(encoding => {
                 if (encoding.scaleResolutionDownBy && encoding.scaleResolutionDownBy > 1) {
                     encoding.scaleResolutionDownBy = 1;
                 }
-                encoding.maxBitrate = Math.max(encoding.maxBitrate || 0, target.bitrate);
-                encoding.maxFramerate = Math.max(encoding.maxFramerate || 0, target.frameRate.ideal);
+                encoding.maxBitrate = Math.max(encoding.maxBitrate || 0, T.bitrate);
+                encoding.maxFramerate = Math.max(encoding.maxFramerate || 0, T.frameRate.ideal);
             });
             sender.setParameters(params).catch(() => {});
         } catch (_) {}
@@ -1406,15 +1438,21 @@
     const mediaDevices = navigator.mediaDevices;
     if (mediaDevices && mediaDevices.getUserMedia && !mediaDevices.getUserMedia.__ichcQualityPatched) {
         const original = mediaDevices.getUserMedia.bind(mediaDevices);
+        // Keep the last few captured streams so ichcForceStopBroadcast() can end a
+        // broadcast whose audio the site failed to release ("broadcasting audio" desync).
+        const stash = s => {
+            try { (window.__ichcStreams = window.__ichcStreams || []).push(s); while (window.__ichcStreams.length > 8) { window.__ichcStreams.shift(); } } catch (e) {}
+            return s;
+        };
         const patched = function(constraints) {
             const improved = improveConstraints(constraints);
-            return original(improved).catch(err => {
+            return original(improved).then(stash).catch(err => {
                 // Our forced { exact } deviceId (or boosted resolution) over-constrained
                 // — e.g. a stale stored camera id. Retry with ICHC's original request so
                 // cam-up never fails just because our injection didn't fit.
                 if (improved !== constraints) {
                     console.warn('[ichc] getUserMedia failed with injected constraints, retrying original:', err && err.name);
-                    return original(constraints);
+                    return original(constraints).then(stash);
                 }
                 throw err;
             });
@@ -1422,6 +1460,44 @@
         patched.__ichcQualityPatched = true;
         mediaDevices.getUserMedia = patched;
     }
+
+    // Recovery lever for the site's "broadcasting audio" desync: physically stop every
+    // local media track we've captured, ending the lingering audio/video source. This
+    // can't repair ICHC's UI state machine, but it stops the actual broadcast media.
+    window.ichcForceStopBroadcast = function() {
+        let n = 0;
+        try {
+            (window.__ichcStreams || []).forEach(s => {
+                try { s.getTracks().forEach(t => { try { t.stop(); n++; } catch (e) {} }); } catch (e) {}
+            });
+        } catch (e) {}
+        console.log('%c[ichc] force-stopped ' + n + ' local media track(s). If the panel still shows a stale state, close it or refresh the tab.', 'color:#f0a020;font-weight:bold');
+        return n;
+    };
+
+    // Tells you whether your mic/cam are actually still captured after a "stop" — i.e.
+    // whether "broadcasting audio" is real (a live audio track) or just a stale label.
+    window.ichcAudioStatus = function() {
+        const out = [];
+        try {
+            (window.__ichcStreams || []).forEach((s, i) => {
+                try {
+                    s.getTracks().forEach(t => out.push({
+                        stream: i, kind: t.kind, label: t.label || '(unnamed)',
+                        readyState: t.readyState, enabled: t.enabled, muted: t.muted
+                    }));
+                } catch (e) {}
+            });
+        } catch (e) {}
+        try { console.table(out); } catch (e) {}
+        const liveAudio = out.filter(t => t.kind === 'audio' && t.readyState === 'live');
+        if (liveAudio.length) {
+            console.log('%c[ichc] ' + liveAudio.length + ' audio track(s) STILL LIVE — your mic is still captured (audio likely still transmitting). Run ichcForceStopBroadcast() to end it.', 'color:#f85149;font-weight:bold');
+        } else {
+            console.log('%c[ichc] no live audio tracks — your mic is released; "broadcasting audio" is just a stale label.', 'color:#3ba55c;font-weight:bold');
+        }
+        return out;
+    };
 
     ['getUserMedia', 'webkitGetUserMedia', 'mozGetUserMedia'].forEach(name => {
         const original = navigator[name];
@@ -4249,6 +4325,37 @@
         } catch (_) {}
     }
 
+    // Startup housekeeping so the profile caches can never fill localStorage (which
+    // makes the site's OWN writes fail — a likely broadcast-state culprit):
+    //   1. Delete orphaned keys from earlier cache versions (av1–av6, yb1–yb2, …).
+    //   2. Cap the total current-cache entries, evicting the oldest by timestamp.
+    const _PROFILE_PREFIXES = [_AV_LS, _KM_LS, _YB_LS, _GS_LS, _BG_LS, _JT_LS, _TR_LS, _BI_LS];
+    const _PROFILE_FAMILY_RE = /^ichc_(av|km|yb|gs|bg|jt|tr|bi)\d*_/;
+    const _PROFILE_CACHE_MAX = 1500;
+    function _pruneProfileCaches() {
+        try {
+            let keys = Object.keys(localStorage);
+            // 1. Drop orphaned old-version keys (match the family shape but not a live prefix).
+            let orphans = 0;
+            keys.forEach(k => {
+                if (_PROFILE_FAMILY_RE.test(k) && !_PROFILE_PREFIXES.some(p => k.startsWith(p))) {
+                    try { localStorage.removeItem(k); orphans++; } catch (_) {}
+                }
+            });
+            // 2. Cap current-version entries by count, oldest ts first.
+            const current = Object.keys(localStorage).filter(k => _PROFILE_PREFIXES.some(p => k.startsWith(p)));
+            if (current.length > _PROFILE_CACHE_MAX) {
+                const withTs = current.map(k => {
+                    let ts = 0;
+                    try { ts = (JSON.parse(localStorage.getItem(k) || '{}').ts) || 0; } catch (_) {}
+                    return [k, ts];
+                }).sort((a, b) => a[1] - b[1]);
+                withTs.slice(0, current.length - _PROFILE_CACHE_MAX).forEach(([k]) => { try { localStorage.removeItem(k); } catch (_) {} });
+            }
+            if (orphans) { console.log('[ichc] pruned ' + orphans + ' orphaned profile-cache keys'); }
+        } catch (_) {}
+    }
+
     function saveBlockedUsers(set) {
         const data = JSON.stringify([...set]);
         try {
@@ -4383,13 +4490,25 @@
     const camDiagnosticState = {
         rows: [],
         wsEvents: [],
+        httpEvents: [],
+        camEvents: [],
+        nativeActionInspections: [],
+        relaySessions: [],
+        controlPlaneFindings: [],
+        controlEndpointFindings: [],
+        commandEffects: [],
+        functionInspections: [],
+        streamInventory: [],
         listening: false,
+        httpListening: false,
         running: false,
     };
+    const CAM_RELAY_TARGETS_KEY = 'ichc_cam_relay_targets_v1';
 
     function installCamDiagnostics() {
         if (window.__ichcCamDiagnosticsInstalled) { return; }
         window.__ichcCamDiagnosticsInstalled = true;
+        installNativeActionInspector();
 
         window.addEventListener('message', event => {
             if (event.source !== window || event.data?.type !== 'ichc-cam-ws-event') { return; }
@@ -4399,14 +4518,554 @@
                 phase: detail.phase || 'event',
                 url: detail.url || '',
                 info: detail.info || '',
+                meta: detail.meta || null,
             });
+            recordRelaySession(detail);
             if (camDiagnosticState.wsEvents.length > 50) {
                 camDiagnosticState.wsEvents.splice(0, camDiagnosticState.wsEvents.length - 50);
             }
             renderCamDiagnostics();
         });
 
+        window.addEventListener('message', event => {
+            if (event.source !== window || event.data?.type !== 'ichc-control-http-event') { return; }
+            const detail = event.data.detail || {};
+            const httpEvent = {
+                time: new Date().toLocaleTimeString(),
+                transport: detail.transport || '',
+                method: detail.method || '',
+                url: detail.url || '',
+                body: detail.body || '',
+                status: detail.status || '',
+                response: detail.response || '',
+                stackHint: detail.stackHint || '',
+            };
+            camDiagnosticState.httpEvents.push(httpEvent);
+            recordIChcCommandEffect(httpEvent);
+            if (camDiagnosticState.httpEvents.length > 60) {
+                camDiagnosticState.httpEvents.splice(0, camDiagnosticState.httpEvents.length - 60);
+            }
+            renderCamDiagnostics();
+        });
+
+        window.addEventListener('message', event => {
+            if (event.source !== window || event.data?.type !== 'ichc-control-function-inspect-result') { return; }
+            const detail = event.data.detail || {};
+            recordControlFunctionInspection(detail);
+        });
+
         // Keep the WebSocket watcher opt-in; replacing window.WebSocket during normal browsing can interfere with live chat/cam updates.
+    }
+
+    function installNativeActionInspector() {
+        if (window.__ichcNativeActionInspectorInstalled) { return; }
+        window.__ichcNativeActionInspectorInstalled = true;
+
+        window.ichcInspectDelegatedCamControl = function(nick) {
+            const name = nick || firstBroadcastingNick();
+            if (!name) {
+                console.warn('[ichc native actions] no broadcasting nick found to inspect');
+                return Promise.resolve(null);
+            }
+            return inspectNativeActionsForNick(name).then(report => {
+                console.group('[ichc native actions] ' + name);
+                console.table(report?.actions || []);
+                console.log(report);
+                console.groupEnd();
+                return report;
+            });
+        };
+        window.ichcInspectDelegatedUserControls = window.ichcInspectDelegatedCamControl;
+
+        window.addEventListener('message', event => {
+            if (event.source !== window || event.data?.type !== 'ichc-native-action-inspect-result') { return; }
+            const detail = event.data.detail || {};
+            recordNativeActionInspection(detail);
+        });
+
+        runInPageContext(`
+(() => {
+    if (window.ichcInspectDelegatedCamControl) { return; }
+    window.ichcInspectDelegatedCamControl = function(nick) {
+        window.postMessage({ type: 'ichc-native-action-inspect-request', nick: nick || '' }, '*');
+        return 'Inspecting native actions for ' + (nick || 'first live cam') + '; result appears in the extension diagnostics panel.';
+    };
+    window.ichcInspectDelegatedUserControls = window.ichcInspectDelegatedCamControl;
+})();
+        `);
+
+        window.addEventListener('message', event => {
+            if (event.source !== window || event.data?.type !== 'ichc-native-action-inspect-request') { return; }
+            inspectNativeActionsForNick(event.data.nick || firstBroadcastingNick());
+        });
+    }
+
+    function firstBroadcastingNick() {
+        const camName = document.querySelector('#cams .name-on-cam, #cams [id^="name-"]')?.textContent?.trim();
+        if (camName) { return camName; }
+        const user = buildUserListData?.().find(u => u.cammed);
+        return user?.name || '';
+    }
+
+    function inspectNativeActionsForNick(nick) {
+        const name = (nick || '').trim();
+        if (!name) { return Promise.resolve(null); }
+
+        return new Promise(resolve => {
+            const token = 'ichc-inspect-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            const done = (report, shouldRecord) => {
+                window.removeEventListener('message', onMessage);
+                window.clearTimeout(timeout);
+                if (shouldRecord) { recordNativeActionInspection(report); }
+                resolve(report);
+            };
+            const timeout = window.setTimeout(() => done({
+                nick: name,
+                status: 'timeout',
+                actions: [],
+                error: 'Timed out waiting for native profile dialog inspection',
+                time: Date.now(),
+            }, true), 2500);
+            const onMessage = event => {
+                if (event.source !== window || event.data?.type !== 'ichc-native-action-inspect-result') { return; }
+                const detail = event.data.detail || {};
+                if (detail.token !== token) { return; }
+                done(detail, false);
+            };
+            window.addEventListener('message', onMessage);
+
+            runInPageContext(`(function() {
+                var token = ${JSON.stringify(token)};
+                var nick = ${JSON.stringify(name)};
+                function emit(detail) {
+                    detail.token = token;
+                    detail.nick = nick;
+                    detail.time = Date.now();
+                    window.postMessage({ type: 'ichc-native-action-inspect-result', detail: detail }, '*');
+                }
+                function clean() {
+                    var s = document.getElementById('ichc-inspect-native-action-style');
+                    if (s) { s.remove(); }
+                    try {
+                        if (typeof $ !== 'undefined') {
+                            $('.ui-dialog').each(function() { try { $(this).dialog('close'); } catch(_) {} });
+                        }
+                    } catch(_) {}
+                }
+                try {
+                    var link = Array.from(document.querySelectorAll('#activeUserList a.userlink'))
+                        .find(function(a) { return (a.textContent || '').trim().toLowerCase() === nick.toLowerCase(); });
+                    if (!link) {
+                        emit({ status: 'missing-userlink', actions: [], error: 'No active user-list link found for nick' });
+                        return;
+                    }
+                    var tmp = document.createElement('style');
+                    tmp.id = 'ichc-inspect-native-action-style';
+                    tmp.textContent = '.ui-dialog { opacity:0 !important; pointer-events:none !important; }';
+                    document.head.appendChild(tmp);
+                    link.click();
+                    setTimeout(function() {
+                        var dialogs = Array.from(document.querySelectorAll('.ui-dialog'));
+                        var actions = [];
+                        dialogs.forEach(function(d, dialogIndex) {
+                            Array.from(d.querySelectorAll('a,button,input[type=submit],input[type=button]')).forEach(function(el, actionIndex) {
+                                var label = (el.textContent || el.value || el.title || el.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim();
+                                var href = el.getAttribute('href') || '';
+                                var onclick = el.getAttribute('onclick') || '';
+                                var form = el.closest('form');
+                                var haystack = [label, href, onclick, el.id, el.className, el.getAttribute('name') || ''].join(' ');
+                                var commandMatch = haystack.match(/send_command\\((['"])(.*?)\\1\\)/);
+                                var nativeCommand = commandMatch ? commandMatch[2] : '';
+                                actions.push({
+                                    dialogIndex: dialogIndex,
+                                    actionIndex: actionIndex,
+                                    tag: el.tagName.toLowerCase(),
+                                    type: el.getAttribute('type') || '',
+                                    label: label,
+                                    id: el.id || '',
+                                    className: typeof el.className === 'string' ? el.className : '',
+                                    name: el.getAttribute('name') || '',
+                                    href: href,
+                                    onclick: onclick ? onclick.slice(0, 500) : '',
+                                    nativeCommand: nativeCommand,
+                                    formAction: form ? (form.getAttribute('action') || '') : '',
+                                    formMethod: form ? (form.getAttribute('method') || '') : '',
+                                    likelyCamControl: /(^|\\W)(cam|broadcast|stream)(\\W|$)|cam\\s+(down|refuse)|block their viewing of cams/i.test(haystack),
+                                    likelyRoomRemovalControl: /kick|room\\s*ban|startRoomBan|\\/(kick|ban)\\b|boot|remove|eject|disconnect/i.test(haystack),
+                                    likelyRoomRestrictionControl: /silence|muzzle|mute|timeout|suspend|\\/silence!?\\b|\\/muzzle\\b/i.test(haystack),
+                                    likelyRoomRoleControl: /make them a room mod|\\/oper\\b|room mod/i.test(haystack)
+                                });
+                            });
+                        });
+                        clean();
+                        emit({
+                            status: dialogs.length ? 'ok' : 'no-dialog',
+                            dialogs: dialogs.length,
+                            actions: actions,
+                            camActions: actions.filter(function(a) { return a.likelyCamControl; }),
+                            roomRemovalActions: actions.filter(function(a) { return a.likelyRoomRemovalControl; }),
+                            roomRestrictionActions: actions.filter(function(a) { return a.likelyRoomRestrictionControl; }),
+                            roomRoleActions: actions.filter(function(a) { return a.likelyRoomRoleControl; })
+                        });
+                    }, 450);
+                } catch (error) {
+                    clean();
+                    emit({ status: 'error', actions: [], error: error && (error.stack || error.message) || String(error) });
+                }
+            })();`);
+        });
+    }
+
+    function recordNativeActionInspection(report) {
+        if (!report) { return; }
+        camDiagnosticState.nativeActionInspections.push({
+            time: new Date(report.time || Date.now()).toLocaleTimeString(),
+            nick: report.nick || '',
+            status: report.status || '',
+            dialogs: report.dialogs || 0,
+            actions: Array.isArray(report.actions) ? report.actions : [],
+            camActions: Array.isArray(report.camActions) ? report.camActions : [],
+            roomRemovalActions: Array.isArray(report.roomRemovalActions) ? report.roomRemovalActions : [],
+            roomRestrictionActions: Array.isArray(report.roomRestrictionActions) ? report.roomRestrictionActions : [],
+            roomRoleActions: Array.isArray(report.roomRoleActions) ? report.roomRoleActions : [],
+            error: report.error || '',
+        });
+        if (camDiagnosticState.nativeActionInspections.length > 20) {
+            camDiagnosticState.nativeActionInspections.splice(0, camDiagnosticState.nativeActionInspections.length - 20);
+        }
+        renderCamDiagnostics();
+    }
+
+    function recordIChcCommandEffect(event) {
+        if (!event || !/chat\.aspx\/SendMessage/i.test(event.url || '') || !event.response) { return; }
+        const command = extractSendMessageCommand(event.body);
+        const commandMeta = parseIChcCommand(command);
+        const parsed = parseIChcSendMessageResponse(event.response);
+        if (!command && !parsed.packets.length) { return; }
+        parsed.packets.forEach(packet => {
+            if (!packet.nick && commandMeta.target && /^(cam-removed|silenced-user|moderation-log|direct-message)$/i.test(packet.type || '')) {
+                packet.nick = commandMeta.target;
+            }
+        });
+        const outcome = classifyIChcCommandOutcome(parsed.packets, event.status, commandMeta);
+        camDiagnosticState.commandEffects.push({
+            time: event.time || new Date().toLocaleTimeString(),
+            command,
+            commandType: commandMeta.type,
+            commandSubcommand: commandMeta.subcommand,
+            commandTarget: commandMeta.target,
+            commandDuration: commandMeta.duration,
+            commandReason: commandMeta.reason,
+            commandIssue: commandMeta.issue,
+            status: event.status || '',
+            outcome,
+            packets: parsed.packets,
+            summary: summarizeIChcCommandEffect(commandMeta, parsed.packets, parsed.summary),
+            response: event.response || '',
+        });
+        if (camDiagnosticState.commandEffects.length > 40) {
+            camDiagnosticState.commandEffects.splice(0, camDiagnosticState.commandEffects.length - 40);
+        }
+    }
+
+    function extractSendMessageCommand(body) {
+        try {
+            const obj = JSON.parse(String(body || ''));
+            return String(obj.msg || '').trim();
+        } catch (_) {
+            const match = String(body || '').match(/["']msg["']\s*:\s*["']([^"']+)/i);
+            return match ? match[1] : '';
+        }
+    }
+
+    function parseIChcCommand(command) {
+        const text = String(command || '').trim();
+        const match = text.match(/^\/(\S+)(?:\s+(.+))?$/);
+        if (!match) { return { type: '', subcommand: '', target: '', duration: '', reason: '', issue: '', args: '' }; }
+        const type = match[1] || '';
+        const args = (match[2] || '').trim();
+        const parts = args ? args.split(/\s+/) : [];
+        let subcommand = '';
+        let target = parts[0] || '';
+        let duration = '';
+        let reason = '';
+        let issue = '';
+        if (/^(cam|room)$/i.test(type) && parts.length > 1) {
+            subcommand = parts[0] || '';
+            target = parts[1] || '';
+        }
+        if (/^roomban$/i.test(type)) {
+            if (/^\d+$/.test(parts[0] || '') && parts[1]) {
+                duration = parts[0] || '';
+                target = parts[1] || '';
+                reason = parts.slice(2).join(' ');
+                issue = 'roomban-argument-order';
+            } else {
+                duration = parts[1] || '';
+                reason = parts.slice(2).join(' ');
+            }
+        }
+        return { type, subcommand, target, duration, reason, issue, args };
+    }
+
+    function summarizeIChcCommandEffect(commandMeta, packets, fallback) {
+        const target = commandMeta?.target ? `target=${commandMeta.target}` : '';
+        const duration = commandMeta?.duration ? `duration=${commandMeta.duration}` : '';
+        const reason = commandMeta?.reason ? `reason=${commandMeta.reason}` : '';
+        const issue = commandMeta?.issue ? `issue=${commandMeta.issue}` : '';
+        const type = commandMeta?.type ? `/${commandMeta.type}${commandMeta?.subcommand ? ' ' + commandMeta.subcommand : ''}` : '';
+        const packetSummary = (packets || []).map(packet => packet.summary).filter(Boolean).join('; ');
+        return [type, target, duration, reason, issue, packetSummary || fallback || 'empty response'].filter(Boolean).join(' · ');
+    }
+
+    function classifyIChcCommandOutcome(packets, status, commandMeta) {
+        const text = (packets || []).map(packet => [packet.type, packet.summary, packet.text, packet.value].filter(Boolean).join(' ')).join(' ');
+        if (/Y U NO MOD|only available to people that are currently modded up|not (?:a|currently) mod|permission|not allowed|denied/i.test(text)) {
+            return 'permission-denied';
+        }
+        if (/failed|must record a reason|required|invalid|usage|try again|cannot|can't/i.test(text)) {
+            return 'validation-failed';
+        }
+        if (commandMeta?.issue) { return 'validation-failed'; }
+        if ((packets || []).some(packet => /cam-removed|cam-added|silenced-user|moderation-log|room-note|room-refresh/i.test(packet.type || ''))) {
+            return 'accepted';
+        }
+        if (String(status || '') && !/^2/.test(String(status))) { return 'http-error'; }
+        if (!(packets || []).length) { return 'empty'; }
+        return 'observed';
+    }
+
+    function parseIChcSendMessageResponse(response) {
+        let payload = '';
+        try {
+            const obj = JSON.parse(String(response || ''));
+            payload = String(obj.d || '');
+        } catch (_) {
+            payload = String(response || '');
+        }
+        const packets = [];
+        String(payload || '').split(/\n+/).forEach(line => {
+            const match = line.match(/^\[([^\]]+)\](.*)$/);
+            if (!match) { return; }
+            const code = match[1];
+            const data = match[2] || '';
+            packets.push(describeIChcPacket(code, data));
+        });
+        return {
+            packets,
+            summary: packets.map(packet => packet.summary).filter(Boolean).join('; ') || (payload ? 'empty/unknown response payload' : 'empty response'),
+        };
+    }
+
+    function describeIChcPacket(code, data) {
+        const fields = String(data || '').split('|');
+        if (code === 'cU') {
+            const bits = fields[0].split('-');
+            return {
+                code,
+                type: 'cam-allocation',
+                streamName: bits[0] || '',
+                applicationName: bits[1] || '',
+                relayHost: bits[2] || '',
+                slot: bits[3] || '',
+                quality: bits[4] || '',
+                resolution: bits[5] || '',
+                summary: `cam allocation stream=${bits[0] || '?'} app=${bits[1] || '?'} host=${bits[2] || '?'} ${bits[5] || ''}`.trim(),
+            };
+        }
+        if (code === 'c+' || code === 'c-') {
+            const bits = fields[0].split('-');
+            return {
+                code,
+                type: code === 'c+' ? 'cam-added' : 'cam-removed',
+                streamName: bits[0] || '',
+                applicationName: bits[1] || '',
+                relayHost: bits[2] || '',
+                nick: bits.slice(3).join('-') || '',
+                summary: `${code === 'c+' ? 'cam added' : 'cam removed'} stream=${bits[0] || '?'} app=${bits[1] || '?'} host=${bits[2] || '?'} nick=${bits.slice(3).join('-') || '?'}`,
+            };
+        }
+        if (code === 'n') {
+            return {
+                code,
+                type: 'room-note',
+                title: fields[0] || '',
+                text: fields[1] || '',
+                color: fields[3] || '',
+                timeoutMs: fields[5] || '',
+                summary: `note ${fields[0] || ''}: ${fields[1] || ''}`.trim(),
+            };
+        }
+        if (code === 'msg') {
+            return {
+                code,
+                type: 'direct-message',
+                color: fields[0] || '',
+                from: fields[1] || '',
+                to: fields[2] || '',
+                text: fields.slice(3).join('|') || '',
+                summary: `direct message ${fields[1] || '?'} -> ${fields[2] || '?'}: ${fields.slice(3).join('|') || ''}`.trim(),
+            };
+        }
+        if (code === 'mods') {
+            return {
+                code,
+                type: 'moderation-log',
+                color: fields[0] || '',
+                nick: fields[1] || '',
+                text: fields.slice(2).join('|') || '',
+                summary: `moderation log ${fields[1] || '?'}: ${fields.slice(2).join('|') || ''}`.trim(),
+            };
+        }
+        if (code === 'rsvp') {
+            return {
+                code,
+                type: 'moderation-suggestion',
+                text: data || '',
+                summary: `suggestion ${data || ''}`.trim(),
+            };
+        }
+        if (code === 's') {
+            return {
+                code,
+                type: 'silenced-user',
+                nick: data || '',
+                summary: `silenced ${data || ''}`.trim(),
+            };
+        }
+        if (code === 'r') {
+            return {
+                code,
+                type: 'room-refresh',
+                value: data || '',
+                summary: `room refresh ${data || ''}`.trim(),
+            };
+        }
+        return {
+            code,
+            type: 'unknown',
+            value: data || '',
+            summary: `[${code}] ${data || ''}`.trim(),
+        };
+    }
+
+    function recordRelaySession(detail) {
+        const meta = detail?.meta || {};
+        const stream = meta.streamName || '';
+        const direction = meta.direction || '';
+        if (!stream && !direction && !meta.sessionId && !meta.command) { return; }
+        const key = [
+            detail.url || '',
+            detail.phase || '',
+            direction || '?',
+            meta.command || '',
+            meta.status || '',
+            meta.applicationName || '',
+            stream || '',
+            meta.sessionId || '',
+        ].join('|');
+        let entry = camDiagnosticState.relaySessions.find(item => item.key === key);
+        if (!entry) {
+            entry = { key, firstSeen: new Date().toLocaleTimeString() };
+            camDiagnosticState.relaySessions.push(entry);
+        }
+        Object.assign(entry, {
+            lastSeen: new Date().toLocaleTimeString(),
+            phase: detail.phase || '',
+            url: detail.url || '',
+            direction,
+            command: meta.command || entry.command || '',
+            status: meta.status || entry.status || '',
+            statusDescription: meta.statusDescription || entry.statusDescription || '',
+            applicationName: meta.applicationName || entry.applicationName || '',
+            streamName: stream || entry.streamName || '',
+            sessionId: meta.sessionId || entry.sessionId || '',
+            candidateCount: meta.candidateCount ?? entry.candidateCount ?? null,
+            candidateSummary: meta.candidateSummary || entry.candidateSummary || '',
+            hasSdp: meta.hasSdp || entry.hasSdp || false,
+        });
+        rememberRelayTarget(entry.url, entry.applicationName);
+        correlateRelaySession(entry);
+        if (camDiagnosticState.relaySessions.length > 60) {
+            camDiagnosticState.relaySessions.splice(0, camDiagnosticState.relaySessions.length - 60);
+        }
+        try { window.ichcRelaySessions = camDiagnosticState.relaySessions.slice(); } catch (_) {}
+    }
+
+    function rememberRelayTarget(url, applicationName) {
+        const app = normalizeWowzaAppName(applicationName || '');
+        if (!url || !app) { return; }
+        try {
+            const existing = loadRelayTargets();
+            const key = url + '|' + app;
+            const filtered = existing.filter(target => (target.url + '|' + target.applicationName) !== key);
+            filtered.unshift({ url, applicationName: app, lastSeen: Date.now() });
+            localStorage.setItem(CAM_RELAY_TARGETS_KEY, JSON.stringify(filtered.slice(0, 12)));
+        } catch (_) {}
+    }
+
+    function loadRelayTargets() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(CAM_RELAY_TARGETS_KEY) || '[]');
+            if (!Array.isArray(parsed)) { return []; }
+            return parsed
+                .map(target => ({
+                    url: String(target?.url || ''),
+                    applicationName: normalizeWowzaAppName(target?.applicationName || ''),
+                    lastSeen: Number(target?.lastSeen || 0),
+                    cached: true,
+                }))
+                .filter(target => target.url && target.applicationName);
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function correlateRelaySession(session) {
+        if (!session || session.name) { return; }
+        const endpoints = relaySessionEndpoints(session);
+        if (!endpoints.size) { return; }
+        const match = camDiagnosticState.camEvents
+            .slice()
+            .reverse()
+            .find(event => event.name && event.name !== '(unknown)' && endpoints.has(event.server));
+        if (match) {
+            session.name = match.name;
+            propagateRelaySessionName(session);
+        }
+    }
+
+    function correlateRelaySessionsForCamEvent(event) {
+        if (!event?.server || !event.name || event.name === '(unknown)') { return; }
+        camDiagnosticState.relaySessions.forEach(session => {
+            if (!session.name && relaySessionEndpoints(session).has(event.server)) {
+                session.name = event.name;
+                propagateRelaySessionName(session);
+            }
+        });
+        try { window.ichcRelaySessions = camDiagnosticState.relaySessions.slice(); } catch (_) {}
+    }
+
+    function propagateRelaySessionName(source) {
+        if (!source?.name || !source.streamName) { return; }
+        camDiagnosticState.relaySessions.forEach(session => {
+            if (session.name || session.streamName !== source.streamName) { return; }
+            const sameUrl = !source.url || !session.url || source.url === session.url;
+            const sameSession = !source.sessionId || !session.sessionId ||
+                source.sessionId === session.sessionId ||
+                session.sessionId === '[empty]';
+            if (sameUrl && sameSession) { session.name = source.name; }
+        });
+    }
+
+    function relaySessionEndpoints(session) {
+        const out = new Set();
+        String(session?.candidateSummary || '').split(/\s*,\s*/).forEach(part => {
+            const bits = part.split('/');
+            const endpoint = bits[bits.length - 1] || '';
+            if (endpoint) { out.add(endpoint); }
+        });
+        return out;
     }
 
     function installCamWebSocketWatcher() {
@@ -4440,10 +5099,53 @@
         }
     }
 
-    function emit(phase, url, info) {
+    function parseWowzaPayload(payload) {
+        try {
+            if (typeof payload !== 'string') { return null; }
+            const obj = JSON.parse(payload);
+            const streamInfo = obj.streamInfo || {};
+            return {
+                direction: obj.direction || '',
+                command: obj.command || '',
+                status: obj.status != null ? String(obj.status) : '',
+                statusDescription: obj.statusDescription || '',
+                applicationName: streamInfo.applicationName || '',
+                streamName: streamInfo.streamName || '',
+                sessionId: streamInfo.sessionId || '',
+                hasSdp: !!obj.sdp,
+                candidateCount: Array.isArray(obj.iceCandidates) ? obj.iceCandidates.length : null,
+                candidateSummary: summarizeIceCandidates(obj.iceCandidates),
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function summarizeIceCandidates(candidates) {
+        try {
+            if (!Array.isArray(candidates) || !candidates.length) { return ''; }
+            const seen = new Set();
+            candidates.forEach(item => {
+                const raw = String(item && item.candidate || '');
+                const parts = raw.split(/\\s+/);
+                const proto = parts[2] || '';
+                const address = parts[4] || '';
+                const port = parts[5] || '';
+                const typ = (raw.match(/ typ (\\S+)/) || [])[1] || '';
+                if (address || typ || proto) {
+                    seen.add([typ, proto.toLowerCase(), address + (port ? ':' + port : '')].filter(Boolean).join('/'));
+                }
+            });
+            return [...seen].join(', ');
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function emit(phase, url, info, meta) {
         window.postMessage({
             type: 'ichc-cam-ws-event',
-            detail: { phase, url: String(url || ''), info: String(info || '') },
+            detail: { phase, url: String(url || ''), info: String(info || ''), meta: meta || null },
         }, '*');
     }
 
@@ -4454,7 +5156,7 @@
         const startedAt = Date.now();
         emit('create', url, '');
         socket.addEventListener('open', () => emit('open', url, 'readyState=' + socket.readyState));
-        socket.addEventListener('message', event => emit('recv', url, summarizePayload(event.data)));
+        socket.addEventListener('message', event => emit('recv', url, summarizePayload(event.data), parseWowzaPayload(event.data)));
         socket.addEventListener('error', () => emit('error', url, ''));
         socket.addEventListener('close', event => {
             emit('close', url, 'after=' + (Date.now() - startedAt) + 'ms code=' + event.code + ' reason=' + (event.reason || '') + ' clean=' + event.wasClean);
@@ -4462,7 +5164,7 @@
 
         const originalSend = socket.send.bind(socket);
         socket.send = function(data) {
-            emit('send', url, summarizePayload(data));
+            emit('send', url, summarizePayload(data), parseWowzaPayload(data));
             return originalSend(data);
         };
         return socket;
@@ -4476,6 +5178,209 @@
     window.WebSocket = WatchedWebSocket;
 })();
         `);
+    }
+
+    function installControlHttpWatcher() {
+        if (camDiagnosticState.httpListening) { return; }
+        camDiagnosticState.httpListening = true;
+        runInPageContext(`
+(() => {
+    if (window.__ichcControlHttpWatcherInstalled) { return; }
+    window.__ichcControlHttpWatcherInstalled = true;
+    const interesting = /cam|command|send_command|ban|kick|silence|muzzle|oper|room|rtc|webrtc|broadcast|refresh|stream|mod|moder/i;
+    function clean(value) {
+        let text = '';
+        try {
+            if (value == null) {
+                text = '';
+            } else if (typeof value === 'string') {
+                text = value;
+            } else if (value instanceof URLSearchParams) {
+                text = value.toString();
+            } else if (value instanceof FormData) {
+                text = Array.from(value.entries()).map(pair => pair[0] + '=' + String(pair[1])).join('&');
+            } else if (value instanceof Blob) {
+                text = 'Blob ' + value.size + ' bytes ' + (value.type || '');
+            } else if (value instanceof ArrayBuffer) {
+                text = 'ArrayBuffer ' + value.byteLength + ' bytes';
+            } else if (ArrayBuffer.isView(value)) {
+                text = value.constructor.name + ' ' + value.byteLength + ' bytes';
+            } else {
+                text = JSON.stringify(value);
+            }
+        } catch (_) {
+            text = String(value || '');
+        }
+        text = String(text || '').replace(/\\s+/g, ' ').trim();
+        return text;
+    }
+    function stackHint() {
+        try {
+            const stack = new Error().stack || '';
+            return stack.split('\\n').slice(2).map(line => line.trim()).join(' | ');
+        } catch (_) {
+            return '';
+        }
+    }
+    function emit(transport, method, url, body, extra) {
+        const safeUrl = clean(url);
+        const safeBody = clean(body);
+        const safeResponse = clean(extra && extra.response);
+        if (!interesting.test([safeUrl, safeBody, safeResponse].join(' '))) { return; }
+        window.postMessage({
+            type: 'ichc-control-http-event',
+            detail: {
+                transport,
+                method: String(method || '').toUpperCase(),
+                url: safeUrl,
+                body: safeBody,
+                status: extra && extra.status != null ? String(extra.status) : '',
+                response: safeResponse,
+                stackHint: stackHint()
+            }
+        }, '*');
+    }
+
+    const nativeFetch = window.fetch;
+    if (typeof nativeFetch === 'function' && !nativeFetch.__ichcControlWatched) {
+        const watchedFetch = function(input, init) {
+            let url = '';
+            let method = '';
+            try {
+                url = typeof input === 'string' ? input : (input && input.url) || '';
+                method = (init && init.method) || (input && input.method) || 'GET';
+                emit('fetch', method, url, init && init.body);
+            } catch (_) {}
+            const result = nativeFetch.apply(this, arguments);
+            try {
+                return Promise.resolve(result).then(response => {
+                    try {
+                        const cloned = response.clone();
+                        cloned.text().then(text => emit('fetch-response', method, url, init && init.body, {
+                            status: response.status,
+                            response: text
+                        })).catch(() => {});
+                    } catch (_) {}
+                    return response;
+                });
+            } catch (_) {
+                return result;
+            }
+        };
+        watchedFetch.__ichcControlWatched = true;
+        window.fetch = watchedFetch;
+    }
+
+    const proto = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
+    if (proto && !proto.__ichcControlWatched) {
+        proto.__ichcControlWatched = true;
+        const nativeOpen = proto.open;
+        const nativeSend = proto.send;
+        proto.open = function(method, url) {
+            try {
+                this.__ichcControlMethod = method || '';
+                this.__ichcControlUrl = url || '';
+            } catch (_) {}
+            return nativeOpen.apply(this, arguments);
+        };
+        proto.send = function(body) {
+            try {
+                const method = this.__ichcControlMethod || '';
+                const url = this.__ichcControlUrl || '';
+                this.addEventListener('loadend', function() {
+                    try {
+                        emit('xhr-response', method, url, body, {
+                            status: this.status,
+                            response: this.responseText || ''
+                        });
+                    } catch (_) {}
+                });
+                emit('xhr', method, url, body);
+            } catch (_) {}
+            return nativeSend.apply(this, arguments);
+        };
+    }
+})();
+        `);
+    }
+
+    function inspectControlFunctionSurfaces() {
+        runInPageContext(`
+(() => {
+    const names = [
+        'send_command',
+        'startRoomBan',
+        'startBroadcasting',
+        'stop_camera',
+        'start_camera',
+        'update_player',
+        'refreshCams',
+        'tospd',
+        'bO',
+        'ignore',
+        'StartWhisper',
+        'startPublicMessage',
+        'giftToThem'
+    ];
+    const urlRe = /(?:https?:\\/\\/|wss?:\\/\\/|\\/)[^'"\\s<>)]{2,}/g;
+    const commandRe = /\\/(?:cam|kick|ban|silence!?|muzzle|oper|deoper|voice|unvoice|follow|unfollow)\\b[^'"\\n;)]*/ig;
+    const transportChecks = [
+        ['fetch', /\\bfetch\\s*\\(/],
+        ['xhr', /XMLHttpRequest|\\.ajax\\s*\\(|\\$\\.post\\s*\\(|\\$\\.get\\s*\\(/],
+        ['websocket', /WebSocket|\\.send\\s*\\(/],
+        ['chat-command', /send_command|\\/(?:cam|kick|ban|silence!?|muzzle|oper)\\b/i],
+        ['wowza', /webrtc-session\\.json|sendOffer|getOffer|getAvailableStreams|streamInfo/i]
+    ];
+    function compact(value, limit) {
+        return String(value || '').replace(/\\s+/g, ' ').trim().slice(0, limit);
+    }
+    function inspectName(name) {
+        const value = window[name];
+        const type = typeof value;
+        let source = '';
+        try { source = type === 'function' ? Function.prototype.toString.call(value) : String(value); } catch (_) {}
+        const urls = [...new Set(source.match(urlRe) || [])].slice(0, 12);
+        const commands = [...new Set(source.match(commandRe) || [])].slice(0, 12);
+        const transports = transportChecks.filter(pair => pair[1].test(source)).map(pair => pair[0]);
+        return {
+            name,
+            type,
+            exists: value != null,
+            length: source.length,
+            transports,
+            urls,
+            commands,
+            snippet: compact(source, 700)
+        };
+    }
+    window.postMessage({
+        type: 'ichc-control-function-inspect-result',
+        detail: { time: Date.now(), functions: names.map(inspectName) }
+    }, '*');
+})();
+        `);
+    }
+
+    function recordControlFunctionInspection(report) {
+        const functions = Array.isArray(report?.functions) ? report.functions : [];
+        camDiagnosticState.functionInspections = functions.map(item => ({
+            name: item.name || '',
+            type: item.type || '',
+            exists: !!item.exists,
+            length: item.length || 0,
+            transports: Array.isArray(item.transports) ? item.transports : [],
+            urls: Array.isArray(item.urls) ? item.urls : [],
+            commands: Array.isArray(item.commands) ? item.commands : [],
+            snippet: item.snippet || '',
+        }));
+        const visible = camDiagnosticState.functionInspections.filter(item => item.exists);
+        const transportLabels = [...new Set(visible.flatMap(item => item.transports || []))];
+        addCamDiagnosticRow(
+            visible.length ? 'info' : 'warn',
+            'ICHC control function surfaces',
+            `${visible.length}/${functions.length || 0} present${transportLabels.length ? '; transports: ' + transportLabels.join(', ') : '; no transport hints'}`
+        );
+        renderCamDiagnostics();
     }
 
     // ── Live per-cam feed stats (WebRTC getStats overlay + console) ──────────────
@@ -4775,41 +5680,40 @@
   };
 
   // ── Broadcast quality control for your OWN outbound cam ──
-  async function applyBcastQuality() {
+  // window.__ichcBcastQ is read by the quality patch (bcastTarget) for the NEXT cam-up,
+  // and ichcApplyBcastNow() applies it LIVE to the current stream (setParameters +
+  // applyConstraints). This touches the outbound track, but that is NOT what causes the
+  // site's "broadcasting audio" desync (that's a pre-existing stop-side site bug), so
+  // live quality changes are safe. We still never touch a track mid-teardown.
+  window.ichcApplyBcastNow = async function() {
     const q = window.__ichcBcastQ;
-    if (!q) { return; }
     for (const pc of PCS) {
       let senders = [];
       try { senders = pc.getSenders ? pc.getSenders() : []; } catch (e) { continue; }
       for (const s of senders) {
-        if (!s.track || s.track.kind !== 'video') { continue; }
-        // Encoder ceiling.
+        if (!s.track || s.track.kind !== 'video' || s.track.readyState !== 'live') { continue; }
         try {
           const p = s.getParameters();
           if (!p.encodings || !p.encodings.length) { p.encodings = [{}]; }
           p.encodings.forEach(enc => {
-            if (q.maxKbps) { enc.maxBitrate = q.maxKbps * 1000; }
-            if (q.maxFps) { enc.maxFramerate = q.maxFps; }
+            if (q && q.maxKbps) { enc.maxBitrate = q.maxKbps * 1000; } else { delete enc.maxBitrate; }
+            if (q && q.maxFps) { enc.maxFramerate = q.maxFps; } else { delete enc.maxFramerate; }
             enc.scaleResolutionDownBy = 1;
           });
-          if (q.degradation) { p.degradationPreference = q.degradation; }
+          p.degradationPreference = (q && q.degradation) ? q.degradation : 'balanced';
           await s.setParameters(p);
         } catch (e) {}
-        // Capture resolution — the real lever. Lift the LIVE track once per target
-        // (re-applying every tick would needlessly re-negotiate the camera). Uses
-        // ideal so a camera that can't reach it just settles at its max, no error.
-        if (q.width && q.height && s.track.applyConstraints && s.track.__ichcResTarget !== q.width) {
-          s.track.__ichcResTarget = q.width;
-          try {
-            await s.track.applyConstraints({
-              width: { ideal: q.width }, height: { ideal: q.height },
-              frameRate: { ideal: q.maxFps || 30 }
-            });
-          } catch (e) {}
+        if (q && q.width && q.height && s.track.applyConstraints) {
+          let cur = 0;
+          try { cur = (s.track.getSettings() || {}).width || 0; } catch (e) {}
+          if (cur !== q.width) {
+            try { await s.track.applyConstraints({ width: { ideal: q.width }, height: { ideal: q.height }, frameRate: { ideal: q.maxFps || 30 } }); } catch (e) {}
+          }
         }
       }
     }
-  }
+    return q;
+  };
   window.ichcSetBroadcastQuality = function(opts) {
     opts = opts || {};
     window.__ichcBcastQ = {
@@ -4818,14 +5722,14 @@
       width: opts.width || null, height: opts.height || null,
       degradation: opts.degradation || 'maintain-resolution'
     };
-    applyBcastQuality();
-    if (!window.__ichcBcastTimer) { window.__ichcBcastTimer = setInterval(applyBcastQuality, 4000); }
-    console.log('%c[ichc broadcast] quality set ' + JSON.stringify(window.__ichcBcastQ) + ' — lifts your capture resolution + encode ceiling. Run ichcBroadcastInfo() to confirm capture moved (camera permitting).', 'color:#3ba55c;font-weight:bold');
+    window.ichcApplyBcastNow();   // apply to the current stream immediately
+    console.log('%c[ichc broadcast] quality set ' + JSON.stringify(window.__ichcBcastQ) + ' — applied live + on next cam-up. Run ichcBroadcastInfo() to confirm.', 'color:#3ba55c;font-weight:bold');
     return window.__ichcBcastQ;
   };
   window.ichcResetBroadcastQuality = function() {
     window.__ichcBcastQ = null;
-    console.log('[ichc broadcast] reset to site default (cam down/up to fully clear).');
+    window.ichcApplyBcastNow();   // drop the caps on the current stream now
+    console.log('%c[ichc broadcast] OFF — caps removed live; resolution reverts on next cam-up.', 'color:#80848e');
     return 'reset';
   };
 
@@ -4894,8 +5798,10 @@
   // Re-apply a persisted broadcast-quality preset on load.
   try {
     const bq = localStorage.getItem('ichc_bq');
-    if (bq === 'sharp') { window.ichcSetBroadcastQuality({ maxKbps: 1200, maxFps: 30, width: 640, height: 480 }); }
-    else if (bq === 'max') { window.ichcSetBroadcastQuality({ maxKbps: 2500, maxFps: 30, width: 1280, height: 720 }); }
+    if (bq === 'sharp') { window.ichcSetBroadcastQuality({ width: 640, height: 480, maxFps: 30, maxKbps: 1500, degradation: 'maintain-resolution' }); }
+    else if (bq === 'smooth') { window.ichcSetBroadcastQuality({ width: 640, height: 480, maxFps: 30, maxKbps: 2500, degradation: 'maintain-framerate' }); }
+    else if (bq === 'hd') { window.ichcSetBroadcastQuality({ width: 1280, height: 720, maxFps: 30, maxKbps: 4000, degradation: 'balanced' }); }
+    else if (bq === 'fhd') { window.ichcSetBroadcastQuality({ width: 1920, height: 1080, maxFps: 30, maxKbps: 6000, degradation: 'balanced' }); }
   } catch (e) {}
 
   async function sample() {
@@ -4969,7 +5875,7 @@
           upS: Math.round((now - firstTs) / 1000),
           rttMs: rttMs,
           server: server, srvType: srvType,
-          audio: false, audioKbps: null, audioLevel: null,
+          audio: false, audioKbps: null, audioPps: null, audioLevel: null,
           availKbps: dir === 'out' ? availKbps : null,
           qualityLimit: dir === 'out' ? (s.qualityLimitationReason || null) : null
         };
@@ -4982,16 +5888,22 @@
         const assrc = 'a:' + String(s.ssrc || s.id);
         const now = (typeof s.timestamp === 'number') ? s.timestamp : Date.now();
         const bytes = s.bytesReceived || 0;
+        const packets = s.packetsReceived || 0;
         const p = prev.get(assrc);
-        let akbps = null;
-        if (p && now > p.ts) { const dt = (now - p.ts) / 1000; akbps = Math.round(((bytes - p.bytes) * 8) / dt / 1000); }
-        prev.set(assrc, { ts: now, bytes: bytes });
+        let akbps = null, apps = null;
+        if (p && now > p.ts) {
+          const dt = (now - p.ts) / 1000;
+          akbps = Math.round(((bytes - p.bytes) * 8) / dt / 1000);
+          apps = Math.round((packets - (p.packets || 0)) / dt);
+        }
+        prev.set(assrc, { ts: now, bytes: bytes, packets: packets });
         const vid = findVideoForTrack(s.trackIdentifier || '');
         const nm = vid ? cardNameForVideo(vid) : '';
         const f = nm ? byKey.get(nm.toLowerCase()) : null;
         if (f) {
           f.audio = true;
           if (akbps != null && isFinite(akbps)) { f.audioKbps = akbps; }
+          if (apps != null && isFinite(apps)) { f.audioPps = apps; }
           if (typeof s.audioLevel === 'number') { f.audioLevel = +s.audioLevel.toFixed(3); }
         }
       });
@@ -5048,6 +5960,22 @@
 
     function _handleCamEvent(ev) {
         if (!ev) { return; }
+        // Mirror every connection-state change into the diagnostics panel log.
+        camDiagnosticState.camEvents.push({
+            time: new Date().toLocaleTimeString(),
+            state: ev.state || '',
+            name: ev.name || '(unknown)',
+            server: ev.server || '',
+            candType: ev.candType || '',
+            proto: ev.proto || '',
+            info: [ev.server, ev.candType ? `(${ev.candType}${ev.proto ? '/' + ev.proto : ''})` : '']
+                .filter(Boolean).join(' '),
+        });
+        if (camDiagnosticState.camEvents.length > 50) {
+            camDiagnosticState.camEvents.splice(0, camDiagnosticState.camEvents.length - 50);
+        }
+        correlateRelaySessionsForCamEvent(camDiagnosticState.camEvents[camDiagnosticState.camEvents.length - 1]);
+        renderCamDiagnostics();
         const failed = ev.state === 'failed' || ev.state === 'disconnected';
         const who = ev.name || '(unknown cam)';
         const key = (ev.name || '').toLowerCase();
@@ -5167,7 +6095,16 @@
         if (feed.upS != null) { h.push('up ' + _fmtDur(feed.upS)); }
         if (feed.framesDropped) { h.push('drop ' + feed.framesDropped); }
         if (feed.freeze) { h.push('frz ' + feed.freeze); }
-        h.push(feed.audio ? ('🔊' + (feed.audioKbps != null ? feed.audioKbps + 'k' : '')) : '🔇');
+        // Audio: kbps + packet rate + level. ~50pps = encoder running (14k+lvl 0 =
+        // encoded silence, DTX off); ~1-3pps = DTX comfort noise; lvl > 0 = audible.
+        if (feed.audio) {
+            let a = '🔊' + (feed.audioKbps != null ? feed.audioKbps + 'k' : '');
+            if (feed.audioPps != null) { a += ' ' + feed.audioPps + 'pps'; }
+            if (feed.audioLevel != null) { a += ' lvl ' + feed.audioLevel.toFixed(2); }
+            h.push(a);
+        } else {
+            h.push('🔇');
+        }
         lines.push(h.join('  '));
         // Line 4: the edge/server serving this cam — the clearest per-cam differentiator.
         if (feed.server) { lines.push('⇄ ' + feed.server + (feed.srvType ? ' (' + feed.srvType + ')' : '')); }
@@ -5187,6 +6124,8 @@
                 rtt_ms: f.rttMs, jitter_ms: f.jitterMs, 'loss%': f.lossPct,
                 up_s: f.upS, dropped: f.framesDropped, freeze: f.freeze,
                 audio_kbps: f.audio ? f.audioKbps : null,
+                audio_pps: f.audio ? f.audioPps : null,
+                audio_lvl: f.audio ? f.audioLevel : null,
                 server: f.server, srvType: f.srvType,
             })));
         }
@@ -5231,14 +6170,50 @@
                 <div class="ichc-camdiag-actions">
                     <button type="button" class="ichc-camdiag-stats" aria-pressed="false">${ICONS.gauge}<span>Live overlay</span></button>
                     <button type="button" class="ichc-camdiag-run">Run tests</button>
+                    <button type="button" class="ichc-camdiag-streams">Probe streams</button>
+                    <button type="button" class="ichc-camdiag-functions">Inspect funcs</button>
+                    <button type="button" class="ichc-camdiag-native">Inspect controls</button>
+                    <button type="button" class="ichc-camdiag-capture">Test capture</button>
                     <button type="button" class="ichc-camdiag-copy">Copy report</button>
+                    <button type="button" class="ichc-camdiag-clear">Clear log</button>
                 </div>
+                <div class="ichc-camdiag-preview" hidden></div>
                 <div class="ichc-camdiag-body"></div>
             `;
             document.body.appendChild(panel);
-            panel.querySelector('.ichc-camdiag-close')?.addEventListener('click', () => panel.remove());
+            panel.querySelector('.ichc-camdiag-close')?.addEventListener('click', () => { stopCamCaptureTest(); panel.remove(); });
             panel.querySelector('.ichc-camdiag-run')?.addEventListener('click', () => runCamDiagnostics());
+            panel.querySelector('.ichc-camdiag-streams')?.addEventListener('click', () => probeObservedStreamInventory());
+            panel.querySelector('.ichc-camdiag-functions')?.addEventListener('click', () => inspectControlFunctionSurfaces());
+            panel.querySelector('.ichc-camdiag-native')?.addEventListener('click', () => {
+                const nick = firstBroadcastingNick();
+                if (!nick) {
+                    recordNativeActionInspection({
+                        nick: '',
+                        status: 'missing-cam',
+                        actions: [],
+                        error: 'No live cam nick found to inspect',
+                        time: Date.now(),
+                    });
+                    return;
+                }
+                inspectNativeActionsForNick(nick);
+            });
+            panel.querySelector('.ichc-camdiag-capture')?.addEventListener('click', () => runCamCaptureTest());
             panel.querySelector('.ichc-camdiag-copy')?.addEventListener('click', () => copyCamDiagnosticReport());
+            panel.querySelector('.ichc-camdiag-clear')?.addEventListener('click', () => {
+                camDiagnosticState.wsEvents = [];
+                camDiagnosticState.httpEvents = [];
+                camDiagnosticState.camEvents = [];
+                camDiagnosticState.nativeActionInspections = [];
+                camDiagnosticState.relaySessions = [];
+                camDiagnosticState.controlPlaneFindings = [];
+                camDiagnosticState.controlEndpointFindings = [];
+                camDiagnosticState.commandEffects = [];
+                camDiagnosticState.functionInspections = [];
+                camDiagnosticState.streamInventory = [];
+                renderCamDiagnostics();
+            });
             const statsBtn = panel.querySelector('.ichc-camdiag-stats');
             statsBtn?.addEventListener('click', () => {
                 setCamStats(!_camStatsOn);
@@ -5250,6 +6225,8 @@
         const sb = panel.querySelector('.ichc-camdiag-stats');
         if (sb) { sb.classList.toggle('ichc-active', _camStatsOn); sb.setAttribute('aria-pressed', String(_camStatsOn)); }
         panel.classList.add('is-open');
+        installCamWebSocketWatcher();
+        installControlHttpWatcher();
         renderCamDiagnostics();
         if (!camDiagnosticState.rows.length && !camDiagnosticState.running) {
             runCamDiagnostics();
@@ -5261,6 +6238,7 @@
         const panel = document.getElementById('ichc-cam-diagnostics');
         if (panel && panel.classList.contains('is-open')) {
             panel.classList.remove('is-open');
+            stopCamCaptureTest();
             panel.remove();
             return;
         }
@@ -5277,6 +6255,141 @@
     function updateCamDiagnosticRow(row, status, detail = '') {
         row.status = status;
         row.detail = detail;
+        renderCamDiagnostics();
+    }
+
+    async function probeObservedStreamInventory() {
+        const targets = uniqueStreamInventoryTargets();
+        if (!targets.length) {
+            addCamDiagnosticRow('warn', 'Stream inventory probe', 'No observed Wowza relay app yet; open diagnostics before cam refresh/play.');
+            return;
+        }
+        for (const target of targets.slice(0, 8)) {
+            const row = addCamDiagnosticRow('info', 'Stream inventory probe', `${shortUrl(target.url)} app=${target.applicationName}${target.cached ? ' cached' : ''}`);
+            try {
+                const result = await requestWowzaStreamInventory(target);
+                recordStreamInventory(target, result);
+                updateCamDiagnosticRow(row, result.ok ? 'pass' : 'warn', result.detail);
+            } catch (error) {
+                const result = { ok: false, detail: error?.message || String(error), streams: [] };
+                recordStreamInventory(target, result);
+                updateCamDiagnosticRow(row, 'warn', result.detail);
+            }
+        }
+    }
+
+    function uniqueStreamInventoryTargets() {
+        const out = [];
+        const seen = new Set();
+        const add = (url, applicationName, cached) => {
+            const app = normalizeWowzaAppName(applicationName || '');
+            if (!url || !app) { return; }
+            const key = url + '|' + app;
+            if (seen.has(key)) { return; }
+            seen.add(key);
+            out.push({ url, applicationName: app, cached: !!cached });
+        };
+        camDiagnosticState.relaySessions.forEach(session => {
+            add(session.url || '', session.applicationName || '', false);
+        });
+        loadRelayTargets().forEach(target => add(target.url, target.applicationName, true));
+        return out;
+    }
+
+    function normalizeWowzaAppName(value) {
+        return String(value || '').replace(/\/_definst_$/i, '').trim();
+    }
+
+    function requestWowzaStreamInventory(target) {
+        return new Promise(resolve => {
+            let socket;
+            let settled = false;
+            const timeout = window.setTimeout(() => finish({ ok: false, detail: 'timeout after 5s', streams: [] }), 5000);
+            function finish(result) {
+                if (settled) { return; }
+                settled = true;
+                window.clearTimeout(timeout);
+                try { socket?.close(); } catch (_) {}
+                resolve(result);
+            }
+            try {
+                socket = new WebSocket(target.url);
+                socket.addEventListener('open', () => {
+                    socket.send(JSON.stringify({
+                        direction: 'play',
+                        command: 'getAvailableStreams',
+                        streamInfo: {
+                            applicationName: target.applicationName,
+                            streamName: '',
+                            sessionId: '[empty]',
+                        },
+                        userData: { param1: 'value1' },
+                    }));
+                });
+                socket.addEventListener('message', event => {
+                    finish(parseStreamInventoryResponse(event.data));
+                });
+                socket.addEventListener('error', () => finish({ ok: false, detail: 'socket error', streams: [] }));
+                socket.addEventListener('close', event => {
+                    if (!settled) { finish({ ok: false, detail: `closed before response code=${event.code}`, streams: [] }); }
+                });
+            } catch (error) {
+                finish({ ok: false, detail: error?.message || String(error), streams: [] });
+            }
+        });
+    }
+
+    function parseStreamInventoryResponse(raw) {
+        try {
+            const obj = JSON.parse(String(raw || ''));
+            const streams = extractStreamNamesDeep(obj);
+            const status = obj.status != null ? String(obj.status) : '';
+            const desc = obj.statusDescription || '';
+            return {
+                ok: status === '200' || streams.length > 0,
+                status,
+                statusDescription: desc,
+                streams,
+                raw: String(raw || '').slice(0, 1200),
+                detail: `status=${status || '?'} ${desc || ''}; streams=${streams.length}${streams.length ? ' ' + streams.slice(0, 12).join(', ') : ''}`,
+            };
+        } catch (error) {
+            return { ok: false, detail: 'unparseable response: ' + (error?.message || error), streams: [], raw: String(raw || '').slice(0, 1200) };
+        }
+    }
+
+    function extractStreamNamesDeep(value) {
+        const out = new Set();
+        const visit = node => {
+            if (!node || out.size > 200) { return; }
+            if (Array.isArray(node)) { node.forEach(visit); return; }
+            if (typeof node !== 'object') { return; }
+            ['streamName', 'name', 'id'].forEach(key => {
+                const v = node[key];
+                if (typeof v === 'string' && /^[a-z0-9_-]{4,}$/i.test(v)) { out.add(v); }
+            });
+            Object.keys(node).forEach(key => visit(node[key]));
+        };
+        visit(value);
+        return [...out];
+    }
+
+    function recordStreamInventory(target, result) {
+        const entry = {
+            time: new Date().toLocaleTimeString(),
+            url: target.url,
+            applicationName: target.applicationName,
+            ok: !!result.ok,
+            status: result.status || '',
+            statusDescription: result.statusDescription || '',
+            streams: result.streams || [],
+            detail: result.detail || '',
+        };
+        camDiagnosticState.streamInventory.push(entry);
+        if (camDiagnosticState.streamInventory.length > 40) {
+            camDiagnosticState.streamInventory.splice(0, camDiagnosticState.streamInventory.length - 40);
+        }
+        try { window.ichcStreamInventory = camDiagnosticState.streamInventory.slice(); } catch (_) {}
         renderCamDiagnostics();
     }
 
@@ -5304,8 +6417,165 @@
             `).join('')
             : '<div class="ichc-camdiag-empty">No site WebSocket attempts captured yet. Leave this panel open and click Go Live to capture publish signaling.</div>';
 
+        const camEvents = camDiagnosticState.camEvents.length
+            ? camDiagnosticState.camEvents.slice(-12).map(event => `
+                <div class="ichc-camdiag-event ichc-camdiag-ev-${escapeAttr(event.state)}">
+                    <span>${escapeHtml(event.time)}</span>
+                    <b>${escapeHtml(event.state)}</b>
+                    <code>${escapeHtml(event.name)}</code>
+                    <span>${escapeHtml(event.info)}</span>
+                </div>
+            `).join('')
+            : '<div class="ichc-camdiag-empty">No cam connection changes yet. Feed connects, drops, and recoveries show up here with the edge server involved.</div>';
+
+        const nativeActions = camDiagnosticState.nativeActionInspections.length
+            ? camDiagnosticState.nativeActionInspections.slice(-8).map(event => {
+                const matches = event.camActions.length
+                    ? event.camActions.map(action => action.label || action.id || action.href || action.onclick || '(unlabelled)').join('; ')
+                    : 'no likely cam-control actions';
+                const removal = event.roomRemovalActions.length
+                    ? ' · room removal: ' + event.roomRemovalActions.map(action => action.label || action.id || action.href || action.onclick || '(unlabelled)').join('; ')
+                    : '';
+                const restriction = event.roomRestrictionActions.length
+                    ? ' · restriction: ' + event.roomRestrictionActions.map(action => action.label || action.id || action.href || action.onclick || '(unlabelled)').join('; ')
+                    : '';
+                const role = event.roomRoleActions.length
+                    ? ' · role: ' + event.roomRoleActions.map(action => action.label || action.id || action.href || action.onclick || '(unlabelled)').join('; ')
+                    : '';
+                return `
+                    <div class="ichc-camdiag-event ichc-camdiag-ev-${escapeAttr(event.status)}">
+                        <span>${escapeHtml(event.time)}</span>
+                        <b>${escapeHtml(event.status)}</b>
+                        <code>${escapeHtml(event.nick || '(none)')}</code>
+                        <span>${escapeHtml(matches + removal + restriction + role + (event.error ? ' · ' + event.error : ''))}</span>
+                    </div>
+                `;
+            }).join('')
+            : '<div class="ichc-camdiag-empty">No native delegated controls inspected yet. Use Inspect controls, or run ichcInspectDelegatedCamControl("nick") in the page console.</div>';
+
+        const relaySessions = camDiagnosticState.relaySessions.length
+            ? camDiagnosticState.relaySessions.slice(-12).map(session => {
+                const parts = [
+                    session.direction,
+                    session.name ? 'cam ' + session.name : '',
+                    session.command,
+                    session.status ? 'status ' + session.status : '',
+                    session.applicationName ? 'app ' + session.applicationName : '',
+                    session.streamName ? 'stream ' + session.streamName : '',
+                    session.sessionId ? 'sid ' + session.sessionId : '',
+                    session.candidateCount != null ? 'candidates ' + session.candidateCount : '',
+                    session.candidateSummary ? 'ice ' + session.candidateSummary : '',
+                    session.hasSdp ? 'sdp' : '',
+                ].filter(Boolean).join(' · ');
+                return `
+                    <div class="ichc-camdiag-event">
+                        <span>${escapeHtml(session.lastSeen || session.firstSeen || '')}</span>
+                        <b>${escapeHtml(session.phase || '')}</b>
+                        <code>${escapeHtml(shortUrl(session.url || ''))}</code>
+                        <span>${escapeHtml(parts || '(no parsed relay metadata)')}</span>
+                    </div>
+                `;
+            }).join('')
+            : '<div class="ichc-camdiag-empty">No parsed Wowza relay sessions yet. Open this panel before cam-up or cam refresh to capture publish/play signaling.</div>';
+
+        const streamInventory = camDiagnosticState.streamInventory.length
+            ? camDiagnosticState.streamInventory.slice(-8).map(entry => `
+                <div class="ichc-camdiag-event ichc-camdiag-ev-${entry.ok ? 'pass' : 'warn'}">
+                    <span>${escapeHtml(entry.time || '')}</span>
+                    <b>${escapeHtml(entry.ok ? 'ok' : 'warn')}</b>
+                    <code>${escapeHtml(shortUrl(entry.url || '') + ' ' + (entry.applicationName || ''))}</code>
+                    <span>${escapeHtml(entry.streams.length ? entry.streams.join(', ') : entry.detail || 'no streams returned')}</span>
+                </div>
+            `).join('')
+            : '<div class="ichc-camdiag-empty">No stream inventory probes yet. Use Probe streams after a relay session is captured or cached.</div>';
+
+        const httpEvents = camDiagnosticState.httpEvents.length
+            ? camDiagnosticState.httpEvents.slice(-12).map(event => `
+                <div class="ichc-camdiag-event">
+                    <span>${escapeHtml(event.time || '')}</span>
+                    <b>${escapeHtml(event.transport || '')} ${escapeHtml(event.method || '')}${event.status ? ' ' + escapeHtml(event.status) : ''}</b>
+                    <code>${escapeHtml(shortUrl(event.url || ''))}</code>
+                    <span>${escapeHtml([event.body, event.response ? 'response=' + event.response : '', event.stackHint].filter(Boolean).join(' · '))}</span>
+                </div>
+            `).join('')
+            : '<div class="ichc-camdiag-empty">No control-looking fetch/XHR calls captured yet. Leave diagnostics open while using room/cam controls to fingerprint the endpoint layer.</div>';
+
+        const commandEffects = camDiagnosticState.commandEffects.length
+            ? camDiagnosticState.commandEffects.slice(-12).map(effect => `
+                <div class="ichc-camdiag-event">
+                    <span>${escapeHtml(effect.time || '')}</span>
+                    <b>${escapeHtml([effect.status, effect.outcome || '', effect.commandType ? '/' + effect.commandType + (effect.commandSubcommand ? ' ' + effect.commandSubcommand : '') : ''].filter(Boolean).join(' '))}</b>
+                    <code>${escapeHtml(effect.command || '(no command)')}</code>
+                    <span>${escapeHtml(effect.summary || '')}</span>
+                </div>
+            `).join('')
+            : '<div class="ichc-camdiag-empty">No parsed SendMessage effects yet. Use cam or room controls while diagnostics is open.</div>';
+
+        const endpointFindings = camDiagnosticState.controlEndpointFindings.length
+            ? camDiagnosticState.controlEndpointFindings.slice(0, 20).map(item => `
+                <div class="ichc-camdiag-event">
+                    <span>${escapeHtml(item.label || '')}</span>
+                    <b>${escapeHtml(shortUrl(item.src || ''))}</b>
+                    <code>${escapeHtml(item.endpoint || '(keyword)')}</code>
+                    <span></span>
+                </div>
+            `).join('')
+            : '<div class="ichc-camdiag-empty">No static ICHC control endpoint scan yet. Run tests to inspect loaded page scripts.</div>';
+
+        const functionSurfaces = camDiagnosticState.functionInspections.length
+            ? camDiagnosticState.functionInspections.map(item => {
+                const hints = [
+                    item.exists ? '' : 'missing',
+                    item.transports.length ? 'transports ' + item.transports.join(', ') : '',
+                    item.urls.length ? 'urls ' + item.urls.join(', ') : '',
+                    item.commands.length ? 'commands ' + item.commands.join(', ') : '',
+                    item.length ? 'source ' + item.length + ' chars' : '',
+                ].filter(Boolean).join(' · ');
+                return `
+                    <div class="ichc-camdiag-event">
+                        <span>${escapeHtml(item.type || '')}</span>
+                        <b>${escapeHtml(item.name || '')}</b>
+                        <code>${escapeHtml(item.exists ? (item.transports.join(', ') || 'no transport hint') : 'missing')}</code>
+                        <span>${escapeHtml(hints || item.snippet || '')}</span>
+                    </div>
+                `;
+            }).join('')
+            : '<div class="ichc-camdiag-empty">No page function fingerprints yet. Run tests or use Inspect funcs.</div>';
+
         body.innerHTML = `
             <div class="ichc-camdiag-section">${rows}</div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">Wowza relay sessions</div>
+                ${relaySessions}
+            </div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">Wowza stream inventory</div>
+                ${streamInventory}
+            </div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">ICHC control HTTP</div>
+                ${httpEvents}
+            </div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">ICHC command effects</div>
+                ${commandEffects}
+            </div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">ICHC endpoint surface</div>
+                ${endpointFindings}
+            </div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">ICHC function surfaces</div>
+                ${functionSurfaces}
+            </div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">Delegated native controls</div>
+                ${nativeActions}
+            </div>
+            <div class="ichc-camdiag-section">
+                <div class="ichc-camdiag-section-title">Cam connection events</div>
+                ${camEvents}
+            </div>
             <div class="ichc-camdiag-section">
                 <div class="ichc-camdiag-section-title">Live signaling watcher</div>
                 ${events}
@@ -5318,12 +6588,18 @@
         camDiagnosticState.running = true;
         camDiagnosticState.rows = [];
         installCamWebSocketWatcher();
+        installControlHttpWatcher();
         renderCamDiagnostics();
 
         try {
             await probeCamBrowserEnvironment();
+            probeCamCodecSupport();
             const candidates = await probeCamScripts();
+            await probeIChcControlEndpointSurface();
+            inspectControlFunctionSurfaces();
             await probeCamWebSockets(candidates);
+            summarizeBrowserVisibleControlPlane(candidates);
+            await probeCamIceConnectivity();
             await probeCamLoopbackRtc();
         } finally {
             camDiagnosticState.running = false;
@@ -5354,6 +6630,75 @@
                 addCamDiagnosticRow('warn', 'Local devices', error?.message || String(error));
             }
         }
+
+        const conn = navigator.connection;
+        if (conn) {
+            const parts = [
+                conn.effectiveType || '',
+                conn.downlink ? `~${conn.downlink} Mbps down` : '',
+                conn.rtt ? `~${conn.rtt} ms RTT` : '',
+                conn.saveData ? 'data-saver ON' : '',
+            ].filter(Boolean);
+            addCamDiagnosticRow(conn.saveData ? 'warn' : 'info', 'Network estimate', parts.join(', ') || 'unavailable');
+        }
+    }
+
+    function probeCamCodecSupport() {
+        if (typeof window.RTCRtpSender?.getCapabilities !== 'function') {
+            addCamDiagnosticRow('warn', 'Codec capabilities', 'RTCRtpSender.getCapabilities unavailable');
+            return;
+        }
+        const names = kind => [...new Set((RTCRtpSender.getCapabilities(kind)?.codecs || [])
+            .map(codec => codec.mimeType.replace(/^(video|audio)\//i, ''))
+            .filter(name => !/^(rtx|red|ulpfec|flexfec-03|CN|telephone-event)$/i.test(name)))];
+        const video = names('video');
+        const audio = names('audio');
+        addCamDiagnosticRow(video.length ? 'pass' : 'fail', 'Video codecs (send)', video.join(', ') || 'none');
+        addCamDiagnosticRow(audio.length ? 'pass' : 'fail', 'Audio codecs (send)', audio.join(', ') || 'none');
+        if (video.length && !video.some(name => /h264/i.test(name))) {
+            addCamDiagnosticRow('warn', 'H264 support', 'not available — viewers on H264-only paths may see no video');
+        }
+    }
+
+    // Gathers ICE candidates against a public STUN server. A srflx candidate proves
+    // NAT traversal works; host-only means STUN/UDP is blocked (firewall, VPN, or
+    // strict network) and publish/view will only work if the site relays via TURN.
+    async function probeCamIceConnectivity() {
+        const row = addCamDiagnosticRow('info', 'NAT / STUN reachability', 'gathering ICE candidates…');
+        if (!window.RTCPeerConnection) {
+            updateCamDiagnosticRow(row, 'fail', 'RTCPeerConnection unavailable');
+            return;
+        }
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        const types = new Map();   // candidateType -> sample address
+        try {
+            await new Promise(resolve => {
+                const timeout = window.setTimeout(resolve, 6000);
+                pc.onicecandidate = event => {
+                    if (!event.candidate) { window.clearTimeout(timeout); resolve(); return; }
+                    const cand = event.candidate;
+                    const type = cand.type || (cand.candidate.match(/ typ (\S+)/) || [])[1] || '?';
+                    if (!types.has(type)) {
+                        types.set(type, (cand.address || '') + (cand.port ? ':' + cand.port : ''));
+                    }
+                };
+                pc.createDataChannel('ichc-ice-probe');
+                pc.createOffer()
+                    .then(offer => pc.setLocalDescription(offer))
+                    .catch(() => { window.clearTimeout(timeout); resolve(); });
+            });
+            if (types.has('srflx')) {
+                updateCamDiagnosticRow(row, 'pass', `STUN OK — public ${types.get('srflx')} (candidates: ${[...types.keys()].join(', ')})`);
+            } else if (types.size) {
+                updateCamDiagnosticRow(row, 'warn', `only ${[...types.keys()].join(', ')} candidates — STUN blocked (firewall/VPN?); cams need a TURN relay to work`);
+            } else {
+                updateCamDiagnosticRow(row, 'fail', 'no ICE candidates gathered — WebRTC networking blocked');
+            }
+        } catch (error) {
+            updateCamDiagnosticRow(row, 'fail', error?.message || String(error));
+        } finally {
+            try { pc.close(); } catch (_) {}
+        }
     }
 
     async function queryPermissionState(name) {
@@ -5372,21 +6717,154 @@
         addCamDiagnosticRow(scriptUrls.length ? 'pass' : 'warn', 'RTC scripts loaded', scriptUrls.length ? `${scriptUrls.length} matching script(s)` : 'none found');
 
         const candidates = new Set();
-        for (const src of scriptUrls.slice(0, 8)) {
+        const findings = [];
+        const inspected = new Set();
+        const queue = scriptUrls.slice(0, 8);
+        for (let qi = 0; qi < queue.length && inspected.size < 18; qi++) {
+            const src = queue[qi];
+            if (inspected.has(src)) { continue; }
+            inspected.add(src);
             const row = addCamDiagnosticRow('info', 'Inspect script', shortUrl(src));
             try {
                 const response = await fetch(src, { cache: 'no-store', credentials: 'same-origin' });
                 const text = await response.text();
                 const found = extractWebSocketCandidates(text, src);
                 found.forEach(url => candidates.add(url));
+                findings.push(...extractControlPlaneFindings(text, src));
+                extractImportedScriptCandidates(text, src).forEach(url => {
+                    if (!inspected.has(url) && queue.length < 24) { queue.push(url); }
+                });
                 const hasWsConnect = /wsConnect|WebSocket/i.test(text);
-                updateCamDiagnosticRow(row, response.ok ? 'pass' : 'warn', `${response.status} ${response.statusText}; ${found.length} socket candidate(s); ${hasWsConnect ? 'socket code present' : 'no socket literal'}`);
+                updateCamDiagnosticRow(row, response.ok ? 'pass' : 'warn', `${response.status} ${response.statusText}; ${found.length} socket candidate(s); ${hasWsConnect ? 'socket code present' : 'no socket literal'}; ${summarizeControlFindings(findings.filter(f => f.src === src))}`);
             } catch (error) {
                 updateCamDiagnosticRow(row, 'warn', error?.message || String(error));
             }
         }
+        camDiagnosticState.controlPlaneFindings = findings;
 
         return [...candidates];
+    }
+
+    function extractImportedScriptCandidates(text, baseUrl) {
+        const found = new Set();
+        const re = /\bimport(?:\s+[^'"]+\s+from\s+|\s*)['"]([^'"]+\.js)['"]/g;
+        let match;
+        while ((match = re.exec(text))) {
+            try {
+                const url = new URL(match[1], baseUrl).href;
+                if (new URL(url).origin === location.origin) { found.add(url); }
+            } catch (_) {}
+        }
+        return [...found];
+    }
+
+    function extractControlPlaneFindings(text, src) {
+        const checks = [
+            ['wowza-webrtc-signaling', /webrtc-session\.json|sendOffer|getOffer|sendResponse|streamInfo|applicationName|streamName/i],
+            ['wowza-stream-list', /getAvailableStreams/i],
+            ['publish-play-only', /direction["']?\s*:\s*["']?(publish|play)|command["']?\s*:\s*["']?(sendOffer|getOffer|sendResponse|getAvailableStreams)/i],
+            ['native-room-command', /send_command|\/cam\s+(down|refuse)|\/kick|\/silence!?|\/muzzle|startRoomBan/i],
+            ['origin-admin-hint', /8087|\/v2\/servers|jmx|incomingstreams|streammanager|unpublish|disconnectStream|shutdownStream|restapi|rest\/v2/i],
+            ['turn-stun-config', /iceServers|stun:|turn:/i],
+        ];
+        return checks
+            .filter(([, re]) => re.test(text))
+            .map(([label]) => ({ label, src }));
+    }
+
+    function summarizeControlFindings(findings) {
+        const labels = [...new Set((findings || []).map(f => f.label))];
+        return labels.length ? 'findings: ' + labels.join(', ') : 'no control-plane keywords';
+    }
+
+    function summarizeBrowserVisibleControlPlane(candidates) {
+        const labels = new Set((camDiagnosticState.controlPlaneFindings || []).map(f => f.label));
+        const sawRelay = labels.has('wowza-webrtc-signaling') || camDiagnosticState.relaySessions.length || candidates.length;
+        const sawStreamList = labels.has('wowza-stream-list');
+        const sawNative = labels.has('native-room-command') || camDiagnosticState.nativeActionInspections.length;
+        const sawAdmin = labels.has('origin-admin-hint');
+        const verdict = [
+            sawRelay ? 'Wowza WebRTC pub/sub signaling visible' : 'no relay signaling discovered statically yet',
+            sawStreamList ? 'Wowza stream inventory command visible (getAvailableStreams)' : 'no Wowza stream-list command found yet',
+            sawNative ? 'room moderation appears as site/native command surface' : 'no delegated room command surface inventoried yet',
+            sawAdmin ? 'possible origin/admin keyword found in client scripts' : 'no browser-visible Wowza REST/JMX/admin control surface found',
+        ].join('; ');
+        addCamDiagnosticRow(sawAdmin ? 'warn' : 'info', 'Control plane verdict', verdict);
+    }
+
+    async function probeIChcControlEndpointSurface() {
+        const findings = [];
+        const sources = [];
+        document.querySelectorAll('script:not([src])').forEach((script, index) => {
+            const text = script.textContent || '';
+            if (text) { sources.push({ src: 'inline-script-' + index, text }); }
+        });
+        const external = [...document.scripts]
+            .map(script => script.src)
+            .filter(src => src && sameOriginUrl(src))
+            .filter(src => /ScriptResource|WebResource|chat|room|user|cam|ajax|jquery|modernizr/i.test(src))
+            .slice(0, 16);
+        for (const src of external) {
+            try {
+                const response = await fetch(src, { cache: 'no-store', credentials: 'same-origin' });
+                const text = await response.text();
+                sources.push({ src, text });
+            } catch (_) {}
+        }
+        sources.forEach(source => {
+            findings.push(...extractIChcEndpointFindings(source.text, source.src));
+        });
+        camDiagnosticState.controlEndpointFindings = dedupeEndpointFindings(findings).slice(0, 80);
+        const labels = [...new Set(camDiagnosticState.controlEndpointFindings.map(item => item.label))];
+        const endpoints = [...new Set(camDiagnosticState.controlEndpointFindings.map(item => item.endpoint).filter(Boolean))];
+        addCamDiagnosticRow(
+            endpoints.length ? 'info' : 'warn',
+            'ICHC endpoint surface',
+            endpoints.length
+                ? `${endpoints.length} endpoint hint(s); ${labels.join(', ')}`
+                : 'no ASP.NET/PageMethod-style control endpoints found in loaded scripts'
+        );
+    }
+
+    function sameOriginUrl(url) {
+        try { return new URL(url, location.href).origin === location.origin; } catch (_) { return false; }
+    }
+
+    function extractIChcEndpointFindings(text, src) {
+        const out = [];
+        const patterns = [
+            ['send-message-endpoint', /(?:["'])([^"']*chat\.aspx\/SendMessage[^"']*)(?:["'])/ig],
+            ['room-ban-endpoint', /(?:["'])(\/roomban\b[^"']*)(?:["'])/ig],
+            ['aspnet-page-method', /(?:["'])([^"']*\.aspx\/[A-Za-z0-9_]+[^"']*)(?:["'])/ig],
+            ['asmx-service-method', /(?:["'])([^"']*\.asmx\/[A-Za-z0-9_]+[^"']*)(?:["'])/ig],
+            ['control-url', /(?:["'])(\/(?:cam|room|ban|kick|chat|message|moder|ignore|follow|roomban|banned)\b[^"']*)(?:["'])/ig],
+        ];
+        patterns.forEach(([label, re]) => {
+            let match;
+            while ((match = re.exec(text))) {
+                out.push({ label, endpoint: match[1], src });
+            }
+        });
+        const keywords = [
+            ['send-command-function', /\bsend_command\s*\(/i],
+            ['keystring-token', /\bkeyString\b/i],
+            ['aspnet-scriptmanager', /Sys\.Net\.WebServiceProxy|PageMethods|ScriptResource\.axd/i],
+            ['room-ban-function', /\bstartRoomBan\b/i],
+        ];
+        keywords.forEach(([label, re]) => {
+            if (re.test(text)) { out.push({ label, endpoint: '', src }); }
+        });
+        return out;
+    }
+
+    function dedupeEndpointFindings(findings) {
+        const seen = new Set();
+        return (findings || []).filter(item => {
+            const key = [item.label || '', item.endpoint || '', item.src || ''].join('|');
+            if (seen.has(key)) { return false; }
+            seen.add(key);
+            return true;
+        });
     }
 
     function extractWebSocketCandidates(text, baseUrl) {
@@ -5477,6 +6955,78 @@
         }
     }
 
+    // ── Camera capture test ──────────────────────────────────────────────────────
+    // Actually opens the camera + mic (the auto probes never do) and shows a short
+    // live preview, so "is my cam physically working" gets a direct answer.
+    let _camCaptureStream = null;
+    let _camCaptureTimer = 0;
+
+    async function runCamCaptureTest() {
+        stopCamCaptureTest();
+        const row = addCamDiagnosticRow('info', 'Camera capture', 'requesting camera + microphone…');
+        if (!navigator.mediaDevices?.getUserMedia) {
+            updateCamDiagnosticRow(row, 'fail', 'getUserMedia unavailable');
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            _camCaptureStream = stream;
+            const video = stream.getVideoTracks()[0];
+            const audio = stream.getAudioTracks()[0];
+            const settings = video?.getSettings?.() || {};
+            const size = settings.width ? `${settings.width}×${settings.height}` : 'unknown size';
+            const fps = settings.frameRate ? `@${Math.round(settings.frameRate)}fps` : '';
+            updateCamDiagnosticRow(row, 'pass',
+                `${video?.label || 'camera'} — ${size}${fps}` +
+                (audio ? `; mic: ${audio.label || 'default'}` : '; no mic track'));
+            _showCamCapturePreview(stream);
+            _camCaptureTimer = window.setTimeout(() => stopCamCaptureTest(), 10000);
+        } catch (error) {
+            updateCamDiagnosticRow(row, 'fail', _decodeGumError(error));
+        }
+    }
+
+    function _decodeGumError(error) {
+        const name = error?.name || '';
+        const known = {
+            NotAllowedError: 'permission denied — allow camera/mic for this site (icon in the address bar)',
+            NotFoundError: 'no camera or microphone found on this machine',
+            NotReadableError: 'device busy — another app (OBS, Zoom, another tab…) is holding the camera',
+            OverconstrainedError: 'device cannot satisfy the requested constraints',
+            SecurityError: 'blocked by browser security settings',
+            AbortError: 'device start aborted — try unplugging/replugging the camera',
+        };
+        return known[name] || `${name || 'Error'}: ${error?.message || error}`;
+    }
+
+    function _showCamCapturePreview(stream) {
+        const slot = document.querySelector('#ichc-cam-diagnostics .ichc-camdiag-preview');
+        if (!slot) { return; }
+        slot.hidden = false;
+        slot.innerHTML = '';
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        const stop = document.createElement('button');
+        stop.type = 'button';
+        stop.className = 'ichc-camdiag-preview-stop';
+        stop.textContent = 'Stop preview';
+        stop.addEventListener('click', () => stopCamCaptureTest());
+        slot.append(video, stop);
+    }
+
+    function stopCamCaptureTest() {
+        if (_camCaptureTimer) { window.clearTimeout(_camCaptureTimer); _camCaptureTimer = 0; }
+        if (_camCaptureStream) {
+            try { _camCaptureStream.getTracks().forEach(track => track.stop()); } catch (_) {}
+            _camCaptureStream = null;
+        }
+        const slot = document.querySelector('#ichc-cam-diagnostics .ichc-camdiag-preview');
+        if (slot) { slot.hidden = true; slot.innerHTML = ''; }
+    }
+
     function copyCamDiagnosticReport() {
         const lines = [
             'ICHC cam diagnostics',
@@ -5484,6 +7034,76 @@
             `Time: ${new Date().toISOString()}`,
             '',
             ...camDiagnosticState.rows.map(row => `[${row.status}] ${row.label}: ${row.detail || ''}`),
+            '',
+            'Wowza relay sessions:',
+            ...(camDiagnosticState.relaySessions.length
+                ? camDiagnosticState.relaySessions.map(session =>
+                    `${session.lastSeen || session.firstSeen || ''} ${session.phase || ''} ${session.direction || ''} ${session.command || ''} ` +
+                    `cam=${session.name || ''} ` +
+                    `status=${session.status || ''} app=${session.applicationName || ''} stream=${session.streamName || ''} ` +
+                    `session=${session.sessionId || ''} candidates=${session.candidateCount ?? ''} ice=${session.candidateSummary || ''} sdp=${session.hasSdp ? 'yes' : 'no'} url=${session.url || ''}`
+                )
+                : ['none']),
+            '',
+            'Browser-visible control-plane findings:',
+            ...(camDiagnosticState.controlPlaneFindings.length
+                ? camDiagnosticState.controlPlaneFindings.map(f => `${f.label}: ${shortUrl(f.src || '')}`)
+                : ['none']),
+            '',
+            'Wowza stream inventory:',
+            ...(camDiagnosticState.streamInventory.length
+                ? camDiagnosticState.streamInventory.map(entry =>
+                    `${entry.time} ${entry.ok ? 'ok' : 'warn'} app=${entry.applicationName || ''} url=${entry.url || ''} ` +
+                    `status=${entry.status || ''} streams=${entry.streams.join(', ')} detail=${entry.detail || ''}`
+                )
+                : ['none']),
+            '',
+            'ICHC control HTTP events:',
+            ...(camDiagnosticState.httpEvents.length
+                ? camDiagnosticState.httpEvents.map(event =>
+                    `${event.time} ${event.transport || ''} ${event.method || ''} ${event.url || ''} status=${event.status || ''} body=${event.body || ''} response=${event.response || ''} stack=${event.stackHint || ''}`
+                )
+                : ['none']),
+            '',
+            'ICHC command effects:',
+            ...(camDiagnosticState.commandEffects.length
+                ? camDiagnosticState.commandEffects.flatMap(effect => [
+                    `${effect.time} status=${effect.status || ''} outcome=${effect.outcome || ''} type=${effect.commandType || ''} subcommand=${effect.commandSubcommand || ''} target=${effect.commandTarget || ''} duration=${effect.commandDuration || ''} reason=${effect.commandReason || ''} issue=${effect.commandIssue || ''} command=${effect.command || ''} summary=${effect.summary || ''}`,
+                    ...effect.packets.map(packet =>
+                        `  - [${packet.code || ''}] ${packet.type || ''} stream=${packet.streamName || ''} app=${packet.applicationName || ''} host=${packet.relayHost || ''} nick=${packet.nick || ''} from=${packet.from || ''} to=${packet.to || ''} color=${packet.color || ''} text=${packet.text || packet.value || ''}`
+                    ),
+                ])
+                : ['none']),
+            '',
+            'ICHC endpoint surface:',
+            ...(camDiagnosticState.controlEndpointFindings.length
+                ? camDiagnosticState.controlEndpointFindings.map(item =>
+                    `${item.label || ''}: ${item.endpoint || '(keyword)'} src=${shortUrl(item.src || '')}`
+                )
+                : ['none']),
+            '',
+            'ICHC function surfaces:',
+            ...(camDiagnosticState.functionInspections.length
+                ? camDiagnosticState.functionInspections.map(item =>
+                    `${item.exists ? 'present' : 'missing'} ${item.name || ''} type=${item.type || ''} transports=${item.transports.join(', ')} urls=${item.urls.join(', ')} commands=${item.commands.join(', ')} sourceChars=${item.length || 0}`
+                )
+                : ['none']),
+            '',
+            'Cam connection events:',
+            ...(camDiagnosticState.camEvents.length
+                ? camDiagnosticState.camEvents.map(event => `${event.time} ${event.state} ${event.name} ${event.info}`)
+                : ['none']),
+            '',
+            'Delegated native control inspections:',
+            ...(camDiagnosticState.nativeActionInspections.length
+                ? camDiagnosticState.nativeActionInspections.flatMap(event => [
+                    `${event.time} ${event.status} ${event.nick || '(none)'} dialogs=${event.dialogs} actions=${event.actions.length} camActions=${event.camActions.length} roomRemovalActions=${event.roomRemovalActions.length} roomRestrictionActions=${event.roomRestrictionActions.length} roomRoleActions=${event.roomRoleActions.length}${event.error ? ' error=' + event.error : ''}`,
+                    ...event.actions.map(action =>
+                        `  - ${action.likelyCamControl ? '[cam?] ' : ''}${action.likelyRoomRemovalControl ? '[remove?] ' : ''}${action.likelyRoomRestrictionControl ? '[restrict?] ' : ''}${action.likelyRoomRoleControl ? '[role?] ' : ''}${action.tag || ''} ${action.label || action.id || '(unlabelled)'} ` +
+                        `cmd=${action.nativeCommand || ''} href=${action.href || ''} form=${action.formMethod || ''} ${action.formAction || ''} onclick=${action.onclick || ''}`
+                    ),
+                ])
+                : ['none']),
             '',
             'Captured WebSocket events:',
             ...(camDiagnosticState.wsEvents.length
