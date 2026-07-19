@@ -1,3 +1,18 @@
+    /* ── Bundled chat font: Hanken Grotesk (variable, wght 400-700) ── */
+    @font-face {
+        font-family: "Hanken Grotesk";
+        src: url("../fonts/HankenGrotesk-Variable.woff2") format("woff2");
+        font-weight: 400 700;
+        font-style: normal;
+        font-display: swap;
+    }
+    @font-face {
+        font-family: "Hanken Grotesk";
+        src: url("../fonts/HankenGrotesk-Italic-Variable.woff2") format("woff2");
+        font-weight: 400 700;
+        font-style: italic;
+        font-display: swap;
+    }
     /* ── Page loading overlay (fills the Rocket Loader deferral gap) ── */
     #ichc-loading-overlay {
         position: fixed !important;
@@ -1544,7 +1559,7 @@
         --ichc-input-height: 50px;
     }
     body {
-        font-family: "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
+        font-family: "Hanken Grotesk", "Trebuchet MS", "Segoe UI", sans-serif !important;
         background: #111214 !important;
         background-attachment: fixed !important;
     }
@@ -3484,7 +3499,7 @@
     }
     #ichc-userlist,
     #ichc-userlist * {
-        font-family: "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
+        font-family: "Hanken Grotesk", "Trebuchet MS", "Segoe UI", sans-serif !important;
         text-shadow: none !important;
         text-decoration: none !important;
         letter-spacing: normal !important;
@@ -4688,9 +4703,16 @@
         margin-top: 2px !important;
         color: #9ca3af !important;
     }
+    .ichc-camdiag-actions {
+        flex-wrap: wrap !important;
+        justify-content: flex-start !important;
+    }
     .ichc-camdiag-close,
     .ichc-camdiag-run,
+    .ichc-camdiag-capture,
     .ichc-camdiag-copy,
+    .ichc-camdiag-clear,
+    .ichc-camdiag-preview-stop,
     .ichc-camdiag-stats {
         border-radius: 6px !important;
         border: 1px solid rgba(255,255,255,0.12) !important;
@@ -4722,6 +4744,37 @@
         background: rgba(35,165,89,0.18) !important;
         border-color: rgba(59,165,92,0.35) !important;
         color: #7ee787 !important;
+    }
+    .ichc-camdiag-capture {
+        background: rgba(78,200,215,0.14) !important;
+        border-color: rgba(78,200,215,0.35) !important;
+        color: #8fe3ef !important;
+    }
+    .ichc-camdiag-clear {
+        color: #9ca3af !important;
+        margin-left: auto !important;
+    }
+    .ichc-camdiag-preview {
+        position: relative !important;
+        display: flex !important;
+        justify-content: center !important;
+        background: #000 !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 6px !important;
+        overflow: hidden !important;
+    }
+    .ichc-camdiag-preview[hidden] { display: none !important; }
+    .ichc-camdiag-preview video {
+        width: 100% !important;
+        max-height: 220px !important;
+        object-fit: contain !important;
+        background: #000 !important;
+    }
+    .ichc-camdiag-preview-stop {
+        position: absolute !important;
+        right: 8px !important;
+        bottom: 8px !important;
+        background: rgba(17,18,20,0.85) !important;
     }
     .ichc-camdiag-body {
         overflow: auto !important;
@@ -4788,6 +4841,11 @@
         background: transparent !important;
         padding: 0 !important;
     }
+    .ichc-camdiag-event b { color: #cbd5e1 !important; }
+    .ichc-camdiag-ev-failed b { color: #f87171 !important; }
+    .ichc-camdiag-ev-disconnected b { color: #fbbf24 !important; }
+    .ichc-camdiag-ev-connected b,
+    .ichc-camdiag-ev-completed b { color: #7ee787 !important; }
 
     /* ── User list hidden cam entries ── */
     #ichc-userlist .ichc-ul-hidden-live {
@@ -5015,7 +5073,7 @@
         border-radius: 10px !important;
         box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.3) !important;
         overflow: hidden !important;
-        font-family: "Trebuchet MS","Aptos","Segoe UI",sans-serif !important;
+        font-family: "Hanken Grotesk","Trebuchet MS","Segoe UI",sans-serif !important;
         font-size: 13px !important;
         padding: 0 !important;
     }

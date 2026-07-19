@@ -24,7 +24,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["gifs.txt", "images/year-badges/*.svg"],
+      "resources": ["gifs.txt", "images/year-badges/*.svg", "fonts/*.woff2"],
       "matches": ["https://www.icanhazchat.com/*"]
     }
   ],
