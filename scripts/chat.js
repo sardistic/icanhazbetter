@@ -1122,9 +1122,28 @@
         chatCache.lossCheckTimer = setInterval(_checkChatLoss, 1000);
     }
 
+    // Where the bar belongs right now. #chat_container is the chat column in the
+    // modern layout; the fallbacks only matter before it exists.
+    function _chatRestoreBarHost() {
+        return document.getElementById('chat_container') ||
+               getChatLog()?.parentElement ||
+               document.body;
+    }
+
     function _ensureChatRestoreBar() {
         let bar = document.getElementById('ichc-chat-restore-bar');
-        if (bar) { return bar; }
+        if (bar) {
+            // Re-home if it drifted. The bar can be created before
+            // installStageLayout() rebuilds the room, in which case it lands in a
+            // wrapper that the rebuild later tags .ichc-retired-shell — which is
+            // `display: none`. The bar then sits in the DOM with its label correctly
+            // set and never paints, which looks exactly like a styling bug.
+            const host = _chatRestoreBarHost();
+            if (host && (bar.parentElement !== host || bar.closest('.ichc-retired-shell'))) {
+                host.insertBefore(bar, host.firstChild);
+            }
+            return bar;
+        }
         bar = document.createElement('div');
         bar.id = 'ichc-chat-restore-bar';
         bar.className = 'ichc-chat-restore-bar';
@@ -1141,7 +1160,7 @@
         dismiss.addEventListener('click', _hideChatRestoreBar);
         bar.appendChild(btn);
         bar.appendChild(dismiss);
-        const host = document.getElementById('chat_container') || getChatLog()?.parentElement || document.body;
+        const host = _chatRestoreBarHost();
         host.insertBefore(bar, host.firstChild);
         return bar;
     }

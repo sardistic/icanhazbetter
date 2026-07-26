@@ -23,6 +23,9 @@
         question:    `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zM8.94 6.94a.75.75 0 1 1-1.061-1.061 3 3 0 1 1 2.871 5.026v.345a.75.75 0 0 1-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 1 0 8.94 6.94zM10 15a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>`,
         dotsH:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M3 10a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm5.5 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm5.5 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z"/></svg>`,
         dotsAnimated:`<span class="ichc-dots-wrap" aria-hidden="true"><span class="ichc-dot ichc-dot-1"></span><span class="ichc-dot ichc-dot-2"></span><span class="ichc-dot ichc-dot-3"></span><span class="ichc-dot ichc-dot-4"></span><span class="ichc-dot ichc-dot-5"></span></span>`,
+        // Line equivalent of dotsAnimated, for the hamburger: 3 stacked rules at
+        // rest, shifting up in a stagger while a hidden 4th slides in below.
+        linesAnimated:`<span class="ichc-lines-wrap" aria-hidden="true"><span class="ichc-line ichc-line-1"></span><span class="ichc-line ichc-line-2"></span><span class="ichc-line ichc-line-3"></span><span class="ichc-line ichc-line-4"></span></span>`,
         chevronDown: `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z" clip-rule="evenodd"/></svg>`,
         chevronUp:   `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M14.77 12.79a.75.75 0 0 1-1.06-.02L10 8.832 6.29 12.77a.75.75 0 0 1-1.08-1.04l4.25-4.5a.75.75 0 0 1 1.08 0l4.25 4.5a.75.75 0 0 1-.02 1.06z" clip-rule="evenodd"/></svg>`,
         chat:        `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902.848.137 1.705.248 2.57.331v3.443a.75.75 0 0 0 1.28.53l3.58-3.579A13.95 13.95 0 0 0 12 14c2.236 0 4.43-.18 6.57-.524C20.007 13.245 21 11.986 21 10.574V5.426c0-1.413-.993-2.67-2.43-2.902A41.112 41.112 0 0 0 12 2h-2zm0 1.5c2.188 0 4.33.175 6.395.512.97.157 1.605.944 1.605 1.814v5.148c0 .87-.636 1.657-1.605 1.814A39.614 39.614 0 0 1 10 13a12.45 12.45 0 0 1-1.57-.1.75.75 0 0 0-.557.16L5.5 15.702v-2.537a.75.75 0 0 0-.676-.744 39.61 39.61 0 0 1-2.344-.303C1.636 11.915 1 11.128 1 10.258V5.426c0-.87.636-1.657 1.605-1.814A39.614 39.614 0 0 1 10 3.5z" clip-rule="evenodd"/></svg>`,
@@ -2411,11 +2414,18 @@
             hamburgerBtn.type = 'button';
             hamburgerBtn.id = 'ichc-nav-hamburger-btn';
             hamburgerBtn.title = 'Navigation';
-            hamburgerBtn.innerHTML = ICONS.hamburger;
+            hamburgerBtn.innerHTML = ICONS.linesAnimated;
 
             hamburgerMenu = document.createElement('div');
             hamburgerMenu.id = 'ichc-nav-hamburger-menu';
             hamburgerMenu.hidden = true;
+
+            // Mirror the more button: watch the menu's hidden attribute rather than
+            // toggling a class at each call site, so the open state stays in sync
+            // however the menu gets closed (button, outside click, anything later).
+            new MutationObserver(() => {
+                hamburgerBtn.classList.toggle('ichc-nav-open', !hamburgerMenu.hidden);
+            }).observe(hamburgerMenu, { attributeFilter: ['hidden'] });
 
             hamburgerBtn.addEventListener('click', e => {
                 e.stopPropagation();
@@ -3620,15 +3630,175 @@
         _camBadgeObs.observe(cams, { childList: true, subtree: true });
     }
 
+    // ── Overlay scrollbar ─────────────────────────────────────────────────────
+    // Draws a custom thumb over a scroll container's right edge, visible only
+    // while scrolling / hovering. The native bar is removed in CSS so it reserves
+    // no gutter; see the overlay-scrollbar block in theme.css for why native
+    // scrollbars cannot do this.
+    // Safe to call repeatedly (a timer for chat, every rebuild for the userlist):
+    // it reuses the existing bar, re-attaches a detached one, and only builds a new
+    // bar for a scroll element it has not seen.
+    function _initOverlayScrollbar(scrollEl, host) {
+        if (!scrollEl) { return; }
+        const parent = host || scrollEl.parentElement;
+        if (!parent) { return; }
+
+        // Self-heal instead of bailing out on the second call. A plain "already done"
+        // guard is not enough: the userlist rebuild strips every panel child, so the
+        // bar can be detached while the scroll body it belongs to survives. Bailing
+        // out there left the userlist with no scrollbar at all.
+        if (scrollEl._ichcOsbBar) {
+            if (!scrollEl._ichcOsbBar.isConnected) {
+                parent.appendChild(scrollEl._ichcOsbBar);
+                scrollEl._ichcOsbLayout?.();
+            }
+            return;
+        }
+
+        // Drop a bar orphaned by a previous scroll element — the site replaces #txt,
+        // and its old bar would otherwise linger in the host.
+        parent.querySelectorAll(':scope > .ichc-osb').forEach(stale => {
+            if (!stale._ichcOsbOwner?.isConnected) { stale.remove(); }
+        });
+
+        const bar = document.createElement('div');
+        bar.className = 'ichc-osb';
+        bar._ichcOsbOwner = scrollEl;
+        const thumb = document.createElement('div');
+        thumb.className = 'ichc-osb-thumb';
+        bar.appendChild(thumb);
+        parent.appendChild(bar);
+        scrollEl._ichcOsbBar = bar;
+
+        let hideTimer = 0;
+        let dragging = false;
+        let hovering = false;
+
+        const layout = () => {
+            const max = scrollEl.scrollHeight - scrollEl.clientHeight;
+            if (max <= 1) {
+                bar.style.display = 'none';
+                bar.classList.remove('ichc-osb-on');
+                return;
+            }
+            bar.style.display = '';
+            // Follow the scroll element's box inside the host rather than assuming
+            // they are coincident — #txt is one flex child of #chat_container.
+            bar.style.top = scrollEl.offsetTop + 'px';
+            bar.style.height = scrollEl.clientHeight + 'px';
+            const h = Math.max(24, Math.round(
+                scrollEl.clientHeight * (scrollEl.clientHeight / scrollEl.scrollHeight)));
+            const pos = Math.round((scrollEl.clientHeight - h) * (scrollEl.scrollTop / max));
+            thumb.style.height = h + 'px';
+            thumb.style.transform = `translateY(${pos}px)`;
+            // Same rainbow mapping chat.js uses for --ichc-scroll-hue. --ichc-osb-hue
+            // drives the thumb gradient and the ichc-osb-breathe glow; --ichc-scroll-hue
+            // is written too, kept in step for anything still reading that name.
+            const hue = String(Math.round(300 * (scrollEl.scrollTop / max)));
+            bar.style.setProperty('--ichc-osb-hue', hue);
+            bar.style.setProperty('--ichc-scroll-hue', hue);
+        };
+        scrollEl._ichcOsbLayout = layout;
+
+        const show = () => {
+            layout();
+            if (bar.style.display === 'none') { return; }
+            bar.classList.add('ichc-osb-on');
+            if (hideTimer) { clearTimeout(hideTimer); }
+            hideTimer = window.setTimeout(() => {
+                hideTimer = 0;
+                if (dragging || hovering) { return; }
+                bar.classList.remove('ichc-osb-on');
+            }, 1400);
+        };
+
+        // Only a scroll the user actually caused should reveal the bar. Chat
+        // auto-follows new messages by setting scrollTop, which fires 'scroll' just
+        // like a wheel does — showing the bar on every incoming line. There is no way
+        // to tell the two apart from the event itself, so gate on a recent input
+        // gesture, the same trick chat.js uses for its own pause logic.
+        let gestureAt = 0;
+        const markGesture = () => { gestureAt = Date.now(); };
+        ['wheel', 'touchmove', 'pointerdown', 'keydown'].forEach(type => {
+            scrollEl.addEventListener(type, markGesture, { passive: true });
+        });
+
+        scrollEl.addEventListener('scroll', () => {
+            // Keep the thumb's geometry current either way, so it is already in the
+            // right place if the bar is revealed a moment later.
+            if (Date.now() - gestureAt > 700) { layout(); return; }
+            show();
+        }, { passive: true });
+
+        // Deliberately no hover-to-reveal on the scroll element itself: resting the
+        // pointer over chat while reading would sit the bar there permanently.
+        // Hovering the bar keeps it alive so it can be grabbed once visible.
+        bar.addEventListener('pointerenter', () => { hovering = true; show(); }, { passive: true });
+        bar.addEventListener('pointerleave', () => { hovering = false; }, { passive: true });
+
+        thumb.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragging = true;
+            thumb.classList.add('ichc-osb-dragging');
+            const startY = e.clientY;
+            const startTop = scrollEl.scrollTop;
+            const max = scrollEl.scrollHeight - scrollEl.clientHeight;
+            const travel = scrollEl.clientHeight - thumb.offsetHeight;
+            // chat.js stamps user-scroll intent from a mousedown bound directly on
+            // the scroll element. The thumb is a sibling, so a real mousedown never
+            // reaches it — without this, dragging the chat up would not pause
+            // auto-follow and new messages would yank you back to the bottom.
+            // Non-bubbling on purpose: only that direct listener should see it.
+            scrollEl.dispatchEvent(new Event('mousedown'));
+            const move = ev => {
+                if (travel <= 0) { return; }
+                scrollEl.scrollTop = startTop + ((ev.clientY - startY) / travel) * max;
+            };
+            const up = () => {
+                dragging = false;
+                thumb.classList.remove('ichc-osb-dragging');
+                document.removeEventListener('pointermove', move);
+                document.removeEventListener('pointerup', up);
+                show();
+            };
+            document.addEventListener('pointermove', move);
+            document.addEventListener('pointerup', up);
+        });
+
+        // Click the empty track to page toward the click
+        bar.addEventListener('pointerdown', e => {
+            if (e.target === thumb) { return; }
+            const mid = bar.getBoundingClientRect().top + thumb.offsetTop + thumb.offsetHeight / 2;
+            scrollEl.scrollTop += (e.clientY < mid ? -0.9 : 0.9) * scrollEl.clientHeight;
+        });
+
+        if (typeof ResizeObserver === 'function') {
+            new ResizeObserver(layout).observe(scrollEl);
+        }
+        new MutationObserver(layout).observe(scrollEl, { childList: true });
+        layout();
+    }
+
+    function _initChatOverlayScrollbar() {
+        const log = document.getElementById('txt');
+        // #chat_container is position: relative and is #txt's offsetParent
+        _initOverlayScrollbar(log, log?.closest('#chat_container') || log?.parentElement);
+    }
+
     function initChatCamBadges() {
         _attachChatBadgeObserver();
         _attachCamBadgeObserver();
         _refreshAllChatCamStatus();
-        // Reconnect if the site replaces #txt or #cams (same approach chat.js uses)
+        _initChatOverlayScrollbar();
+        // Reconnect if the site replaces #txt or #cams (same approach chat.js uses).
+        // The overlay scrollbar rides along: its per-element guard means a replaced
+        // #txt gets a fresh bar and an unchanged one is a no-op.
         window.setInterval(() => {
             _attachChatBadgeObserver();
             _attachCamBadgeObserver();
             _refreshAllChatCamStatus();
+            _initChatOverlayScrollbar();
         }, 3000);
     }
 
@@ -3648,6 +3818,55 @@
             }
             _gifDataCache = { gifs };
         }).catch(() => {});
+    }
+
+    // The edit box's inset shadow is pooled toward the cursor while the pointer is
+    // over it, as if the shadow were being dragged around inside the box. The CSS
+    // reads --ichc-box-sx / --ichc-box-sy (see the frosted-glass block at the end of
+    // theme.css); this only writes those two custom properties, so the shadow's
+    // colour, blur, and the rest of the box styling stay in the stylesheet.
+    // A positive inset x offset darkens the LEFT inner edge, so to pool the shadow
+    // under the cursor the offset points from the cursor back toward the centre.
+    // Flip both signs here to invert it into cursor-as-light-source behaviour.
+    // Kept small on purpose: a wide reach made the shadow swing across the box and
+    // read as an animation rather than a shadow. A few px is a drift, not a swing.
+    // The vertical reach is much smaller than the horizontal one: the box is only
+    // ~36px tall against several hundred wide, so the same reach on both axes makes
+    // the vertical component saturate within a few px of mouse travel and jump.
+    const _BOX_SHADOW_REACH_X = 3; // px at the box edge; 2px is the CSS resting value
+    const _BOX_SHADOW_REACH_Y = 0.5;
+    function _initInputShadowFollow() {
+        const input = document.getElementById('txtMsg');
+        if (!input || input._ichcShadowFollow) { return; }
+        input._ichcShadowFollow = true;
+
+        let frame = 0;
+        let pending = null;
+
+        const write = () => {
+            frame = 0;
+            if (!pending) { return; }
+            input.style.setProperty('--ichc-box-sx', pending.x.toFixed(2) + 'px');
+            input.style.setProperty('--ichc-box-sy', pending.y.toFixed(2) + 'px');
+        };
+
+        input.addEventListener('pointermove', e => {
+            const r = input.getBoundingClientRect();
+            if (!r.width || !r.height) { return; }
+            // -1..1 from the centre, clamped so the corners don't overshoot
+            const nx = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2)));
+            const ny = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 2)));
+            pending = { x: -nx * _BOX_SHADOW_REACH_X, y: -ny * _BOX_SHADOW_REACH_Y };
+            if (!frame) { frame = requestAnimationFrame(write); }
+        }, { passive: true });
+
+        input.addEventListener('pointerleave', () => {
+            pending = null;
+            if (frame) { cancelAnimationFrame(frame); frame = 0; }
+            // Back to the stylesheet's resting offsets
+            input.style.removeProperty('--ichc-box-sx');
+            input.style.removeProperty('--ichc-box-sy');
+        });
     }
 
     function _initEmojiTabComplete() {
@@ -7209,6 +7428,9 @@
             collapseBtn.classList.toggle('ichc-ul-is-collapsed', _ulCollapsed);
             collapseBtn.title = _ulCollapsed ? 'Expand user list' : 'Collapse user list';
         }
+        // The userlist's pinned height differs by collapsed state (it extends behind
+        // the frosted input bar only when expanded), so re-run the layout pass.
+        layoutChat();
     }
 
     function transformCommandBar() {
@@ -7558,6 +7780,9 @@
         });
         // ── Emoji / meme tab-complete ─────────────────────────────────────────────
         _initEmojiTabComplete();
+
+        // ── Cursor-tracked inset shadow on the edit box ───────────────────────────
+        _initInputShadowFollow();
 
         // GIF/emote picker button
         let gifWrapper = document.getElementById('ichc-gif-wrapper');
@@ -9074,8 +9299,10 @@
             });
         }
         // Remove all panel children except the scroll body (removes old header etc.)
+        // and the overlay scrollbar, which must survive rebuilds — it is bound to the
+        // scroll body, and the scroll body is reused rather than recreated.
         [...panel.children].forEach(el => {
-            if (el !== scrollBody) { el.remove(); }
+            if (el !== scrollBody && !el.classList.contains('ichc-osb')) { el.remove(); }
         });
         if (!scrollBody) {
             scrollBody = document.createElement('div');
@@ -9244,6 +9471,10 @@
         // Scroll body always lives at the end of the panel — below header and PM avatars.
         panel.appendChild(scrollBody);
 
+        // Overlay scrollbar for the user rows, hosted on the panel (position:
+        // relative). No-op after the first build, since the scroll body is reused.
+        _initOverlayScrollbar(scrollBody, panel);
+
         // Sidebar cam/viewer stats (visible only when collapsed)
         _updateSidebarStats(panel, cammedCount, activeCount + idleCount);
 
@@ -9259,6 +9490,49 @@
                 _ir.insertBefore(savedMoreBtn, _sendBtn || null);
             }
         }
+
+        // Inline role badges after the name: mod shield, then supporter heart.
+        // Called from both row paths on purpose. Previously these were only created in
+        // _buildNewRow, while the reuse path just rewrote className — so a user who
+        // became a mod after their row was first built got the `mod` class (hence the
+        // blurple name, the only visible "who is a mod" cue) but never the shield.
+        // Same held for the heart. Syncing both directions also clears a badge when
+        // the role goes away.
+        const _syncRoleBadges = (span, u) => {
+            const nameWrap = span.querySelector('.ichc-ul-name-wrap');
+            if (!nameWrap) { return; }
+
+            let shield = nameWrap.querySelector(':scope > .ichc-ul-mod-badge');
+            if (u.mod && !shield) {
+                shield = document.createElement('span');
+                shield.className = 'ichc-ul-mod-badge';
+                shield.setAttribute('aria-label', 'Moderator');
+                shield.title = 'Moderator';
+                shield.innerHTML = ICONS.shield;
+                nameWrap.appendChild(shield);
+            } else if (!u.mod && shield) {
+                shield.remove();
+                shield = null;
+            }
+
+            let heart = nameWrap.querySelector(':scope > .ichc-ul-supporter-heart');
+            if (u.supporter && !heart) {
+                heart = document.createElement('span');
+                heart.className = 'ichc-ul-supporter-heart';
+                heart.setAttribute('aria-label', 'Get Hearted');
+                heart.title = 'Get Hearted';
+                heart.innerHTML = ICONS.heart;
+                nameWrap.appendChild(heart);
+            } else if (!u.supporter && heart) {
+                heart.remove();
+                heart = null;
+            }
+
+            // Shield sits immediately before the heart so the two read as one group
+            if (shield && heart && shield.nextElementSibling !== heart) {
+                nameWrap.insertBefore(shield, heart);
+            }
+        };
 
         // ── User rows ──
         const _buildNewRow = (u, imgKey) => {
@@ -9355,23 +9629,13 @@
             ].filter(Boolean).join(' · ') || u.name;
 
             // Inline role icons — rendered right after the name (§6).
-            if (u.mod) {
-                const modBadge = document.createElement('span');
-                modBadge.className = 'ichc-ul-mod-badge';
-                modBadge.setAttribute('aria-label', 'Moderator');
-                modBadge.innerHTML = ICONS.shield;
-                nameWrap.appendChild(modBadge);
-            }
-            if (u.supporter) {
-                const heart = document.createElement('span');
-                heart.className = 'ichc-ul-supporter-heart';
-                heart.setAttribute('aria-label', 'Get Hearted');
-                heart.title = 'Get Hearted';
-                heart.innerHTML = ICONS.heart;
-                nameWrap.appendChild(heart);
-            }
+            _syncRoleBadges(span, u);
 
-            // Cam-hidden users stay in ON CAM (§7). Eye-slash toggles cam visibility.
+            // Cam-hidden users stay in ON CAM (§7) and carry an eye-slash to re-enable
+            // them. Users whose cam is *showing* get no button: the old hover-to-reveal
+            // "Hide cam" eye reserved a slot in every cammed row for an action already
+            // available in the user dropdown ("Hide cam"), so it cost layout on every
+            // broadcaster to duplicate an existing control.
             if (u.hidden) {
                 const enableBtn = document.createElement('button');
                 enableBtn.type = 'button';
@@ -9391,20 +9655,6 @@
                     openUserDropdown(u, span);
                 });
             } else {
-                if (u.cammed) {
-                    const hideBtn = document.createElement('button');
-                    hideBtn.type = 'button';
-                    hideBtn.className = 'ichc-ul-eye reveal';
-                    hideBtn.title = 'Hide cam';
-                    hideBtn.setAttribute('aria-label', 'Hide cam');
-                    hideBtn.innerHTML = ICONS.eye;
-                    hideBtn.addEventListener('click', e => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        hideUserCam(u.name);
-                    });
-                    nameWrap.insertBefore(hideBtn, nameWrap.firstChild);
-                }
                 span.addEventListener('click', event => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -9453,11 +9703,15 @@
             const spans = filtered.map(u => {
                 const imgKey = u.name.toLowerCase();
                 let span = existingRows.get(imgKey);
+                // Only the hidden flag changes a row's DOM structure now (it adds the
+                // re-enable eye and swaps the click handler). Cam state used to force a
+                // rebuild because cammed rows carried a hover "Hide cam" eye; that
+                // button is gone, so a user starting or stopping a broadcast no longer
+                // destroys and recreates their row — which also preserves its
+                // transitions.
                 const hiddenChanged = span && (span.classList.contains('ichc-ul-hidden-live') !== !!u.hidden);
-                // Cam state drives which inline eye button (hide vs show) the row carries.
-                const cammedChanged = span && (span.classList.contains('cammed') !== !!u.cammed);
 
-                if (span && !hiddenChanged && !cammedChanged) {
+                if (span && !hiddenChanged) {
                     // Update dynamic attributes on the existing row without detaching it.
                     span.className = 'ichc-ul-user userlink' +
                         (u.hidden ? ' ichc-ul-hidden-live' : '') +
@@ -9482,6 +9736,8 @@
                     if (avatarWrap) {
                         avatarWrap.className = 'ichc-ul-avatar-wrap' + (u.supporter ? ' ichc-ul-supporter' : '');
                     }
+                    // Mod shield / supporter heart can appear or disappear on a reused row
+                    _syncRoleBadges(span, u);
                     span.title = [
                         u.hidden && 'hidden',
                         u.mod && 'mod',
@@ -11472,11 +11728,22 @@
             container.style.setProperty('max-height', target + 'px', 'important');
         }
         if (userList) {
-            if (userList.dataset.ichcTargetHeight !== targetText) {
-                userList.dataset.ichcTargetHeight = targetText;
-                userList.style.setProperty('height', target + 'px', 'important');
-                userList.style.setProperty('min-height', target + 'px', 'important');
-                userList.style.setProperty('max-height', target + 'px', 'important');
+            // Expanded, the userlist spans both shell rows so its user rows run down
+            // behind the translucent input bar (frosted-glass block in theme.css) —
+            // it gets the input height back. These inline heights are !important and
+            // therefore beat any stylesheet rule, so the extra height has to be added
+            // here, not in CSS. Collapsed, the panel is a fixed overlay stacked far
+            // above the input row: keeping it out of the bar's 50px leaves the
+            // emote/more buttons clickable.
+            const ulCollapsed = document.getElementById('ichc-chat-shell')
+                ?.classList.contains('ichc-ul-collapsed');
+            const ulTarget = ulCollapsed ? target : target + inputHeight;
+            const ulText = String(ulTarget);
+            if (userList.dataset.ichcTargetHeight !== ulText) {
+                userList.dataset.ichcTargetHeight = ulText;
+                userList.style.setProperty('height', ulTarget + 'px', 'important');
+                userList.style.setProperty('min-height', ulTarget + 'px', 'important');
+                userList.style.setProperty('max-height', ulTarget + 'px', 'important');
             }
         }
         if (camsPanel) {

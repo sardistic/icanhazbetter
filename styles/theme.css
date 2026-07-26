@@ -3548,7 +3548,11 @@
         min-width: 0 !important;
         overflow: visible !important;
         gap: 8px !important;
-        padding: 2px 4px 2px 10px !important;
+        /* No bottom padding: the 26px counts already carry the font's descender space
+           below their baseline, so anything here reads as a gap under the numbers.
+           Measured stack under the digits was 2px ghost + 2px here + 4px userlist
+           flex gap; this and the ghost's bottom padding are the two safe to drop. */
+        padding: 2px 4px 0 10px !important;
     }
     /* Controls: right grid column (auto) — always gets its intrinsic width */
     .ichc-ul-controls-row {
@@ -3648,39 +3652,62 @@
         width: 12px !important;
         height: 12px !important;
     }
-    /* Primary position: bottom-right corner of the PM avatar strip */
+    /* Primary position: hangs off the bottom-right of the PM avatar strip, with
+       only the top sliver still overlapping it. bottom: -23px on a 26px button
+       leaves 3px inside (~11.5%) — rounded from 10% to keep the button on whole
+       pixels, which the dot grid inside it depends on. #ichc-pm-avatars has no
+       overflow clip, and #ichc-userlist's clip is far below, so the overhang shows;
+       it floats over the top-right of the user rows.
+
+       z-index must beat .ichc-osb (20), the overlay scrollbar rail, which starts at
+       the scroll body's top edge and so overlaps this button's overhang. Note that
+       #ichc-pm-avatars has position: relative with z-index: auto, i.e. it forms no
+       stacking context — this value is compared against the rail's directly inside
+       #ichc-userlist, so it genuinely has to exceed 20, not merely be positive. */
     #ichc-pm-avatars #ichc-ul-collapse-btn {
         top: auto !important;
-        bottom: 0 !important;
+        bottom: -23px !important;
         height: 26px !important;
         width: 26px !important;
         border-top: 1px solid rgba(255,255,255,0.07) !important;
         border-radius: 0 !important;
         pointer-events: auto !important;
-        z-index: 10 !important;
+        z-index: 25 !important;
     }
     /* Collapse button base — triangle: top-center + bottom-left + bottom-right
-       grid: x∈{2,6.5,11}  y∈{2,11}  → 2px outer margin, 1.5px inter-dot gap, 9px corner span */
-    #ichc-ul-collapse-btn .ichc-dot-1 { left: 2px !important;   top: 11px !important; }
-    #ichc-ul-collapse-btn .ichc-dot-2 { left: 6.5px !important; top: 2px !important;  }
-    #ichc-ul-collapse-btn .ichc-dot-3 { left: 11px !important;  top: 11px !important; }
-    #ichc-ul-collapse-btn .ichc-dot-4 { left: 6.5px !important; top: 6.5px !important; opacity: 0 !important; }
+       grid: x∈{1,6,11}  y∈{2,11}  → 5px pitch, 2px inter-dot gap, 9px corner span.
+       Whole-pixel coords only; see the note on the animated dots icon below. */
+    #ichc-ul-collapse-btn .ichc-dot-1 { left: 1px !important;  top: 11px !important; }
+    #ichc-ul-collapse-btn .ichc-dot-2 { left: 6px !important;  top: 2px !important;  }
+    #ichc-ul-collapse-btn .ichc-dot-3 { left: 11px !important; top: 11px !important; }
+    #ichc-ul-collapse-btn .ichc-dot-4 { left: 6px !important;  top: 6px !important; opacity: 0 !important; }
     #ichc-ul-collapse-btn .ichc-dot-5 { opacity: 0 !important; }
     /* Collapse hover — dots 1 & 3 rise to join dot-2 at top row (y=2) */
     #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-1 { transform: translate(0px, -9px) !important; }
     #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-3 { transform: translate(0px, -9px) !important; }
     #ichc-ul-collapse-btn:not(.ichc-ul-is-collapsed):hover .ichc-dot-4 { opacity: 0 !important; }
     /* Expand (collapsed) base — triangle: bottom-center + top-left + top-right */
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-1 { left: 2px !important;   top: 2px !important;  }
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-2 { left: 6.5px !important; top: 11px !important; }
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-3 { left: 11px !important;  top: 2px !important;  }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-1 { left: 1px !important;  top: 2px !important;  }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-2 { left: 6px !important;  top: 11px !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed .ichc-dot-3 { left: 11px !important; top: 2px !important;  }
     /* Expand hover — dot-2 slides left, dot-4 slides to bottom-right → 4 corners */
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-2 { transform: translate(-4.5px, 0px) !important; }
-    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-4 { transform: translate(4.5px, 4.5px) !important; opacity: 1 !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-2 { transform: translate(-5px, 0px) !important; }
+    #ichc-ul-collapse-btn.ichc-ul-is-collapsed:hover .ichc-dot-4 { transform: translate(5px, 5px) !important; opacity: 1 !important; }
 
     /* ── Animated dots icon (3 dots → 4 corner X on hover) ──
-       16×16px container, dots positioned as px coords (1 SVG unit = 0.8px).
-       left dot(1.7,6.5) center(6.5,6.5) right(11.3,6.5); corners at (0.9,0.9),(12.1,0.9),(12.1,12.1),(0.9,12.1) */
+       16×16px container. Every dot coordinate and every fan translate below is a
+       WHOLE number of px, and must stay that way. The old grid was derived from
+       SVG units (1 unit = 0.8px), which put the dots on half-pixels — 1.7 / 6.5 /
+       11.3 resting, corners at 0.9 / 12.1. That is geometrically equidistant
+       (4.8px pitch) but each dot then straddles the device-pixel grid by a
+       different fraction, so they antialias unevenly and the resting row reads as
+       misaligned. The more button is the worst case because its wrap is
+       rotate(90deg) — a 90° rotation about the wrap's centre (8,8) maps integer
+       boxes to integer boxes, but resamples fractional ones a second time.
+       Resting row: x∈{1,6,11}, y=6 → 5px pitch, 2px gaps.
+       Fan corners: (1,1) (11,1) (11,11) (1,11) → the corner square spans 1..14, so its
+       centre is 7.5 and dot-5 at (6,6) sits exactly in it. Corners at 12 would put
+       the centre on a half-pixel and dot-5 visibly off. */
     .ichc-dots-wrap {
         display: inline-block !important;
         width: 16px !important;
@@ -3698,50 +3725,129 @@
         background: currentColor !important;
         transition: transform 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.18s !important;
     }
-    .ichc-dot-1 { left: 1.7px !important; top: 6.5px !important; }
-    .ichc-dot-2 { left: 6.5px !important; top: 6.5px !important; }
-    .ichc-dot-3 { left: 11.3px !important; top: 6.5px !important; }
-    .ichc-dot-4 { left: 6.5px !important; top: 6.5px !important; opacity: 0 !important; }
-    .ichc-dot-5 { left: 6.5px !important; top: 6.5px !important; opacity: 0 !important; }
-    /* Hover: fan to 4 corners */
+    .ichc-dot-1 { left: 1px !important;  top: 6px !important; }
+    .ichc-dot-2 { left: 6px !important;  top: 6px !important; }
+    .ichc-dot-3 { left: 11px !important; top: 6px !important; }
+    .ichc-dot-4 { left: 6px !important;  top: 6px !important; opacity: 0 !important; }
+    .ichc-dot-5 { left: 6px !important;  top: 6px !important; opacity: 0 !important; }
+    /* Hover: fan to 4 corners — (1,1) (12,1) (12,12) (1,12) from the resting row */
     .ichc-ul-more-btn:hover .ichc-dot-1,
     .ichc-room-submenu-btn:hover .ichc-dot-1 {
-        transform: translate(-0.8px, -5.6px) !important;
+        transform: translate(0px, -5px) !important;
     }
     .ichc-ul-more-btn:hover .ichc-dot-2,
     .ichc-room-submenu-btn:hover .ichc-dot-2 {
-        transform: translate(5.6px, -5.6px) !important;
+        transform: translate(5px, -5px) !important;
     }
     .ichc-ul-more-btn:hover .ichc-dot-3,
     .ichc-room-submenu-btn:hover .ichc-dot-3 {
-        transform: translate(0.8px, 5.6px) !important;
+        transform: translate(0px, 5px) !important;
     }
     .ichc-ul-more-btn:hover .ichc-dot-4,
     .ichc-room-submenu-btn:hover .ichc-dot-4 {
-        transform: translate(-5.6px, 5.6px) !important;
+        transform: translate(-5px, 5px) !important;
         opacity: 1 !important;
     }
     /* Active/open: corners stay spread + center dot appears */
     .ichc-ul-more-btn.ichc-menu-open .ichc-dot-1,
     .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-1 {
-        transform: translate(-0.8px, -5.6px) !important;
+        transform: translate(0px, -5px) !important;
     }
     .ichc-ul-more-btn.ichc-menu-open .ichc-dot-2,
     .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-2 {
-        transform: translate(5.6px, -5.6px) !important;
+        transform: translate(5px, -5px) !important;
     }
     .ichc-ul-more-btn.ichc-menu-open .ichc-dot-3,
     .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-3 {
-        transform: translate(0.8px, 5.6px) !important;
+        transform: translate(0px, 5px) !important;
     }
     .ichc-ul-more-btn.ichc-menu-open .ichc-dot-4,
     .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-4 {
-        transform: translate(-5.6px, 5.6px) !important;
+        transform: translate(-5px, 5px) !important;
         opacity: 1 !important;
     }
     .ichc-ul-more-btn.ichc-menu-open .ichc-dot-5,
     .ichc-room-submenu.ichc-submenu-open .ichc-room-submenu-btn .ichc-dot-5 {
         opacity: 1 !important;
+    }
+
+    /* ── Animated lines icon — the hamburger's counterpart to the animated dots
+       above. Same 16×16 wrap and the same whole-pixel rule: 2px rules on a 4px
+       pitch, so every state lands on the device-pixel grid and stays crisp.
+
+       Three states, and hover and open are deliberately different so the button
+       reports what it is about to do rather than just twitching:
+         rest  — y ∈ {3, 7, 11}, 4th hidden under the middle
+         hover — springy tilt on the wrap, stack shifts up 2px in a stagger and the
+                 hidden 4th slides out below: y ∈ {1, 5, 9, 13}
+         open  — morphs to an X: lines 1 and 3 converge on the centre row (y=7) and
+                 rotate ±45°, lines 2 and 4 collapse to nothing
+       Rotation needs a centre transform-origin, and ±4px is exactly the whole-pixel
+       distance from y=3 and y=11 to the centre row, so the X stays crisp too. ── */
+    .ichc-lines-wrap {
+        display: inline-block !important;
+        width: 16px !important;
+        height: 16px !important;
+        position: relative !important;
+        vertical-align: -0.1em !important;
+        flex-shrink: 0 !important;
+        transition: transform 0.3s cubic-bezier(0.34,1.4,0.5,1) !important;
+    }
+    .ichc-line {
+        display: block !important;
+        position: absolute !important;
+        left: 2px !important;
+        width: 12px !important;
+        height: 2px !important;
+        border-radius: 1px !important;
+        background: currentColor !important;
+        transform-origin: center !important;
+        transition: transform 0.3s cubic-bezier(0.34,1.4,0.5,1), opacity 0.18s !important;
+    }
+    .ichc-line-1 { top: 3px !important; }
+    .ichc-line-2 { top: 7px !important; }
+    .ichc-line-3 { top: 11px !important; }
+    .ichc-line-4 { top: 7px !important; opacity: 0 !important; }
+
+    /* Hover (closed only): tilt the whole glyph and ripple the stack upward */
+    #ichc-nav-hamburger-btn:hover:not(.ichc-nav-open) .ichc-lines-wrap {
+        transform: rotate(-5deg) scale(1.08) !important;
+    }
+    #ichc-nav-hamburger-btn:hover:not(.ichc-nav-open) .ichc-line-1 {
+        transform: translateY(-2px) !important;
+        transition-delay: 0ms !important;
+    }
+    #ichc-nav-hamburger-btn:hover:not(.ichc-nav-open) .ichc-line-2 {
+        transform: translateY(-2px) !important;
+        transition-delay: 40ms !important;
+    }
+    #ichc-nav-hamburger-btn:hover:not(.ichc-nav-open) .ichc-line-3 {
+        transform: translateY(-2px) !important;
+        transition-delay: 80ms !important;
+    }
+    #ichc-nav-hamburger-btn:hover:not(.ichc-nav-open) .ichc-line-4 {
+        transform: translateY(6px) !important;
+        opacity: 1 !important;
+        transition-delay: 120ms !important;
+    }
+
+    /* Open: collapse to an X, with a quarter-turn on the wrap for the flourish */
+    #ichc-nav-hamburger-btn.ichc-nav-open .ichc-lines-wrap {
+        transform: rotate(90deg) !important;
+    }
+    #ichc-nav-hamburger-btn.ichc-nav-open .ichc-line-1 {
+        transform: translateY(4px) rotate(45deg) !important;
+        transition-delay: 60ms !important;
+    }
+    #ichc-nav-hamburger-btn.ichc-nav-open .ichc-line-3 {
+        transform: translateY(-4px) rotate(-45deg) !important;
+        transition-delay: 60ms !important;
+    }
+    #ichc-nav-hamburger-btn.ichc-nav-open .ichc-line-2,
+    #ichc-nav-hamburger-btn.ichc-nav-open .ichc-line-4 {
+        transform: scaleX(0) !important;
+        opacity: 0 !important;
+        transition-delay: 0ms !important;
     }
 
     /* Search button in the title row */
@@ -3788,23 +3894,32 @@
     #ichc-userlist.ichc-ul-search-open .ichc-ul-search-row {
         display: block !important;
     }
+    /* Height is locked to 18px — the same box as the search icon button that opens
+       it (.ichc-ul-search-btn is 18×18 around a 16px glyph), so the control that
+       replaces the icon occupies exactly the icon's vertical space. Padding is
+       horizontal-only and identical in the focus state: the old rule grew padding
+       from 2px to 4px on focus, which changed the input's height and nudged the
+       whole user list down every time you clicked into it. */
     #ichc-userlist .ichc-ul-search-input {
         width: 100% !important;
+        height: 18px !important;
         box-sizing: border-box !important;
         background: rgba(255,255,255,0.03) !important;
         border: 1px solid rgba(255,255,255,0.06) !important;
         border-radius: 4px !important;
-        padding: 2px 7px !important;
+        padding: 0 7px !important;
         font-size: 11px !important;
+        line-height: 16px !important;
         font-family: inherit !important;
         color: #b5bac1 !important;
         outline: none !important;
         caret-color: #7289da !important;
-        transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, padding 0.12s !important;
+        transition: background 0.15s, border-color 0.15s, box-shadow 0.15s !important;
     }
     #ichc-userlist .ichc-ul-search-input::placeholder { color: #36383d !important; }
     #ichc-userlist .ichc-ul-search-input:focus {
-        padding: 4px 7px !important;
+        height: 18px !important;
+        padding: 0 7px !important;
         background: rgba(255,255,255,0.055) !important;
         border-color: rgba(125,80,205,0.45) !important;
         box-shadow: 0 0 0 2px rgba(125,80,205,0.12), 0 0 8px rgba(65,145,215,0.12) !important;
@@ -3856,12 +3971,33 @@
         box-sizing: border-box !important;
         border-radius: 0 !important;
         padding: 0 4px !important;
-        margin: 0 0 5px !important;
-        background: rgba(255,255,255,0.025) !important;
-        border-top: 1px solid rgba(255,255,255,0.05) !important;
-        border-left: 1px solid rgba(255,255,255,0.05) !important;
-        border-right: 1px solid rgba(0,0,0,0.32) !important;
-        border-bottom: 1px solid rgba(0,0,0,0.32) !important;
+        /* 5px → 3px: reclaims 2px per row on top of the 2px from the dropped
+           top/bottom borders, ~4px per row total. */
+        margin: 0 0 3px !important;
+        /* Darker than the panel, not lighter. This was rgba(255,255,255,0.025), a
+           lightening overlay — fine when the panel was #18191c, but the panel is now
+           #212328 (lightened so the frosted input bar has something to blur), which
+           made every row read as light grey. A dark overlay instead lands the rows
+           near #1a1b1f, recessed into the panel. */
+        background: rgba(0,0,0,0.22) !important;
+        /* No top or bottom border at all. Fading them was not enough — they still read
+           as lines bracketing the name — and removing them also reclaims 2px of height
+           per row, which matters in a list this dense. Row separation does not need
+           them: the row background is darker than the panel (#1a1b1f on #212328) and
+           the 3px gap below does the rest.
+
+           Left/right keep a karma-scaled bevel. They are the outer edges of a
+           full-width row, so they read as depth rather than as rules through the text.
+           --ichc-kt-i is set by _setKarmaTierClass() and runs 0.42 (lowest karma) → 1.0
+           (highest); it is *removed* for karma ≤ 0, so the 0.42 fallback puts unranked
+           users at the faint end. Offsetting by 0.42 inside the calc keeps both ends
+           readable: left 0.018 → 0.045, right 0.11 → 0.26. */
+        border-top: 0 !important;
+        border-bottom: 0 !important;
+        border-left: 1px solid
+            rgba(255,255,255, calc(0.018 + (var(--ichc-kt-i, 0.42) - 0.42) * 0.047)) !important;
+        border-right: 1px solid
+            rgba(0,0,0, calc(0.11 + (var(--ichc-kt-i, 0.42) - 0.42) * 0.26)) !important;
         cursor: pointer !important;
         color: #c8ccd2 !important;
         font-size: 12px !important;
@@ -3904,7 +4040,12 @@
         background: rgba(var(--ichc-kt-color, 120,124,138), var(--ichc-bar-alpha, 0.45)) !important;
     }
     /* Profile-background wash (§10): anchored to the right edge, very low contrast
-       so the name reads first. Masked to fade out toward the left. */
+       so the name reads first. Masked to fade out toward the left.
+       Kept deliberately faint. Only users who have a profile banner get this, so a
+       pale banner used to read as a light grey field over most of the row while the
+       rows either side of it stayed dark — enough to look like a selection state
+       rather than texture. Opacity went 0.20 → 0.12 (idle 0.10 → 0.06) and the mask
+       now runs out at 50% instead of 72%, keeping the wash near the right edge. */
     #ichc-userlist .ichc-ul-user::before {
         content: '' !important;
         position: absolute !important;
@@ -3912,16 +4053,18 @@
         background-image: var(--ichc-bg-img, none) !important;
         background-size: cover !important;
         background-position: right center !important;
-        opacity: 0.20 !important;
-        -webkit-mask-image: linear-gradient(to left, #000 0%, transparent 72%) !important;
-        mask-image: linear-gradient(to left, #000 0%, transparent 72%) !important;
+        opacity: 0.12 !important;
+        -webkit-mask-image: linear-gradient(to left, #000 0%, transparent 50%) !important;
+        mask-image: linear-gradient(to left, #000 0%, transparent 50%) !important;
         pointer-events: none !important;
         z-index: -1 !important;
         border-radius: inherit !important;
     }
-    #ichc-userlist .ichc-ul-user.idle::before { opacity: 0.10 !important; }
+    #ichc-userlist .ichc-ul-user.idle::before { opacity: 0.06 !important; }
+    /* Hover lifts toward the panel tone rather than past it, so the row still reads
+       as recessed. The background replaces the base value, it does not stack. */
     #ichc-userlist .ichc-ul-user:hover {
-        background: rgba(255,255,255,0.045) !important;
+        background: rgba(0,0,0,0.08) !important;
     }
     #ichc-userlist .ichc-ul-user:focus-visible {
         outline: 2px solid rgba(255,255,255,0.24) !important;
@@ -4037,9 +4180,10 @@
         transition: opacity 0.12s ease, color 0.12s ease !important;
     }
     /* open-eye: "hide this cam" affordance — only on row hover */
-    #ichc-userlist .ichc-ul-eye.reveal { opacity: 0 !important; }
-    #ichc-userlist .ichc-ul-user:hover .ichc-ul-eye.reveal { opacity: 0.5 !important; }
-    /* eye-slash: currently hidden — always visible */
+    /* The `.reveal` variant (hover-to-show "Hide cam" eye on every cammed row) is gone
+       — that action lives in the user dropdown, and the button reserved layout in every
+       broadcaster's row to duplicate it. Only the eye-slash below remains. */
+    /* eye-slash: cam currently hidden — always visible, so it can be re-enabled */
     #ichc-userlist .ichc-ul-eye.on { opacity: 0.9 !important; }
     #ichc-userlist .ichc-ul-eye:hover { color: #d4d8df !important; opacity: 1 !important; }
 
@@ -4086,15 +4230,30 @@
     }
     /* Karma-tinted drop shadow on the row box (not the name text) — scales with
        tier intensity (--ichc-kt-i). */
-    /* Sticker lift: crisp hard offset shadow; on hover the row pops up-left and the
-       shadow grows for an obvious raised effect. */
+    /* Sticker lift: crisp hard offset shadow in the user's karma colour; on hover the
+       row pops up-left and the shadow grows.
+
+       This is the "coloured border" around rows, and it is the brightest karma cue in
+       the list, so both states run at roughly half their original alpha. Ramps are
+       against --ichc-kt-i's real 0.42 → 1.0 range (the old 0.5 fallback was wrong for
+       unranked users, who have the var removed entirely — 0.42 matches the low end):
+         rest   0.092 → 0.150  (was 0.226 → 0.340)
+         hover  0.236 → 0.340  (was 0.547 → 0.750)
+
+       At rest the offset is horizontal only (1px 0). With `1px 1px` it drew a 1px line
+       along the bottom of every row, which is what still read as a defined border under
+       each name once the actual borders were faded out. Hover keeps the diagonal offset
+       — only one row has it at a time, so it reads as a lift rather than as rules
+       running through the list. */
     #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"] {
-        box-shadow: 1px 1px 0 0 rgba(var(--ichc-kt-color), calc(0.14 + var(--ichc-kt-i, 0.5) * 0.20)) !important;
+        box-shadow: 1px 0 0 0
+            rgba(var(--ichc-kt-color), calc(0.05 + var(--ichc-kt-i, 0.42) * 0.10)) !important;
         transition: background 0.1s, transform 0.13s ease, box-shadow 0.13s ease !important;
     }
     #ichc-userlist .ichc-ul-user[style*="--ichc-kt-color"]:hover {
         transform: translate(-1px, -1px) !important;
-        box-shadow: 3px 3px 0 0 rgba(var(--ichc-kt-color), calc(0.40 + var(--ichc-kt-i, 0.5) * 0.35)) !important;
+        box-shadow: 3px 3px 0 0
+            rgba(var(--ichc-kt-color), calc(0.16 + var(--ichc-kt-i, 0.42) * 0.18)) !important;
     }
     #ichc-userlist .ichc-ul-karma {
         font: 700 11px/1 -apple-system, "Inter", "Segoe UI", sans-serif !important;
@@ -4171,11 +4330,13 @@
         align-items: center !important;
         justify-content: center !important;
     }
-    /* Hidden "0" ghost — widest digit, keeps each cell at a stable width */
+    /* Hidden "0" ghost — widest digit, keeps each cell at a stable width.
+       Bottom padding dropped: it sat under the digits and read as dead space in the
+       metrics header. Top is kept so the flip panels still have headroom. */
     .ichc-fh-ghost {
         visibility: hidden !important;
         display: block !important;
-        padding: 2px 3px !important;
+        padding: 2px 3px 0 !important;
         line-height: 1 !important;
     }
     /* Flip holder covers its digit cell */
@@ -5319,15 +5480,18 @@
         background: #25272b !important;
         border-color: rgba(255,255,255,0.14) !important;
     }
+    /* Matched to .ichc-ul-more-menu / .ichc-room-submenu so every popup in the
+       extension shares one look: 8px radius (was 10), 0.45 shadow alpha (was 0.5),
+       160px min-width (was 180). Item metrics follow .ichc-ul-more-item below. */
     #ichc-nav-hamburger-menu {
         position: absolute !important;
         top: calc(100% + 6px) !important;
         left: 0 !important;
-        min-width: 180px !important;
+        min-width: 160px !important;
         background: #18191c !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
-        border-radius: 10px !important;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.45) !important;
         padding: 4px !important;
         z-index: 2147483640 !important;
         display: flex !important;
@@ -5339,15 +5503,18 @@
         display: flex !important;
         align-items: center !important;
         gap: 8px !important;
-        padding: 8px 10px !important;
+        padding: 7px 10px !important;
         border-radius: 6px !important;
         color: #dbdee1 !important;
         text-decoration: none !important;
         font-size: 12px !important;
         font-weight: 500 !important;
         cursor: pointer !important;
-        transition: background 0.12s !important;
+        transition: background 0.1s !important;
         white-space: nowrap !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        text-align: left !important;
     }
     .ichc-nav-item:hover {
         background: rgba(255,255,255,0.06) !important;
@@ -6375,4 +6542,257 @@
         background: #d4d7dc !important;
         border: 1px solid #b8bbbe !important;
         color: #313338 !important;
+    }
+
+    /* ── Overlay scrollbars (chat + userlist) ───────────────────────────────
+       The native scrollbars are removed outright so they reserve no gutter, and
+       a custom thumb is drawn over the content's right edge by
+       _initOverlayScrollbar() in modernize.js.
+
+       This has to be a real element. Firefox's `scrollbar-width: thin` always
+       reserves layout space, neither engine exposes an overlay mode, and
+       `scrollbar-color` accepts solid colours only — so "no space when idle,
+       floating over the content, rainbow, visible only while scrolling" is not
+       reachable with native scrollbars at all.
+
+       Must come after the `scrollbar-width: thin` declarations on #txt (line
+       ~249) and .ichc-ul-scroll-body (~3566), and after the global
+       ::-webkit-scrollbar rule (~1543).
+
+       Element padding is deliberately left alone: #txt keeps its 6px right pad
+       and the scroll body its 3px, which is roughly the thumb's width, so text
+       still clears the thumb while user rows pass under it — that is the point
+       of an overlay. ── */
+    #txt,
+    .ichc-ul-scroll-body {
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+    #txt::-webkit-scrollbar,
+    .ichc-ul-scroll-body::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
+    }
+    /* Track: absolutely placed over the scroll element's box by the JS, which
+       writes top/height/--ichc-osb-hue. Idle state is fully transparent AND
+       pointer-events: none, so it never eats clicks on the content beneath.
+
+       Both the rail and the thumb are frosted. The rail's frost is on ::before
+       rather than on .ichc-osb itself, and that placement is load-bearing: an
+       element with backdrop-filter forms a backdrop root, so a thumb nested
+       inside a blurred .ichc-osb could only ever sample the rail's own flat
+       surface. With the frost on ::before, .ichc-osb stays a plain box, the
+       ::before paints first, and the thumb's own backdrop-filter reaches the
+       real chat/user rows underneath. Do not move the blur back up. */
+    .ichc-osb {
+        position: absolute !important;
+        right: 1px !important;
+        width: 14px !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+        transition: opacity 0.22s ease !important;
+        z-index: 20 !important;
+    }
+    /* The frosted rail surface. Blur only — NO dark tint. The tint used to be
+       rgba(38,40,47,0.30) and it was the reason nothing showed through the thumb:
+       it sits between the content and the thumb, so it both veiled the userlist's
+       right-edge karma numbers (visibly clipping their last digit) and left the
+       thumb with nothing but flat grey to transmit. A faint white sheen gives the
+       rail its glassiness instead of a dark veil. */
+    .ichc-osb::before {
+        content: '' !important;
+        position: absolute !important;
+        inset: 0 !important;
+        border-radius: 7px !important;
+        background: rgba(255,255,255,0.04) !important;
+        -webkit-backdrop-filter: blur(4px) saturate(140%) !important;
+        backdrop-filter: blur(4px) saturate(140%) !important;
+        pointer-events: none !important;
+    }
+    .ichc-osb.ichc-osb-on {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+    /* Thumb. Hue is driven by scroll position, matching the rainbow the chat
+       scrollbar already used (chat.js: violet 300 at the bottom → red 0 at the
+       top), so chat and the userlist now agree.
+
+       It rides on the frosted rail, inset 4px so the frost shows either side of it,
+       and is glass rather than a painted bar. No border: an earlier version used a
+       1px white rim to stay legible at 0.22 alpha, which read as an unwanted outline.
+       With the rim gone the tint has to carry it alone, so alpha went 0.22 → 0.34 —
+       still see-through, but it no longer disappears. The outer ichc-osb-breathe glow
+       is now the only thing defining its edge.
+       Widening the thumb is not the lever here — it stays 6px by request. */
+    .ichc-osb-thumb {
+        position: absolute !important;
+        top: 0 !important;
+        right: 4px !important;
+        width: 6px !important;
+        border: 0 !important;
+        border-radius: 3px !important;
+        background: linear-gradient(to bottom,
+            hsl(var(--ichc-osb-hue, 220) 92% 76% / 0.34),
+            hsl(calc(var(--ichc-osb-hue, 220) + 38) 90% 66% / 0.34)) !important;
+        -webkit-backdrop-filter: blur(10px) saturate(180%) !important;
+        backdrop-filter: blur(10px) saturate(180%) !important;
+        cursor: grab !important;
+        transition: width 0.12s ease, right 0.12s ease !important;
+    }
+    .ichc-osb-thumb:hover { width: 8px !important; right: 3px !important; }
+    /* Its own gentle pulse rather than chat's ichc-scroll-breathe, which blooms to
+       56px at 0.85 alpha — far too much light around a piece of glass, and it washed
+       out the transmission the thumb is meant to show. Only box-shadow is animated,
+       and only while the bar is visible. */
+    @keyframes ichc-osb-breathe {
+        0%, 100% {
+            box-shadow: 0 0 5px hsl(var(--ichc-osb-hue, 220) 96% 60% / 0.40),
+                        0 0 12px hsl(var(--ichc-osb-hue, 220) 100% 62% / 0.18);
+        }
+        50% {
+            box-shadow: 0 0 7px hsl(var(--ichc-osb-hue, 220) 100% 68% / 0.55),
+                        0 0 18px hsl(var(--ichc-osb-hue, 220) 100% 66% / 0.28);
+        }
+    }
+    .ichc-osb.ichc-osb-on .ichc-osb-thumb {
+        animation: ichc-osb-breathe 2.2s ease-in-out infinite !important;
+    }
+    .ichc-osb-thumb.ichc-osb-dragging {
+        width: 8px !important;
+        right: 3px !important;
+        cursor: grabbing !important;
+        animation-duration: 0.7s !important;
+    }
+    html.ichc-light-theme .ichc-osb::before {
+        background: rgba(255,255,255,0.22) !important;
+    }
+    /* Light theme: also borderless. The tint runs a shade stronger than dark theme
+       because a mid-tone glass over a pale backdrop has less to contrast against. */
+    html.ichc-light-theme .ichc-osb-thumb {
+        border: 0 !important;
+        background: linear-gradient(to bottom,
+            hsl(var(--ichc-osb-hue, 220) 72% 50% / 0.42),
+            hsl(calc(var(--ichc-osb-hue, 220) + 38) 70% 44% / 0.42)) !important;
+    }
+
+    /* ── Frosted-glass chat input bar ───────────────────────────────────────
+       The userlist column spans both shell rows so its user rows keep running
+       down behind the input bar; the bar paints on top (z-index above the
+       userlist) with a backdrop blur, so its right end shows the blurred
+       userlist through the glass. Square corners on the edit box, plus a
+       drop shadow falling down and to the right.
+
+       Do NOT add scroll-runway padding to .ichc-ul-scroll-body here — it
+       lifts every user row clear of the bar, leaving empty background behind
+       the glass and killing the effect. The cost of leaving it off is that at
+       max scroll the last row or two sit under the bar (visible through the
+       frost, but not clickable until you scroll up a little).
+
+       Tint alphas are deliberately low and the backdrop lifts brightness:
+       a heavy dark tint reads as flat charcoal, not glass. The edit box is a
+       *lightening* overlay over the frost, not a dark fill, so the bar does
+       not get darker than the pre-glass design.
+
+       The userlist panel is a few levels lighter than the shell background.
+       That is what makes the blur legible: before, panel and shell were both
+       #18191c, so a perfect blur still showed a flat field. The tonal seam
+       where the userlist column begins is now visible through the glass even
+       when no user rows happen to sit in the bottom 50px.
+
+       Must stay last in the file: it overrides the earlier #ichc-input-row /
+       #txtMsg rules and the light-theme block above.
+    ── */
+    #ichc-chat-shell:not(.ichc-ul-collapsed) #ichc-userlist {
+        grid-row: 1 / -1 !important;
+        background: #212328 !important;
+        border-left: 1px solid rgba(255,255,255,0.05) !important;
+    }
+    /* The row keeps its original columns (1fr / emote 40px / more 32px) and the
+       edit box spans the first two, stretching across the userlist column as it
+       always did. That means the box covers most of the glass, so only a narrow
+       strip at the far right is bare frost — the blur is deliberately mild here,
+       read mostly through the box's own translucent fill. */
+    #ichc-input-row {
+        z-index: 7 !important;
+        border-radius: 0 !important;
+        background: rgba(40,42,49,0.30) !important;
+        -webkit-backdrop-filter: blur(8px) saturate(140%) brightness(1.10) !important;
+        backdrop-filter: blur(8px) saturate(140%) brightness(1.10) !important;
+        border-top: 1px solid rgba(255,255,255,0.12) !important;
+    }
+    /* Edit box: square, shadow pressed *inward* so it reads as recessed into the
+       glass. --ichc-box-sx/sy are rewritten by _initInputShadowFollow() in
+       modernize.js while the pointer is over the box, pooling the shadow toward
+       the cursor; the 2px fallbacks are the resting state. Kept tight and low
+       contrast — the reach is only a few px (_BOX_SHADOW_REACH_X/Y in the JS), so
+       it drifts rather than swinging.
+
+       Texture: #txtMsg is an <input>, so ::before/::after are unavailable and an
+       overlay element is out. Instead the grain is a tiled fractalNoise SVG as a
+       *background layer* (desaturated, low opacity) blended with the fill via
+       background-blend-mode: soft-light — mid-grey is a no-op under soft-light,
+       so only the noise's deviations show, as a faint tooth in the surface. It
+       has to be background-color + background-image rather than the background
+       shorthand, or the earlier #txtMsg shorthand rules reset the image.
+       The shadow itself is stacked in three passes at decreasing blur so its
+       falloff is slightly stepped instead of a smooth gradient, which reads as
+       texture in the shade rather than an airbrush. */
+    #txtMsg,
+    #ichc-input-row #txtMsg {
+        height: 100% !important;
+        border-radius: 0 !important;
+        background-color: rgba(255,255,255,0.05) !important;
+        background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='140'%20height='140'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='1.05'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='140'%20height='140'%20filter='url(%23n)'%20opacity='0.14'/%3E%3C/svg%3E") !important;
+        background-repeat: repeat !important;
+        background-size: 140px 140px !important;
+        background-blend-mode: soft-light !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        box-shadow: inset var(--ichc-box-sx, 2px) var(--ichc-box-sy, 2px) 7px rgba(0,0,0,0.34),
+                    inset calc(var(--ichc-box-sx, 2px) * 0.6) calc(var(--ichc-box-sy, 2px) * 0.6) 3px rgba(0,0,0,0.24),
+                    inset calc(var(--ichc-box-sx, 2px) * 0.3) calc(var(--ichc-box-sy, 2px) * 0.3) 1px rgba(0,0,0,0.20),
+                    inset 0 0 0 1px rgba(0,0,0,0.20) !important;
+        transition: box-shadow 140ms ease-out !important;
+    }
+    #ichc-input-row #txtMsg:focus {
+        border-color: var(--ichc-input-border, #5865f2) !important;
+        box-shadow: inset var(--ichc-box-sx, 2px) var(--ichc-box-sy, 2px) 7px rgba(0,0,0,0.34),
+                    inset calc(var(--ichc-box-sx, 2px) * 0.6) calc(var(--ichc-box-sy, 2px) * 0.6) 3px rgba(0,0,0,0.24),
+                    inset calc(var(--ichc-box-sx, 2px) * 0.3) calc(var(--ichc-box-sy, 2px) * 0.3) 1px rgba(0,0,0,0.20),
+                    inset 0 0 0 1px rgba(0,0,0,0.20),
+                    0 0 0 3px var(--ichc-input-glow, rgba(88,101,242,0.18)) !important;
+    }
+    /* Emote button overlays the box's right edge again. It matches the row's
+       content height so it never overhangs the box onto the bar glass — the
+       surface behind the emote cube is the box itself. */
+    #ichc-input-row #ichc-gif-wrapper,
+    #ichc-input-row #ichc-gif-toggle-btn {
+        height: 100% !important;
+        background: transparent !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+    html.ichc-light-theme #ichc-chat-shell:not(.ichc-ul-collapsed) #ichc-userlist {
+        background: #e8eaee !important;
+        border-left: 1px solid rgba(0,0,0,0.05) !important;
+    }
+    html.ichc-light-theme #ichc-input-row {
+        background: rgba(220,223,229,0.30) !important;
+        border-top: 1px solid rgba(0,0,0,0.10) !important;
+    }
+    /* background-color, not the shorthand — the shorthand would drop the grain layer */
+    html.ichc-light-theme #ichc-input-row #txtMsg {
+        background-color: rgba(255,255,255,0.30) !important;
+        border: 1px solid rgba(0,0,0,0.12) !important;
+        box-shadow: inset var(--ichc-box-sx, 2px) var(--ichc-box-sy, 2px) 7px rgba(0,0,0,0.18),
+                    inset calc(var(--ichc-box-sx, 2px) * 0.6) calc(var(--ichc-box-sy, 2px) * 0.6) 3px rgba(0,0,0,0.13),
+                    inset calc(var(--ichc-box-sx, 2px) * 0.3) calc(var(--ichc-box-sy, 2px) * 0.3) 1px rgba(0,0,0,0.11),
+                    inset 0 0 0 1px rgba(0,0,0,0.11) !important;
+    }
+    html.ichc-light-theme #ichc-input-row #txtMsg:focus {
+        border-color: var(--ichc-input-border, #5865f2) !important;
+        box-shadow: inset var(--ichc-box-sx, 2px) var(--ichc-box-sy, 2px) 7px rgba(0,0,0,0.18),
+                    inset calc(var(--ichc-box-sx, 2px) * 0.6) calc(var(--ichc-box-sy, 2px) * 0.6) 3px rgba(0,0,0,0.13),
+                    inset calc(var(--ichc-box-sx, 2px) * 0.3) calc(var(--ichc-box-sy, 2px) * 0.3) 1px rgba(0,0,0,0.11),
+                    inset 0 0 0 1px rgba(0,0,0,0.11),
+                    0 0 0 3px var(--ichc-input-glow, rgba(88,101,242,0.18)) !important;
     }
