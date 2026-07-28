@@ -119,7 +119,10 @@
             if (!panel || seen.has(panel)) { return; }
             seen.add(panel);
 
-            // Close button
+            // Close button. Guarded on the DOM, not just the `seen` Set: if this setup
+            // ever runs twice each pass gets its own Set and the panel ends up with two
+            // buttons sharing one id (observed in the live markup).
+            if (panel.querySelector('#ichc-broadcaster-close')) { return; }
             const btn = document.createElement('button');
             btn.id = 'ichc-broadcaster-close';
             btn.textContent = '✕';

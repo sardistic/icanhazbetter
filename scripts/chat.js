@@ -110,7 +110,27 @@
 
     // ── Chat ──────────────────────────────────────────────────────────────────────
 
-    function resumeNativeChat() {
+    // `force` is for deliberate "take me to live" actions only (the jump-to-live
+    // indicator, pressing Enter, the site's own resume control).
+    //
+    // Everything else must respect the reader's position. window.cR() does not merely
+    // un-pause the site's chat — it also scrolls #txt to the bottom. Console tracing
+    // showed cR() being invoked from our injected script over and over while the user
+    // was scrolled up (writes like `2188 -> 8642` against a max of 2375), which is what
+    // "it instantly drags it back down" was. It happened with no messages arriving
+    // because these callers are driven by timers and the site's pause notice, not by
+    // incoming chat.
+    function resumeNativeChat(force = false) {
+        if (!force) {
+            // Two independent guards on purpose. The flag says what we believe; the
+            // scroll position says what is actually true. Trusting the flag alone was
+            // not enough — if anything leaves `auto` set while the reader is parked,
+            // cR() fires and yanks them to live. Position cannot lie.
+            if (!chatScrollState.auto) { return; }
+            const t = getChatScrollTarget();
+            if (t && !isNearChatBottom(t, 56)) { return; }
+        }
+        chatScrollState.sitePaused = false;
         chatScrollState.nativePaused = false;
         runInPageContext(`
             if (typeof window.cR === 'function') {
@@ -132,7 +152,10 @@
     }
 
     function pauseNativeChat() {
-        if (chatScrollState.nativePaused) { return; }
+        // Guarded on its own flag rather than chatScrollState.nativePaused, which other
+        // code assigns directly — a stray assignment used to make this a permanent no-op.
+        if (chatScrollState.sitePaused) { return; }
+        chatScrollState.sitePaused = true;
         chatScrollState.nativePaused = true;
         runInPageContext(`
             if (typeof window.cP === 'function') {
@@ -234,6 +257,63 @@
         b = Math.round(b + (255 - b) * mix);
         return `rgb(${r}, ${g}, ${b})`;
     }
+
+    // ── Per-user text colour registry ─────────────────────────────────────────
+    // Each user picks their own text colour on the site, and their messages carry it
+    // inline — which is the only place it is exposed, so it is harvested from chat as
+    // they speak. modernize.js consumes this to colour userlist names, keeping one
+    // identity colour per person across both panels.
+    // Content scripts of the same extension share one isolated world, so `window` is
+    // a valid channel between chat.js and modernize.js (ichc-pm-alert already relies
+    // on this). localStorage carries it across reloads so a name is coloured before
+    // its owner says anything.
+    const NICK_COLOR_KEY = 'ichc_nick_colors';
+    const NICK_COLOR_MAX = 400;
+    const nickColors = window.__ichcNickColors || (window.__ichcNickColors = new Map());
+
+    (function _loadNickColors() {
+        if (nickColors.size) { return; }
+        try {
+            const raw = JSON.parse(localStorage.getItem(NICK_COLOR_KEY) || '{}');
+            Object.keys(raw).forEach(k => nickColors.set(k, raw[k]));
+        } catch (_) {}
+    })();
+
+    let _nickColorSaveTimer = null;
+    let _nickColorDirty = false;
+
+    function _persistNickColors() {
+        _nickColorSaveTimer = null;
+        if (!_nickColorDirty) { return; }
+        _nickColorDirty = false;
+        try {
+            // Keep the newest entries only — Map preserves insertion order
+            const entries = [...nickColors.entries()].slice(-NICK_COLOR_MAX);
+            if (entries.length !== nickColors.size) {
+                nickColors.clear();
+                entries.forEach(([k, v]) => nickColors.set(k, v));
+            }
+            localStorage.setItem(NICK_COLOR_KEY, JSON.stringify(Object.fromEntries(entries)));
+        } catch (_) {}
+        window.dispatchEvent(new CustomEvent('ichc-nick-colors-updated'));
+    }
+
+    // `raw` is the colour exactly as the site rendered it. Readability is each
+    // consumer's job, since chat and the userlist sit on different backgrounds.
+    function recordNickColor(name, raw) {
+        const key = (name || '').trim().toLowerCase();
+        if (!key || !raw) { return; }
+        if (isThemeManagedChatColor(raw)) { return; }   // our own styling, not theirs
+        if (nickColors.get(key) === raw) { return; }
+        nickColors.delete(key);                          // re-insert to mark as newest
+        nickColors.set(key, raw);
+        _nickColorDirty = true;
+        if (!_nickColorSaveTimer) { _nickColorSaveTimer = setTimeout(_persistNickColors, 1200); }
+    }
+
+    // Exposed so modernize.js can record the local user's colour the moment they pick
+    // it in the site's picker, instead of waiting for them to post a message.
+    window.__ichcRecordNickColor = recordNickColor;
 
     function extractChatNickColor(anchor) {
         if (!anchor) { return ''; }
@@ -340,6 +420,11 @@
         getScopedChatElements(root, 'a').forEach(anchor => {
             if (!isLikelyChatNickAnchor(anchor)) { return; }
             const color = extractChatNickColor(anchor);
+            // Harvest before any readability adjustment — store what the user chose
+            if (color) { recordNickColor(anchor.textContent, color); }
+            // First time we style this anchor is the first time we have seen the
+            // message, so it doubles as "spoke just now" for ranking.
+            if (anchor.dataset.ichcChatNick !== '1') { recordSpoke(anchor.textContent); }
             let resolved;
             if (lightMode) {
                 // In light mode keep the nick color as-is if it's dark enough,
@@ -390,28 +475,52 @@
             row.classList.toggle('ichc-bcast-stop', isStop);
             const isSacrifice = /\bcammed down for\b/.test(rowNorm);
             row.classList.toggle('ichc-cam-sacrifice', isSacrifice);
-            if (!row.dataset.ichcTsHidden) {
-                row.dataset.ichcTsHidden = '1';
+            // Timestamps. Two bugs used to leave a raw clock time sitting inline in the
+            // middle of a message, which also threw off the float placement of the
+            // timestamp on the following row:
+            //
+            //  a) the "already processed" flag was set BEFORE scanning, so a row whose
+            //     time had not been inserted yet (the site builds some rows in pieces)
+            //     was marked done forever and never got the .ichc-ts class.
+            //  b) a time that was a bare text node directly under the row was skipped
+            //     outright by the `parent !== row` guard, so it stayed as plain text.
+            //
+            // Now the flag is only set once a timestamp is actually found, retries are
+            // bounded so rows that genuinely have no time are not rescanned forever, and
+            // a bare text node gets wrapped in our own span.
+            const _tsTries = parseInt(row.dataset.ichcTsTries || '0', 10);
+            if (!row.dataset.ichcTsHidden && _tsTries < 6) {
+                let tsFound = false;
                 const tsPattern = /^\s*[\[(]?\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?[\])]?\s*$/i;
                 // 1. Walk text nodes — match bare H:MM or [H:MM:SS] style timestamps
                 const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+                const tsTextNodes = [];
                 let tnode;
                 while ((tnode = walker.nextNode())) {
-                    if (tsPattern.test(tnode.textContent)) {
-                        const parent = tnode.parentElement;
-                        if (parent && parent !== row) {
-                            parent.classList.add('ichc-ts');
-                            const epoch = _parseTimestamp(tnode.textContent);
-                            if (epoch !== null) {
-                                parent.dataset.ichcTsEpoch = String(epoch);
-                                parent.textContent = _relativeTime(epoch);
-                            }
-                        }
-                    }
+                    if (tsPattern.test(tnode.textContent)) { tsTextNodes.push(tnode); }
                 }
+                tsTextNodes.forEach(node => {
+                    let parent = node.parentElement;
+                    if (parent === row) {
+                        // Bare text node — give it a wrapper we can style and position
+                        const span = document.createElement('span');
+                        row.insertBefore(span, node);
+                        span.appendChild(node);
+                        parent = span;
+                    }
+                    if (!parent) { return; }
+                    parent.classList.add('ichc-ts');
+                    tsFound = true;
+                    const epoch = _parseTimestamp(node.textContent);
+                    if (epoch !== null) {
+                        parent.dataset.ichcTsEpoch = String(epoch);
+                        parent.textContent = _relativeTime(epoch);
+                    }
+                });
                 // 2. <small> tags are a common timestamp wrapper in icanhazchat
                 row.querySelectorAll('small').forEach(el => {
                     el.classList.add('ichc-ts');
+                    tsFound = true;
                     if (tsPattern.test(el.textContent)) {
                         const epoch = _parseTimestamp(el.textContent);
                         if (epoch !== null) {
@@ -424,6 +533,7 @@
                 row.querySelectorAll('td').forEach(td => {
                     if (!td.querySelector('a') && tsPattern.test(td.textContent)) {
                         td.classList.add('ichc-ts');
+                        tsFound = true;
                         const epoch = _parseTimestamp(td.textContent);
                         if (epoch !== null) {
                             td.dataset.ichcTsEpoch = String(epoch);
@@ -435,6 +545,21 @@
                         }
                     }
                 });
+
+                // A right-floated box is placed on the line it is encountered on, not
+                // necessarily the first one — so a timestamp appearing after the message
+                // text drops to a lower line and reads as sitting inside the message.
+                // Hoisting it to the front of the row pins it to the top right.
+                const tsEl = row.querySelector(':scope > .ichc-ts:not(td)');
+                if (tsEl && row.firstChild !== tsEl) { row.insertBefore(tsEl, row.firstChild); }
+
+                if (tsFound) {
+                    row.dataset.ichcTsHidden = '1';
+                    delete row.dataset.ichcTsTries;
+                } else {
+                    // Nothing to find yet — allow a few more passes as the row fills in
+                    row.dataset.ichcTsTries = String(_tsTries + 1);
+                }
             }
         });
 
@@ -1010,7 +1135,16 @@
         if (node.classList.contains('ichc-event-collector') ||
             node.classList.contains('ichc-chat-inline-img') ||
             node.classList.contains('ichc-og-card') ||
-            node.classList.contains('ichc-chat-cleared-divider')) { return false; }
+            node.classList.contains('ichc-chat-cleared-divider') ||
+            // Our own injected furniture is not live chat. Keeping these out means they
+            // never enter the cache or the persisted history, never count toward clear
+            // detection, and are never re-salvaged as if they were real messages.
+            node.classList.contains('ichc-condensed-bar') ||
+            node.classList.contains('ichc-muted-row') ||
+            node.classList.contains('ichc-history-row') ||
+            node.classList.contains('ichc-history-divider') ||
+            node.classList.contains('ichc-history-block') ||
+            node.closest?.('.ichc-muted-body, .ichc-history-block')) { return false; }
         return true;
     }
 
@@ -1036,6 +1170,109 @@
                 observer.observe(chatScrollState.observedRoot, { childList: true, subtree: true });
             }
         }
+    }
+
+    // ── Silenced / removed message reveal ───────────────────────────────────────
+    // When a moderator silences someone the site removes that person's rows while the
+    // rest of the log stays put, so _handleChatClear ignores it (that needs the log to
+    // end up empty) and the rows were being discarded.
+    //
+    // Each removed row is replaced by a placeholder **in its original position**, which
+    // MutationRecord.previousSibling / nextSibling make possible — they describe where
+    // the node was when it went. Click it and the original text appears right there,
+    // like revealing muted text; click again to re-hide. No aggregated notice, because
+    // the position is known and guessing was never necessary.
+    const MUTED_MAX = 60;               // cap live placeholders; oldest are dropped
+
+    function _rowAuthor(row) {
+        const link = row.querySelector?.('a.userlink');
+        const name = (link?.textContent || '').trim();
+        if (name) { return name; }
+        // A silence can blank the visible nick but leave the onclick intact
+        const onclick = link?.getAttribute?.('onclick') || '';
+        const m = onclick.match(/userInfoPopup\(\s*["']([^"']+)["']/);
+        return m ? m[1].trim() : '';
+    }
+
+    function _makeMutedRow(nick, row) {
+        const p = document.createElement('p');
+        p.className = 'line ichc-muted-row';
+        if (nick) { p.dataset.nick = nick; }
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ichc-muted-reveal';
+        btn.title = 'Show the removed message';
+
+        const body = document.createElement('span');
+        body.className = 'ichc-muted-body';
+        body.hidden = true;
+
+        const label = () => {
+            btn.textContent = body.hidden
+                ? '🔇 ' + (nick || 'message') + ' — removed (show)'
+                : '🔇 ' + (nick || 'message') + ' — hide';
+        };
+
+        btn.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (body.hidden && !body.firstChild) {
+                // Cached clone, inserted as a node — no innerHTML of chat content
+                body.appendChild(row.cloneNode(true));
+            }
+            body.hidden = !body.hidden;
+            p.classList.toggle('ichc-muted-open', !body.hidden);
+            label();
+        });
+
+        label();
+        p.append(btn, body);
+        return p;
+    }
+
+    function _trimMutedRows(log) {
+        const all = log.querySelectorAll('.ichc-muted-row');
+        for (let i = 0; i < all.length - MUTED_MAX; i++) { all[i].remove(); }
+    }
+
+    // Returns true if it consumed the removal.
+    function _handleSilencedRemoval(log, mutations) {
+        if (!_chatRetentionEnabled() || !log) { return false; }
+
+        // A batch that also *adds* rows is the site appending and trimming, not a
+        // moderator removing anything. Without this guard, routine log trimming would
+        // litter the chat with "removed message" placeholders.
+        const added = mutations.some(m =>
+            [...m.addedNodes].some(n => _isRetainableRow(n)));
+        if (added) { return false; }
+
+        let placed = 0;
+        mutations.forEach(m => {
+            const removed = [...m.removedNodes].filter(_isRetainableRow);
+            if (!removed.length) { return; }
+
+            // previousSibling is shared by every node in one removed run, so advance an
+            // anchor as we go — otherwise the placeholders come out in reverse order.
+            let anchor = (m.previousSibling && m.previousSibling.parentNode === log)
+                ? m.previousSibling : null;
+            const before = (m.nextSibling && m.nextSibling.parentNode === log)
+                ? m.nextSibling : null;
+
+            removed.forEach(node => {
+                const nick = _rowAuthor(node);
+                const marker = _makeMutedRow(nick, node);
+                if (anchor) { anchor.after(marker); }
+                else if (before) { log.insertBefore(marker, before); }
+                else { log.appendChild(marker); }
+                anchor = marker;
+                placed++;
+            });
+        });
+
+        if (!placed) { return false; }
+        _trimMutedRows(log);
+        return true;
     }
 
     // Inspect a mutation batch for a mass row removal (a clear). Returns true if it
@@ -1077,7 +1314,123 @@
     // A debounced snapshot of the live chat survives a moderator clear regardless of
     // HOW the site wipes it (innerHTML, node removal, or replacing #txt). When the log
     // goes empty while we hold a cache, a restore button appears (manual, not auto).
-    const CHAT_CACHE_MAX = 400;
+    // ── Cross-refresh chat history ──────────────────────────────────────────────
+    // The rolling cache above is DOM clones, so it dies with the page. This persists a
+    // *structured* record per message instead and rebuilds rows on the next load, so
+    // you come back to what you were reading.
+    //
+    // Structured, not stored HTML, and that is a security decision rather than a size
+    // one: chat rows are authored by other users, so re-inserting their markup through
+    // innerHTML on every page load would turn any message that ever slipped past the
+    // site's filter into a stored XSS that fires for us forever (see pentest/
+    // chat-send-xss.js). Rebuilt rows only ever receive text via textContent, so
+    // nothing in a stored message can become active content. It also keeps the payload
+    // small enough for localStorage.
+    const CHAT_HISTORY_MAX = 600;
+
+    function _historyKey() {
+        // Per room — histories from different rooms must never mix
+        const room = (location.pathname.split('/').filter(Boolean)[0] || 'root').toLowerCase();
+        return 'ichc_chat_history_' + room;
+    }
+
+    // Our own injected furniture, stripped before reading the message body
+    const HISTORY_STRIP = '.ichc-ts, .ichc-reply-btn, a.userlink, .ichc-chat-inline-img,' +
+        ' .ichc-og-card, .ichc-event-collector, .ichc-chat-year-badge, .ichc-nick-block,' +
+        ' .ichc-nick-sep, .ichc-emote-disabled-label, .ichc-muted-row';
+
+    function _rowToRecord(row) {
+        if (!_isRetainableRow(row)) { return null; }
+        const tsEl = row.querySelector('.ichc-ts[data-ichc-ts-epoch]');
+        const t = tsEl ? (parseInt(tsEl.dataset.ichcTsEpoch, 10) || 0) : 0;
+        const link = row.querySelector('a.userlink');
+        const n = (link?.textContent || '').trim();
+        // Prefer the harvested identity colour over the readability-adjusted one
+        const c = link ? (link.style.getPropertyValue('--ichc-chat-name-color') || '').trim() : '';
+        const clone = row.cloneNode(true);
+        clone.querySelectorAll(HISTORY_STRIP).forEach(el => el.remove());
+        const m = (clone.textContent || '').replace(/\s+/g, ' ').replace(/^[:\s]+/, '').trim();
+        if (!n && !m) { return null; }
+        return { t, n, c, m };
+    }
+
+    const _sig = rec => (rec.t || 0) + '|' + (rec.n || '').toLowerCase() + '|' + (rec.m || '');
+
+    function _saveChatHistory() {
+        if (!_chatRetentionEnabled()) { return; }
+        const log = getChatLog();
+        if (!log) { return; }
+        try {
+            const recs = [...log.children]
+                .map(_rowToRecord)
+                .filter(Boolean)
+                .slice(-CHAT_HISTORY_MAX);
+            if (!recs.length) { return; }   // never clobber a good history with nothing
+            localStorage.setItem(_historyKey(), JSON.stringify({ v: 1, at: Date.now(), recs }));
+        } catch (_) {}   // quota or private mode — history is a nicety, not load-bearing
+    }
+
+    function _buildHistoryRow(rec) {
+        const p = document.createElement('p');
+        p.className = 'line ichc-history-row';
+        if (rec.t) {
+            const ts = document.createElement('span');
+            ts.className = 'ichc-history-ts';
+            const d = new Date(rec.t);
+            ts.textContent = isNaN(d.getTime())
+                ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            p.appendChild(ts);
+        }
+        if (rec.n) {
+            const nick = document.createElement('span');
+            nick.className = 'ichc-history-nick';
+            nick.textContent = rec.n;
+            if (rec.c && /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))$/i.test(rec.c)) {
+                nick.style.setProperty('color', rec.c, 'important');
+            }
+            p.appendChild(nick);
+        }
+        const body = document.createElement('span');
+        body.className = 'ichc-history-body';
+        body.textContent = rec.m;    // text only, never innerHTML — see the note above
+        p.appendChild(body);
+        return p;
+    }
+
+    let _historyShown = false;
+    function _restoreChatHistory() {
+        if (_historyShown || !_chatRetentionEnabled()) { return; }
+        const log = getChatLog();
+        if (!log) { return; }
+        if (log.querySelector('.ichc-history-block')) { _historyShown = true; return; }
+
+        let recs = [];
+        try {
+            const stored = JSON.parse(localStorage.getItem(_historyKey()) || 'null');
+            if (stored && Array.isArray(stored.recs)) { recs = stored.recs; }
+        } catch (_) { return; }
+        if (!recs.length) { _historyShown = true; return; }
+
+        // Drop anything already on screen — after a quick refresh the site often
+        // re-serves the tail of the log, and showing it twice is worse than not at all.
+        const live = new Set([...log.children].map(_rowToRecord).filter(Boolean).map(_sig));
+        const fresh = recs.filter(r => !live.has(_sig(r)));
+        if (!fresh.length) { _historyShown = true; return; }
+
+        const block = document.createElement('div');
+        block.className = 'ichc-history-block';
+        fresh.forEach(r => block.appendChild(_buildHistoryRow(r)));
+        const divider = document.createElement('div');
+        divider.className = 'ichc-history-divider';
+        divider.textContent = '— ' + fresh.length + ' earlier message' +
+            (fresh.length === 1 ? '' : 's') + ' from before the refresh —';
+        block.appendChild(divider);
+
+        log.insertBefore(block, log.firstChild);
+        _historyShown = true;
+    }
+
+    const CHAT_CACHE_MAX = 800;   // was 400 — longer scroll back on restore
     const chatCache = { rows: [], count: 0, snapTimer: null, lossShown: false, lastContentAt: 0, lossCheckTimer: null };
 
     function _snapshotChatCache() {
@@ -1090,6 +1443,7 @@
         chatCache.rows = snap;
         chatCache.count = snap.length;
         chatCache.lastContentAt = Date.now();
+        _saveChatHistory();   // same debounce as the in-memory snapshot
     }
     function _scheduleChatSnapshot() {
         if (!_chatRetentionEnabled() || chatCache.snapTimer) { return; }
@@ -1239,35 +1593,318 @@
         return m ? m[1].trim() : '';
     }
 
+    // ── Condensed join/leave mode ───────────────────────────────────────────────
+    // Toggled from the userlist more-menu ("Condensed join/leave"). Instead of an
+    // inline event row per burst, every join and leave collapses into two lines
+    // pinned to the top of the chat log, updating live.
+    //
+    // Expiry is tied to what the reader can actually see. Each new chat row gets a
+    // monotonic line number; an event records the line number current when it landed.
+    // On every update the topmost row visible in the viewport is found and anything
+    // older than it is dropped — so the pinned lines only ever describe the stretch of
+    // conversation on screen. A monotonic counter is used rather than row indices
+    // because the site trims rows off the top, which would shift every index.
+    const CONDENSED_KEY = 'ichc_condensed_events';
+    const CONDENSED_MAX = 40;              // hard cap per line, independent of viewport
+    let _lineSeq = 0;
+    const condensed = { joins: new Map(), leaves: new Map(), bar: null, raf: 0, expanded: false };
+
+    function _condensedOn() {
+        try { return localStorage.getItem(CONDENSED_KEY) === '1'; } catch (_) { return false; }
+    }
+
+    // Stamped on every genuinely new chat row so events can be aged against them.
+    // Only real chat rows carry line numbers. Stamping our own furniture (the
+    // condensed bar especially, which is the log's first child) makes it the topmost
+    // "visible line" and expires every event immediately.
+    function _stampLine(row) {
+        if (!(row instanceof HTMLElement) || row.dataset.ichcLine) { return; }
+        if (!_isRetainableRow(row)) { return; }
+        row.dataset.ichcLine = String(++_lineSeq);
+    }
+
+    // Line number of the topmost row currently visible in the scroll viewport.
+    // Everything before it has scrolled out of the reader's view.
+    function _firstVisibleLine(log) {
+        const top = log.scrollTop;
+        for (const row of log.children) {
+            if (!(row instanceof HTMLElement)) { continue; }
+            if (!row.dataset.ichcLine) { continue; }
+            if (!_isRetainableRow(row)) { continue; }
+            if (row.offsetTop + row.offsetHeight > top) {
+                return parseInt(row.dataset.ichcLine, 10) || 0;
+            }
+        }
+        return 0;
+    }
+
+    function _condensedBar(log) {
+        if (condensed.bar?.isConnected) { return condensed.bar; }
+        const bar = document.createElement('div');
+        bar.className = 'ichc-condensed-bar';
+        bar.id = 'ichc-condensed-bar';
+
+        // Lines live in their own column so the toggle can sit beside them without
+        // being caught by the ellipsis clamp on the lines themselves.
+        const lines = document.createElement('div');
+        lines.className = 'ichc-condensed-lines';
+        const j = document.createElement('div');
+        j.className = 'ichc-condensed-line ichc-condensed-joins';
+        const l = document.createElement('div');
+        l.className = 'ichc-condensed-line ichc-condensed-leaves';
+        lines.append(j, l);
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'ichc-condensed-toggle';
+        toggle.hidden = true;
+
+        bar.append(lines, toggle);
+
+        // The whole bar is the hit target — it holds only plain text, so there is
+        // nothing else in it a click could be meant for.
+        bar.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            condensed.expanded = !condensed.expanded;
+            _updateCondensed();
+        });
+
+        log.insertBefore(bar, log.firstChild);
+        condensed.bar = bar;
+        return bar;
+    }
+
+    function _removeCondensedBar() {
+        condensed.bar?.remove();
+        condensed.bar = null;
+    }
+
+    // The bold figure is a RATE — how many in the last 60s — not the length of the name
+    // list beside it, which is scoped to the visible chat instead. Those two numbers
+    // legitimately differ, so the tooltip spells both out rather than leaving the reader
+    // to wonder why "2" is followed by five names.
+    const CONDENSED_WINDOW_MS = 60 * 1000;
+    function _renderCondensedLine(el, map, verb) {
+        if (!map.size) { el.hidden = true; return; }
+        el.hidden = false;
+        const names = _rankNames([...map.keys()]);
+        const cutoff = Date.now() - CONDENSED_WINDOW_MS;
+        const recent = [...map.values()].filter(r => (r?.at ?? 0) >= cutoff).length;
+
+        // Reuse the existing nodes rather than replaceChildren(). This repaints on every
+        // scroll event, and a native tooltip needs about a second of unbroken hover — so
+        // rebuilding the <b> each time meant the title never had a chance to appear and
+        // the number looked like it had only a help cursor and no explanation.
+        let count = el.querySelector(':scope > .ichc-condensed-count');
+        let rest = count && count.nextSibling;
+        if (!count) {
+            el.replaceChildren();
+            count = document.createElement('b');
+            count.className = 'ichc-condensed-count';
+            rest = document.createTextNode('');
+            el.append(count, rest);
+        }
+        if (!rest || rest.nodeType !== Node.TEXT_NODE) {
+            rest = document.createTextNode('');
+            count.after(rest);
+        }
+
+        const countText = String(recent);
+        if (count.textContent !== countText) { count.textContent = countText; }
+        const title =
+            recent + ' ' + verb + ' in the last minute.\n' +
+            names.length + ' ' + verb + ' listed — everyone who ' + verb +
+            ' within the stretch of chat currently on screen.\n' +
+            'Names drop off once their moment scrolls out of view.';
+        if (count.title !== title) { count.title = title; }
+        const restText = ' ' + verb + ': ' + names.join(', ');
+        if (rest.textContent !== restText) { rest.textContent = restText; }
+    }
+
+    // Drop anything that has scrolled out of view, then repaint both lines.
+    // `fromScroll` updates only refresh what is already on screen. Creating or removing
+    // the bar changes the content height above the viewport, which shifts scrollTop and
+    // fires another scroll event — a feedback loop that yanks the view while reading.
+    // Event-driven updates reconcile presence instead.
+    function _updateCondensed(fromScroll) {
+        condensed.raf = 0;
+        const log = getChatLog();
+        if (!log) { return; }
+        if (!_condensedOn()) { _removeCondensedBar(); return; }
+
+        const floor = _firstVisibleLine(log);
+        [condensed.joins, condensed.leaves].forEach(map => {
+            map.forEach((rec, nick) => { if ((rec?.seq ?? 0) < floor) { map.delete(nick); } });
+            while (map.size > CONDENSED_MAX) { map.delete(map.keys().next().value); }
+        });
+
+        // Adding or removing the bar changes the content height above the viewport, which
+        // shifts scrollTop and fires another scroll event. Presence is therefore only
+        // allowed to change while the reader is pinned to live and not mid-scroll —
+        // otherwise the view lurches under them, which reads as chat fighting back.
+        const canReflow = !fromScroll && chatScrollState.auto !== false;
+        if (!condensed.joins.size && !condensed.leaves.size) {
+            if (canReflow) { _removeCondensedBar(); }
+            return;
+        }
+        if (!canReflow && !condensed.bar?.isConnected) { return; }
+        const bar = _condensedBar(log);
+        const jl = bar.querySelector('.ichc-condensed-joins');
+        const ll = bar.querySelector('.ichc-condensed-leaves');
+
+        // Paint collapsed first so overflow can be measured against the clamped width,
+        // then apply the expanded class. While expanded the lines wrap, so scrollWidth
+        // equals clientWidth and the check would report "nothing hidden" — hence the
+        // toggle also stays visible whenever it is open, to offer the way back.
+        bar.classList.remove('ichc-condensed-open');
+        _renderCondensedLine(jl, condensed.joins, 'joined');
+        _renderCondensedLine(ll, condensed.leaves, 'left');
+        const clipped = [jl, ll].some(el => !el.hidden && el.scrollWidth > el.clientWidth + 1);
+
+        bar.classList.toggle('ichc-condensed-open', condensed.expanded);
+        const toggle = bar.querySelector('.ichc-condensed-toggle');
+        if (toggle) {
+            toggle.hidden = !(clipped || condensed.expanded);
+            toggle.textContent = condensed.expanded ? '\u25be' : '\u25b8';
+            toggle.title = condensed.expanded ? 'Collapse' : 'Show everyone';
+            bar.classList.toggle('ichc-condensed-clickable', !toggle.hidden);
+        }
+    }
+
+    function _scheduleCondensed(fromScroll) {
+        if (condensed.raf) { return; }
+        condensed.raf = requestAnimationFrame(() => _updateCondensed(fromScroll));
+    }
+
+    // A per-minute figure has to fall back to 0 on its own, so repaint on a slow timer
+    // whenever the bar is on screen. Only runs while there is something to show.
+    setInterval(() => {
+        if (condensed.bar?.isConnected) { _scheduleCondensed(); }
+    }, 10000);
+
+    // Returns true when it has taken ownership of the event.
+    function _addCondensedEvent(type, nick, refRow) {
+        if (!_condensedOn()) { return false; }
+        refRow.dataset.ichcEventProcessed = '1';
+        refRow.style.setProperty('display', 'none', 'important');
+        const map = type === 'join' ? condensed.joins : condensed.leaves;
+        const other = type === 'join' ? condensed.leaves : condensed.joins;
+        const key = (nick || '').trim();
+        if (!key) { return true; }
+        // A join cancels a pending leave for the same person and vice versa — showing
+        // someone as both joined and left in the same visible stretch is just noise.
+        other.delete(key);
+        map.delete(key);
+        map.set(key, { seq: _lineSeq, at: Date.now() });
+        _scheduleCondensed();
+        return true;
+    }
+
+    window.addEventListener('ichc-condensed-events-change', () => {
+        condensed.joins.clear();
+        condensed.leaves.clear();
+        condensed.expanded = false;
+        _removeCondensedBar();
+        _scheduleCondensed();
+    });
+
+    // How many names survive before truncation, per join/leave group.
+    const EVENT_VISIBLE = 5;
+
+    // Who spoke recently. The room cares more about someone who was just talking than
+    // about a stranger with the same karma, and this is the only script that sees
+    // messages arrive, so recency is tracked here rather than in the ranker.
+    const lastSpoke = window.__ichcLastSpoke || (window.__ichcLastSpoke = new Map());
+    function recordSpoke(name) {
+        const key = (name || '').trim().toLowerCase();
+        if (!key) { return; }
+        lastSpoke.set(key, Date.now());
+        if (lastSpoke.size > 400) {
+            // Map keeps insertion order; drop the oldest quarter in one pass
+            const drop = [...lastSpoke.keys()].slice(0, 100);
+            drop.forEach(k => lastSpoke.delete(k));
+        }
+    }
+
+    // Profile stats come from modernize.js (karma, account age, cam/mod/supporter
+    // state); the talking bonus is added here. Absent ranker → every name scores 0 and
+    // the original arrival order is preserved, so truncation still behaves sensibly.
+    function _rankNick(nick) {
+        const key = (nick || '').trim().toLowerCase();
+        let score = 0;
+        try { score = window.__ichcRankUser?.(key) || 0; } catch (_) {}
+        const spoke = lastSpoke.get(key);
+        if (spoke) {
+            const mins = (Date.now() - spoke) / 60000;
+            if (mins < 5) { score += 3; }
+            else if (mins < 30) { score += 2; }
+            else if (mins < 120) { score += 1; }
+        }
+        return score;
+    }
+
+    // Rank descending, ties broken by arrival order so the result is stable between
+    // re-renders (this row is rebuilt on every new event).
+    function _rankNames(names) {
+        return names
+            .map((n, i) => ({ n, i, s: _rankNick(n) }))
+            .sort((a, b) => (b.s - a.s) || (a.i - b.i))
+            .map(o => o.n);
+    }
+
+    function _eventGroup(names, cls, verb, expandedKey) {
+        const span = document.createElement('span');
+        span.className = cls;
+        const count = document.createElement('b');
+        count.textContent = String(names.length);
+        span.appendChild(count);
+
+        const ranked = _rankNames(names);
+        const expanded = chatEventCollector[expandedKey];
+        const shown = expanded ? ranked : ranked.slice(0, EVENT_VISIBLE);
+        const hidden = ranked.length - shown.length;
+
+        span.appendChild(document.createTextNode(' ' + verb + ': ' + shown.join(', ')));
+
+        if (hidden > 0 || expanded) {
+            const more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'ichc-event-more';
+            more.textContent = expanded ? ' show less' : ' +' + hidden + ' more';
+            more.title = expanded ? 'Show only the most prominent' : 'Show everyone';
+            more.addEventListener('click', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                chatEventCollector[expandedKey] = !chatEventCollector[expandedKey];
+                if (chatEventCollector.row?.isConnected) {
+                    _renderEventCollector(chatEventCollector.row);
+                }
+            });
+            span.appendChild(more);
+        }
+        return span;
+    }
+
     function _renderEventCollector(row) {
         const { joinNames, leaveNames } = chatEventCollector;
         const frag = document.createDocumentFragment();
         if (joinNames.length) {
-            const span = document.createElement('span');
-            span.className = 'ichc-event-join-part';
-            const b = document.createElement('b');
-            b.textContent = String(joinNames.length);
-            span.appendChild(b);
-            span.appendChild(document.createTextNode(' Joined: ' + joinNames.join(', ')));
-            frag.appendChild(span);
+            frag.appendChild(_eventGroup(joinNames, 'ichc-event-join-part', 'Joined', 'joinExpanded'));
         }
         if (joinNames.length && leaveNames.length) {
-            frag.appendChild(document.createTextNode(' · '));
+            frag.appendChild(document.createTextNode(' \u00b7 '));
         }
         if (leaveNames.length) {
-            const span = document.createElement('span');
-            span.className = 'ichc-event-leave-part';
-            const b = document.createElement('b');
-            b.textContent = String(leaveNames.length);
-            span.appendChild(b);
-            span.appendChild(document.createTextNode(' Left: ' + leaveNames.join(', ')));
-            frag.appendChild(span);
+            frag.appendChild(_eventGroup(leaveNames, 'ichc-event-leave-part', 'Left', 'leaveExpanded'));
         }
         row.replaceChildren(frag);
     }
 
     function _addToEventCollector(type, nick, refRow) {
         _cancelSeal();
+        // Condensed mode replaces the inline collector row entirely
+        if (_addCondensedEvent(type, nick, refRow)) { return; }
         refRow.dataset.ichcEventProcessed = '1';
         refRow.style.setProperty('display', 'none', 'important');
         // Always use #txt directly — refRow.parentElement can be a nested tbody/container
@@ -1281,6 +1918,8 @@
             chatEventCollector.row.className = 'ichc-event-collector';
             chatEventCollector.joinNames  = [];
             chatEventCollector.leaveNames = [];
+            chatEventCollector.joinExpanded  = false;
+            chatEventCollector.leaveExpanded = false;
         }
 
         if (type === 'join') {
@@ -1353,6 +1992,10 @@
             target.addEventListener(type, markUserScroll, { passive: true });
         });
 
+        // Scrolling changes which lines are on screen, which is what the condensed
+        // lines are scoped to — so they have to be recomputed as the view moves.
+        target.addEventListener('scroll', () => _scheduleCondensed(true), { passive: true });
+
         // Track global mouse-button state — the only reliable way to detect a scrollbar
         // thumb hold, since Chrome doesn't fire pointer events for native scrollbar drags.
         if (!chatScrollState._mouseTracking) {
@@ -1379,14 +2022,26 @@
             chatScrollState.pendingScrollTarget = null;
             chatScrollState.scrollRAF = null;
             if (!target || !target.isConnected) { return; }
-            if (Date.now() < chatScrollState.programmaticUntil) { return; }
+
+            // Whether this scroll came from the user has to be decided BEFORE the
+            // programmatic guard below, not after. markUserScroll stamps userScrollAt on
+            // wheel / touchmove / pointerdown / mousedown, all of which fire before the
+            // scroll event, so this is reliable.
+            const userInitiated = (Date.now() - chatScrollState.userScrollAt) < 600;
+
+            // Ignore our own scrolling, never the user's. scrollChatToBottom opens a
+            // 260ms programmatic window on every follow and its retry re-opens it 110ms
+            // later, so in a busy room the window is almost continuously open. Guarding
+            // unconditionally meant real wheel scrolls were dropped, the pause branches
+            // never ran, auto-follow stayed on, and the next message snapped the view
+            // back to the bottom — the "it keeps snapping when I scroll up" report.
+            if (!userInitiated && Date.now() < chatScrollState.programmaticUntil) { return; }
 
             // Rainbow scrollbar hue: violet(300) at bottom → red(0) at top — full spectrum
             const _max = target.scrollHeight - target.clientHeight;
             const _up = _max > 0 ? 1 - (target.scrollTop / _max) : 0;
             target.style.setProperty('--ichc-scroll-hue', Math.round(300 * (1 - _up)));
 
-            const userInitiated = (Date.now() - chatScrollState.userScrollAt) < 600;
             if (userInitiated) {
                 target.classList.add('ichc-user-scrolling');
                 if (chatScrollState.scrollbarHideTimer) { clearTimeout(chatScrollState.scrollbarHideTimer); }
@@ -1409,10 +2064,36 @@
             // event re-follows to the bottom and the user can never escape it.
             const prevTop = chatScrollState.lastScrollTop;
             chatScrollState.lastScrollTop = target.scrollTop;
+
+            // Anti-yank. While the reader is parked, any scroll they did not cause is
+            // the site pulling the log to the bottom — put it straight back. This used
+            // to exist only inside the 56px near-bottom band, so a yank from further up
+            // was never undone, which is what "constantly pulling to the bottom" was.
+            // Purely local: no site API, so nothing can trip flood protection.
+            if (!chatScrollState.auto && !userInitiated &&
+                    chatScrollState.savedScrollTop != null &&
+                    Math.abs(target.scrollTop - chatScrollState.savedScrollTop) > 2) {
+                // Deliberately does NOT open a programmatic window. Doing so made the
+                // restore fire once and then give up: the site's next yank landed inside
+                // the window, was skipped as non-user, and was never undone — leaving the
+                // view pinned at the bottom with no further event to recover from.
+                // No window is needed anyway, because the echo scroll this restore
+                // generates lands exactly on savedScrollTop, so the diff test below
+                // rejects it on its own.
+                target.scrollTop = chatScrollState.savedScrollTop;
+                chatScrollState.lastScrollTop = chatScrollState.savedScrollTop;
+                if (chatScrollState.restoreCount != null) { chatScrollState.restoreCount++; }
+                _updateScrollIndicator();
+                return;
+            }
             if (userInitiated && !isNearChatBottom(target, 4) &&
                     (target.scrollTop < prevTop || !chatScrollState.auto)) {
                 chatScrollState.savedScrollTop = target.scrollTop;
                 chatScrollState.auto = false;
+                // NOTE: do NOT call pauseNativeChat() here. window.cP()/cR() are the
+                // site's *server-side* chat pause/resume, and driving them from scroll
+                // events trips its flood protection ("don't flood"). Position is held
+                // by the anti-yank restore below instead, which is purely local.
                 chatScrollState.nativePaused = true;
                 chatScrollState.followTicket += 1;
                 cancelScheduledChatFollow();
@@ -1436,16 +2117,18 @@
                     scheduleChatFollow(false);
                     _updateScrollIndicator();
                 } else if (!userInitiated && chatScrollState.savedScrollTop != null) {
-                    // Site scrolled us to bottom while reading — restore position
-                    chatScrollState.programmaticUntil = Date.now() + 300;
+                    // Site scrolled us to bottom while reading — restore position.
+                    // No programmatic window here either, for the same reason as the
+                    // anti-yank above: it would swallow the next yank instead of undoing it.
                     target.scrollTop = chatScrollState.savedScrollTop;
+                    chatScrollState.lastScrollTop = chatScrollState.savedScrollTop;
                 }
                 return;
             }
 
             chatScrollState.savedScrollTop = target.scrollTop;
             chatScrollState.auto = false;
-            chatScrollState.nativePaused = true;
+            chatScrollState.nativePaused = true;   // local only — see the note above
             chatScrollState.followTicket += 1;
             cancelScheduledChatFollow();
             _updateScrollIndicator();
@@ -1855,6 +2538,11 @@
         bindChatScrollTargets();
         hideChatPauseNotice();
         clearNativeChatPause();
+        // Seed line numbers for rows already loaded, so condensed expiry has a scale
+        // to measure against from the first event rather than after the first scroll.
+        [...log.children].forEach(_stampLine);
+        _scheduleCondensed();
+        _restoreChatHistory();       // show what was on screen before the refresh
         _snapshotChatCache();        // seed the cache from whatever is already loaded
         _startChatLossWatcher();     // periodic clear/loss safety net
 
@@ -1887,6 +2575,9 @@
 
                 // Moderator "clear chat" — salvage the wiped rows before anything else.
                 if (_handleChatClear(log, mutations)) { return; }
+                // A single user's rows vanishing is a silence, not a clear. Checked
+                // after the clear handler so a full wipe is never mistaken for one.
+                if (_handleSilencedRemoval(log, mutations)) { return; }
 
                 mutations.forEach(mutation => {
                     mutation.addedNodes.forEach(node => {
@@ -1902,6 +2593,18 @@
                                  node.classList.contains('ichc-nick-sep') ||
                                  node.classList.contains('ichc-emote-wrap') ||
                                  node.classList.contains('ichc-emote-disabled-label') ||
+                                 // Our own injected blocks. Without these the observer
+                                 // treats them as new chat rows — which stamped the
+                                 // condensed bar with a line number and poisoned the
+                                 // expiry floor, so no event ever survived to display.
+                                 node.classList.contains('ichc-condensed-bar') ||
+                                 node.classList.contains('ichc-history-block') ||
+                                 node.classList.contains('ichc-history-row') ||
+                                 node.classList.contains('ichc-history-divider') ||
+                                 node.classList.contains('ichc-muted-row') ||
+                                 !!node.closest?.('.ichc-condensed-bar') ||
+                                 !!node.closest?.('.ichc-history-block') ||
+                                 !!node.closest?.('.ichc-muted-body') ||
                                  !!node.dataset?.ichcEventProcessed ||
                                  !!node.closest?.('.ichc-nick-block') ||
                                  !!node.closest?.('.ichc-event-collector') ||
@@ -1928,6 +2631,7 @@
                                     }
                                     applyChatTheme(node);
                                     _markMentions(node);
+                                    _stampLine(node);   // line number for condensed expiry
                                     sawNewRows = true;
                                 }
                             }
@@ -1945,6 +2649,7 @@
 
                 if (!sawNewRows) { return; }
                 chatScrollState.lastMessageAt = Date.now();
+                _scheduleCondensed();   // new lines can push old events out of view
                 _scheduleChatSnapshot();
                 bindChatScrollTargets();
                 if (!chatScrollState.auto) {

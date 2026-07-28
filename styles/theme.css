@@ -561,6 +561,127 @@
     }
     #txt .ichc-event-join-part  { color: rgba(110,170,240,0.90)  !important; }
     #txt .ichc-event-leave-part { color: rgba(200,130,155,0.88) !important; }
+    /* ── Condensed join/leave bar ──
+       Two lines pinned to the top of the scroll container, so they stay visible while
+       chat scrolls under them. position: sticky (not fixed) keeps it inside #txt's own
+       scroll box without any JS positioning. Contents are scoped to the lines currently
+       on screen — see _updateCondensed() in chat.js. ── */
+    #txt .ichc-condensed-bar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 6 !important;
+        margin: 0 0 3px !important;
+        padding: 3px 6px !important;
+        background: rgba(24,25,28,0.92) !important;
+        -webkit-backdrop-filter: blur(6px) saturate(140%) !important;
+        backdrop-filter: blur(6px) saturate(140%) !important;
+        border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+        font-size: 10px !important;
+        line-height: 1.45 !important;
+    }
+    /* Lines column and toggle sit side by side, so the ellipsis clamp on a line never
+       swallows the chevron. */
+    #txt .ichc-condensed-bar {
+        display: flex !important;
+        align-items: flex-start !important;
+        gap: 6px !important;
+    }
+    #txt .ichc-condensed-lines {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-clickable { cursor: pointer !important; }
+    #txt .ichc-condensed-line {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        opacity: 0.85 !important;
+    }
+    #txt .ichc-condensed-line[hidden] { display: none !important; }
+    /* Expanded: let the names wrap, and cap the height so a huge burst cannot push the
+       conversation off screen — the bar scrolls on its own instead. */
+    #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-lines {
+        max-height: 8.5em !important;
+        overflow-y: auto !important;
+        scrollbar-width: none !important;
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-lines::-webkit-scrollbar {
+        width: 0 !important;
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-line {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        margin-bottom: 2px !important;
+    }
+    #txt .ichc-condensed-toggle {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        flex: 0 0 auto !important;
+        width: 15px !important;
+        height: 15px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        background: rgba(255,255,255,0.07) !important;
+        border: 0 !important;
+        border-radius: 3px !important;
+        color: #9aa0aa !important;
+        font-size: 9px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        transition: background 0.12s, color 0.12s !important;
+    }
+    #txt .ichc-condensed-toggle[hidden] { display: none !important; }
+    #txt .ichc-condensed-bar:hover .ichc-condensed-toggle {
+        background: rgba(255,255,255,0.15) !important;
+        color: #dbdee1 !important;
+    }
+    #txt .ichc-condensed-joins  { color: rgba(110,170,240,0.92) !important; }
+    #txt .ichc-condensed-leaves { color: rgba(200,130,155,0.90) !important; }
+    /* The figure is a per-minute rate with its own tooltip, so it gets a hint of
+       affordance (dotted underline, help cursor) and must stay hoverable even though
+       the bar around it is a click target. */
+    #txt .ichc-condensed-line b,
+    #txt .ichc-condensed-count {
+        display: inline-block !important;
+        min-width: 1.2em !important;
+        margin-right: 3px !important;
+        font-weight: 800 !important;
+        cursor: help !important;
+        border-bottom: 1px dotted currentColor !important;
+        pointer-events: auto !important;
+    }
+    html.ichc-light-theme #txt .ichc-condensed-bar {
+        background: rgba(232,234,238,0.92) !important;
+        border-bottom-color: rgba(0,0,0,0.10) !important;
+    }
+    html.ichc-light-theme #txt .ichc-condensed-joins  { color: #1e5fa8 !important; }
+    html.ichc-light-theme #txt .ichc-condensed-leaves { color: #9c3760 !important; }
+
+    /* "+N more" / "show less" — inherits the group's colour so join and leave keep
+       their own tint, and stays inline so it reads as part of the sentence. */
+    #txt .ichc-event-more {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        display: inline !important;
+        margin-left: 4px !important;
+        padding: 0 3px !important;
+        background: rgba(255,255,255,0.06) !important;
+        border: 0 !important;
+        border-radius: 3px !important;
+        color: inherit !important;
+        font: inherit !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        opacity: 0.85 !important;
+        transition: background 0.12s, opacity 0.12s !important;
+    }
+    #txt .ichc-event-more:hover {
+        background: rgba(255,255,255,0.14) !important;
+        opacity: 1 !important;
+    }
 
     /* ── @mention highlight ── */
     @keyframes ichc-mention-flash {
@@ -2734,7 +2855,16 @@
 
     #rtc-broadcaster.ichc-panel-closed { display: none !important; }
 
-    /* Go Live panel — must escape #ichc-room-root stacking context (z:2147483000) */
+    /* ── Go Live panel (#rtc-broadcaster) ───────────────────────
+       The site builds this with Bootstrap: .row > .col-md-7 (video) + .col-md-5
+       (#publish-settings), and inside that a .col-10 select next to a .col-2 icon
+       button per input.
+
+       Bootstrap has to be beaten explicitly, not just overridden loosely. A first
+       attempt set flex on the rows but left Bootstrap's `width: 83.333%` on .col-10
+       and never set flex-wrap, so col-10 + col-2 + gap exceeded 100% and every toggle
+       button wrapped onto its own line. Hence the blanket width/flex-basis reset and
+       the explicit nowrap below. ── */
     #rtc-broadcaster,
     #cams > #rtc-broadcaster,
     #cams #rtc-broadcaster,
@@ -2744,43 +2874,287 @@
         top: 50% !important;
         left: 50% !important;
         transform: translate(-50%, -50%) !important;
-        width: 640px !important;
-        max-width: 95vw !important;
+        width: 680px !important;
+        max-width: 94vw !important;
         box-sizing: border-box !important;
         display: block !important;
-        background: #1e2124 !important;
-        border: 1px solid #3a3d42 !important;
-        border-radius: 10px !important;
-        box-shadow: 0 8px 32px rgba(0,0,0,.7) !important;
-        padding: 12px !important;
+        background: #1b1d21 !important;
+        border: 1px solid rgba(255,255,255,0.09) !important;
+        border-radius: 14px !important;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.7), 0 2px 10px rgba(0,0,0,0.45) !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        font-family: "Hanken Grotesk", "Trebuchet MS", "Segoe UI", sans-serif !important;
+        /* Makes the browser draw native chrome dark — most importantly the <select>
+           dropdown *popup*, which no author CSS can reach. Without this the list flashes
+           white over a dark panel when opened. */
+        color-scheme: dark !important;
     }
-    /* Selects: show full device name without clipping */
-    #rtc-broadcaster select {
-        min-width: 180px !important;
+    /* Header bar, drawn with ::before so no markup change is needed */
+    #rtc-broadcaster::before {
+        content: "Go live" !important;
+        display: block !important;
+        padding: 13px 16px 12px !important;
+        background: #212429 !important;
+        border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+        color: #b9bec6 !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+    }
+
+    /* ── Bootstrap neutralisation ── */
+    #rtc-broadcaster .container-fluid,
+    #rtc-broadcaster #publish-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: none !important;
+        width: auto !important;
+    }
+    #rtc-broadcaster #publish-content {
+        padding: 16px !important;
+    }
+    #rtc-broadcaster #publish-content > .row,
+    #rtc-broadcaster #publish-settings > .row {
+        display: flex !important;
+        flex-wrap: nowrap !important;   /* the fix: no more wrapped toggles */
+        margin: 0 !important;
+        width: auto !important;
+    }
+    /* Never resurrect a row the site has hidden (transcoder warning / error panel) */
+    #rtc-broadcaster .row[style*="display:none"],
+    #rtc-broadcaster .row[style*="display: none"] { display: none !important; }
+    /* Strip every Bootstrap column width/basis; sizing is set per column below */
+    #rtc-broadcaster [class*="col-"] {
+        flex: 0 1 auto !important;
+        width: auto !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* ── Body: preview | controls ── */
+    #rtc-broadcaster #publish-content > .row {
+        gap: 16px !important;
+        align-items: stretch !important;
+    }
+    #rtc-broadcaster #publish-video-container {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        display: flex !important;
+    }
+    /* Overrides the site's inline width:90% */
+    #rtc-broadcaster #publisher-video {
+        width: 100% !important;
         max-width: 100% !important;
+        aspect-ratio: 4 / 3 !important;
+        height: auto !important;
+        display: block !important;
+        object-fit: cover !important;
+        background: #000 !important;
+        border: 1px solid rgba(255,255,255,0.07) !important;
+        border-radius: 10px !important;
     }
-    /* Don't block clicks on the broadcaster controls */
-    #camPreview {
-        pointer-events: none !important;
+    #rtc-broadcaster #publish-settings {
+        flex: 0 0 232px !important;
+        width: 232px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 14px !important;
+        /* The site puts a card border here; the panel is part of ours now */
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        padding: 0 !important;
     }
-    /* Close button injected by theme.js */
+
+    /* ── One input row: label, then select + square toggle side by side ── */
+    #rtc-broadcaster #publish-settings > .row {
+        gap: 8px !important;
+        align-items: flex-end !important;
+    }
+    #rtc-broadcaster #publish-settings .col-10 {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    #rtc-broadcaster #publish-settings .col-2 {
+        flex: 0 0 34px !important;
+        width: 34px !important;
+    }
+    #rtc-broadcaster .form-group { margin: 0 !important; width: auto !important; }
+    #rtc-broadcaster label {
+        display: block !important;
+        margin: 0 0 5px !important;
+        color: #7f858e !important;
+        font-size: 9.5px !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.07em !important;
+        text-align: left !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    #rtc-broadcaster select,
+    #rtc-broadcaster select.form-control {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        display: block !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        height: 34px !important;
+        box-sizing: border-box !important;
+        padding: 0 26px 0 10px !important;
+        background-color: #24272c !important;
+        background-image: linear-gradient(45deg, transparent 50%, #8d939c 50%),
+            linear-gradient(135deg, #8d939c 50%, transparent 50%) !important;
+        background-position: calc(100% - 14px) 15px, calc(100% - 9px) 15px !important;
+        background-size: 5px 5px, 5px 5px !important;
+        background-repeat: no-repeat !important;
+        border: 1px solid rgba(255,255,255,0.09) !important;
+        border-radius: 8px !important;
+        color: #e3e6ea !important;
+        font: 500 12px/1 inherit !important;
+        text-overflow: ellipsis !important;
+        cursor: pointer !important;
+        transition: border-color 0.13s, background-color 0.13s !important;
+    }
+    #rtc-broadcaster select:hover { background-color: #2a2e34 !important; }
+    #rtc-broadcaster select:focus {
+        outline: none !important;
+        border-color: #5865f2 !important;
+        box-shadow: 0 0 0 3px rgba(88,101,242,0.20) !important;
+    }
+    #rtc-broadcaster select option { background: #24272c !important; color: #e3e6ea !important; }
+
+    /* Camera / mic toggles. #mute-toggle carries an inline
+       background-image: linear-gradient(white 100%, lime) — that is why it rendered as
+       a white slab; an !important declaration beats a non-important inline value. */
+    #rtc-broadcaster .control-button,
+    #rtc-broadcaster #camera-toggle,
+    #rtc-broadcaster #mute-toggle {
+        width: 34px !important;
+        min-width: 34px !important;
+        height: 34px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex: 0 0 auto !important;
+        background-color: #24272c !important;
+        background-image: none !important;
+        border: 1px solid rgba(255,255,255,0.09) !important;
+        border-radius: 8px !important;
+        cursor: pointer !important;
+        transition: background-color 0.13s, border-color 0.13s !important;
+    }
+    #rtc-broadcaster .control-button:hover {
+        background-color: #2f3339 !important;
+        border-color: rgba(255,255,255,0.2) !important;
+    }
+    /* The site swaps which <img> is shown to signal state, so only normalise them.
+       brightness(0) invert(1) forces any source colour to a clean white glyph. */
+    #rtc-broadcaster .control-button img {
+        width: 17px !important;
+        height: 17px !important;
+        filter: brightness(0) invert(1) !important;
+        opacity: 0.8 !important;
+    }
+    #rtc-broadcaster .control-button:hover img { opacity: 1 !important; }
+
+    /* ── Actions ── */
+    #rtc-broadcaster #publish-settings > .row:last-child {
+        display: block !important;
+        margin-top: auto !important;   /* pin to the bottom of the column */
+    }
+    #rtc-broadcaster #publish-settings > .row:last-child .col-10 {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    #rtc-broadcaster #publish-toggle,
+    #rtc-broadcaster #publish-toggle.btn {
+        display: block !important;
+        width: 100% !important;
+        padding: 11px 12px !important;
+        background: #5865f2 !important;
+        border: 0 !important;
+        border-radius: 10px !important;
+        color: #fff !important;
+        font: 700 14px/1.2 inherit !important;
+        letter-spacing: 0.01em !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 10px rgba(88,101,242,0.32) !important;
+        transition: background 0.14s, box-shadow 0.14s, transform 0.1s !important;
+    }
+    #rtc-broadcaster #publish-toggle:hover {
+        background: #6b76f5 !important;
+        box-shadow: 0 4px 16px rgba(88,101,242,0.45) !important;
+    }
+    #rtc-broadcaster #publish-toggle:active { transform: translateY(1px) !important; }
+    #rtc-broadcaster #publish-settings br { display: none !important; }
+    #rtc-broadcaster a[href*="stopCam"] {
+        display: block !important;
+        margin-top: 8px !important;
+        padding: 5px !important;
+        color: #7f858e !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        text-align: center !important;
+        text-decoration: none !important;
+        border-radius: 7px !important;
+        transition: color 0.12s, background 0.12s !important;
+    }
+    #rtc-broadcaster a[href*="stopCam"]:hover {
+        color: #f87171 !important;
+        background: rgba(239,68,68,0.10) !important;
+    }
+
+    /* Warning / error panels */
+    #rtc-broadcaster .alert {
+        margin: 0 16px 0 !important;
+        padding: 9px 11px !important;
+        border-radius: 9px !important;
+        font-size: 11px !important;
+        line-height: 1.4 !important;
+    }
+    #rtc-broadcaster .alert-warning {
+        background: rgba(205,170,55,0.12) !important;
+        border: 1px solid rgba(205,170,55,0.36) !important;
+        color: #e0c470 !important;
+    }
+    #rtc-broadcaster .alert-danger {
+        background: rgba(239,68,68,0.12) !important;
+        border: 1px solid rgba(239,68,68,0.36) !important;
+        color: #f8a1a1 !important;
+    }
+    #rtc-broadcaster #error-panel.invisible { display: none !important; }
+    /* Do not block clicks on the broadcaster controls */
+    #camPreview { pointer-events: none !important; }
+    /* Close button injected by theme.js — sits in the header bar */
     #ichc-broadcaster-close {
         position: absolute !important;
-        top: 8px !important;
-        right: 10px !important;
-        width: 24px !important;
-        height: 24px !important;
-        line-height: 24px !important;
-        text-align: center !important;
+        top: 9px !important;
+        right: 11px !important;
+        width: 26px !important;
+        height: 26px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
         cursor: pointer !important;
-        font-size: 16px !important;
-        color: #b9bbbe !important;
+        font-size: 12px !important;
+        color: #8b9198 !important;
         background: transparent !important;
-        border: none !important;
-        border-radius: 4px !important;
-        z-index: 1 !important;
+        border: 1px solid transparent !important;
+        border-radius: 7px !important;
+        z-index: 2 !important;
         user-select: none !important;
+        transition: color 0.12s, background 0.12s, border-color 0.12s !important;
     }
+    /* If a duplicate is ever injected again, show only the first */
+    #ichc-broadcaster-close ~ #ichc-broadcaster-close { display: none !important; }
     #ichc-broadcaster-close:hover { color: #fff !important; background: rgba(255,255,255,.1) !important; }
 
     #cams {
@@ -4284,12 +4658,12 @@
     /* Presence is carried by name brightness + section grouping (§2) — no left dot. */
     /* Active (default) */
     #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) .ichc-ul-user-name {
-        color: #cfd3da !important;
+        color: var(--ichc-ul-name-color, #cfd3da) !important;
         font-weight: 600 !important;
     }
     /* Cammed: brightest */
     #ichc-userlist .ichc-ul-user.cammed .ichc-ul-user-name {
-        color: #f4f6f8 !important;
+        color: var(--ichc-ul-name-color, #f4f6f8) !important;
         font-weight: 600 !important;
     }
     /* Hidden cammed: dimmed name, still in ON CAM */
@@ -4297,13 +4671,22 @@
         color: #9298a4 !important;
         font-weight: 500 !important;
     }
+    /* Name colour = the user's own chosen text colour when we have it.
+       --ichc-ul-name-color is set per row by _applyNickColor() in modernize.js from
+       the registry chat.js harvests off their messages, already adjusted for this
+       panel's background. The fallback in each var() is the role colour, so users who
+       have not spoken yet keep the old behaviour. Every one of these needs the var,
+       because the role rules below would otherwise win on specificity. */
+    #ichc-userlist .ichc-ul-user .ichc-ul-user-name {
+        color: var(--ichc-ul-name-color, #c8ccd2) !important;
+    }
     /* Mod: keep blurple tint on the name (role, not presence) */
     #ichc-userlist .ichc-ul-user.mod .ichc-ul-user-name {
-        color: #9aa8e0 !important;
+        color: var(--ichc-ul-name-color, #9aa8e0) !important;
     }
     /* Idle: muted, de-emphasized */
     #ichc-userlist .ichc-ul-user.idle .ichc-ul-user-name {
-        color: #777c85 !important;
+        color: var(--ichc-ul-name-color, #777c85) !important;
         font-weight: 500 !important;
     }
     /* Bar alpha by section (§4) */
@@ -6403,11 +6786,11 @@
     html.ichc-light-theme #ichc-userlist .ichc-ul-username.ichc-ul-mod { color: #c27c0e !important; }
     /* Username text (current redesign) — presence states default to light colors
        for dark mode; flip them dark for light mode. */
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) .ichc-ul-user-name { color: #313338 !important; }
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user.cammed .ichc-ul-user-name { color: #1b1d21 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, #313338) !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user.cammed .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, #1b1d21) !important; }
     html.ichc-light-theme #ichc-userlist .ichc-ul-user.cammed.ichc-ul-hidden-live .ichc-ul-user-name { color: #6b7280 !important; }
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user.mod .ichc-ul-user-name { color: #4752c4 !important; }
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user.idle .ichc-ul-user-name { color: #9298a4 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user.mod .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, #4752c4) !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-user.idle .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, #9298a4) !important; }
     html.ichc-light-theme .ichc-wc-nick {
         background: rgba(0,0,0,0.05) !important;
         color: #313338 !important;
@@ -6542,6 +6925,95 @@
         background: #d4d7dc !important;
         border: 1px solid #b8bbbe !important;
         color: #313338 !important;
+    }
+
+    /* ── Removed-message reveal + cross-refresh history ──────────────────────
+       Both sit inline in chat and both must be obviously not-live: a removed message
+       is a moderator action, and history is from a previous page load. Muted amber for
+       removals, cool grey for history. See _handleSilencedRemoval() and
+       _restoreChatHistory() in chat.js. ── */
+    #txt .ichc-muted-row {
+        margin: 1px 0 !important;
+        padding: 0 !important;
+        line-height: 1.3 !important;
+    }
+    #txt .ichc-muted-reveal {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        display: inline-block !important;
+        max-width: 100% !important;
+        padding: 1px 7px !important;
+        border: 1px dashed rgba(205,170,55,0.40) !important;
+        border-radius: 4px !important;
+        background: rgba(205,170,55,0.06) !important;
+        color: rgba(206,176,94,0.90) !important;
+        font: 600 10.5px/1.35 inherit !important;
+        cursor: pointer !important;
+        text-align: left !important;
+        transition: background 0.12s, border-color 0.12s !important;
+    }
+    #txt .ichc-muted-reveal:hover {
+        background: rgba(205,170,55,0.14) !important;
+        border-color: rgba(205,170,55,0.66) !important;
+        color: rgba(224,196,116,1) !important;
+    }
+    /* Revealed text sits exactly where the message was, dimmed and marked */
+    #txt .ichc-muted-body {
+        display: block !important;
+        margin: 1px 0 2px 6px !important;
+        padding-left: 7px !important;
+        border-left: 2px solid rgba(205,170,55,0.35) !important;
+        opacity: 0.75 !important;
+    }
+    #txt .ichc-muted-body[hidden] { display: none !important; }
+    /* Revealed content must not look interactive — it is a record, not live chat */
+    #txt .ichc-muted-body .ichc-reply-btn { display: none !important; }
+    #txt .ichc-muted-body a { pointer-events: none !important; }
+    html.ichc-light-theme #txt .ichc-muted-reveal {
+        border-color: rgba(150,110,20,0.45) !important;
+        background: rgba(150,110,20,0.08) !important;
+        color: #7a5b12 !important;
+    }
+    html.ichc-light-theme #txt .ichc-muted-body {
+        border-left-color: rgba(150,110,20,0.35) !important;
+    }
+
+    /* Messages carried over from before a refresh */
+    #txt .ichc-history-block {
+        margin: 0 0 2px !important;
+        padding: 0 0 2px !important;
+        opacity: 0.62 !important;
+    }
+    #txt .ichc-history-row {
+        margin: 0 !important;
+        padding: 1px 0 !important;
+        font-size: 12px !important;
+        line-height: 1.35 !important;
+    }
+    #txt .ichc-history-ts {
+        color: #6f757e !important;
+        font-size: 10px !important;
+        margin-right: 5px !important;
+    }
+    #txt .ichc-history-nick {
+        font-weight: 700 !important;
+        color: #9aa3b2 !important;
+        margin-right: 5px !important;
+    }
+    #txt .ichc-history-body { color: #aab2bd !important; }
+    #txt .ichc-history-divider {
+        margin: 3px 0 4px !important;
+        padding-top: 3px !important;
+        border-top: 1px dashed rgba(255,255,255,0.10) !important;
+        color: #6f757e !important;
+        font-size: 10px !important;
+        text-align: center !important;
+        letter-spacing: 0.02em !important;
+    }
+    html.ichc-light-theme #txt .ichc-history-nick { color: #4a515c !important; }
+    html.ichc-light-theme #txt .ichc-history-body { color: #5c636e !important; }
+    html.ichc-light-theme #txt .ichc-history-divider {
+        border-top-color: rgba(0,0,0,0.12) !important;
     }
 
     /* ── Overlay scrollbars (chat + userlist) ───────────────────────────────

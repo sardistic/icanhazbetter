@@ -294,6 +294,52 @@
             el.style.removeProperty('--ichc-kt-i');
         }
     }
+    // ── User prominence score ─────────────────────────────────────────────────
+    // Used by chat.js to decide which names survive truncation in the aggregated
+    // join/leave line. Exposed on window because content scripts of one extension
+    // share an isolated world, and these caches only exist here.
+    //
+    // Live signals outrank profile stats deliberately: someone on cam right now
+    // matters more to the room than someone with a big karma number who is idle.
+    // Note profileYearCache holds an AGE IN YEARS, not a calendar year — see
+    // _YEAR_TIERS ([1,4,8,12,16]) and _setUserViz, which both treat it that way.
+    function _rankUser(nick) {
+        const key = (nick || '').trim().toLowerCase();
+        if (!key) { return 0; }
+        let score = 0;
+
+        const karma = profileKarmaCache.get(key);
+        if (karma != null && karma > 0) {
+            // Same log curve as _setUserViz, saturating at 50k
+            score += 3 * Math.min(1, Math.log10(1 + karma) / Math.log10(50001));
+        }
+        const age = profileYearCache.get(key);
+        if (age != null && age > 0) { score += Math.min(1, age / 12); }
+        if (profileGuestCache.get(key) === true) { score -= 2; }
+
+        // Broadcast in the last 6h — _BCAST_LS stores the epoch their cam went live
+        try {
+            const started = parseInt(localStorage.getItem(_BCAST_LS + key) || '', 10);
+            if (started && Date.now() - started < 6 * 3600 * 1000) { score += 3; }
+        } catch (_) {}
+
+        // Current state straight off their userlist row: cheaper and always fresher
+        // than re-deriving mod/supporter/cam status here.
+        try {
+            const row = document.querySelector(
+                `#ichc-userlist .ichc-ul-user[data-ichc-av-key="${CSS.escape(key)}"]`);
+            if (row) {
+                if (row.classList.contains('cammed')) { score += 4; }
+                if (row.classList.contains('mod')) { score += 2; }
+                if (row.classList.contains('ichc-ul-supporter-row')) { score += 1; }
+                if (row.classList.contains('idle')) { score -= 1; }
+            }
+        } catch (_) {}
+
+        return score;
+    }
+    window.__ichcRankUser = _rankUser;
+
     function _setYearTierClass(el, year) {
         if (!el) { return; }
         for (let i = 0; i <= 5; i++) { el.classList.remove(`ichc-yt${i}`); }
@@ -3751,8 +3797,19 @@
             // auto-follow and new messages would yank you back to the bottom.
             // Non-bubbling on purpose: only that direct listener should see it.
             scrollEl.dispatchEvent(new Event('mousedown'));
+            let lastStamp = Date.now();
             const move = ev => {
                 if (travel <= 0) { return; }
+                // Re-stamp user intent throughout the drag. chat.js only treats a scroll
+                // as user-initiated within 600ms of the last input event, so any drag
+                // longer than that was being read as a *programmatic* scroll — which put
+                // chat's follow logic into "restore saved position / jump to live" and
+                // fought the drag. One stamp at pointerdown was not enough.
+                const now = Date.now();
+                if (now - lastStamp > 200) {
+                    lastStamp = now;
+                    scrollEl.dispatchEvent(new Event('mousedown'));
+                }
                 scrollEl.scrollTop = startTop + ((ev.clientY - startY) / travel) * max;
             };
             const up = () => {
@@ -4207,82 +4264,62 @@
         if (inputRow) { inputRow.classList.toggle('ichc-has-mention', !!active); }
     }
 
-    // Play the site's own notification sound when the local user is @mentioned.
-    // Runs in the page's main world so we can reuse whatever audio the site
-    // already loads (an <audio>/<embed> element or a global play function). Falls
-    // back to a short synthesized WebAudio chime if nothing site-native is found.
-    let _mentionSoundLast = 0;
-    function _playMentionSound() {
+    // ── Mention / PM ping ─────────────────────────────────────────────────────
+    // Two states only: off, or this ping. The previous version tried to reuse the
+    // site's own audio and accepted *any* <audio> element on the page (its scoring
+    // filter let a score of 0 through), so the alert was whatever clip happened to be
+    // loaded — which is why it sounded like a UI click and bore no relation to the
+    // event. Synthesised instead: nothing to fetch, no dependency on site markup, and
+    // it cannot drift into playing the wrong clip.
+    //
+    // The sound is a rising two-note bell (A5 → D6, ~90 ms apart), each note a sine
+    // with a quiet octave partial and a 0.38 s exponential decay. Short and clearly a
+    // notification rather than a click. Built in the page's main world so the
+    // AudioContext inherits the page's user activation.
+    const PING_KEY = 'ichc_ping_sound';
+    function _pingEnabled() {
+        try { return localStorage.getItem(PING_KEY) !== 'off'; } catch (_) { return true; }
+    }
+    function _setPingEnabled(on) {
+        try { localStorage.setItem(PING_KEY, on ? 'on' : 'off'); } catch (_) {}
+    }
+
+    let _pingLast = 0;
+    // `force` bypasses both the toggle and the throttle — used to preview the sound
+    // when the user switches it on, so "does it work" is answered immediately.
+    function _playPing(force) {
+        if (!force && !_pingEnabled()) { return; }
         const now = Date.now();
-        if (now - _mentionSoundLast < 1500) { return; } // throttle bursts
-        _mentionSoundLast = now;
+        if (!force && now - _pingLast < 1200) { return; }   // collapse bursts
+        _pingLast = now;
         runInPageContext(`
 (() => {
     try {
-        if (window.__ichcPlayMentionSound) { return window.__ichcPlayMentionSound(); }
-
-        function playEl(el) {
-            try {
-                const node = el.cloneNode(true);
-                node.volume = (typeof el.volume === 'number') ? el.volume : 1;
-                node.muted = false;
-                const p = node.play();
-                if (p && typeof p.catch === 'function') { p.catch(() => {}); }
-                return true;
-            } catch (_) { return false; }
-        }
-
-        function findSiteSound() {
-            // Prefer audio elements whose source looks like a notification ping.
-            const audios = Array.from(document.querySelectorAll('audio, embed[src]'));
-            const scored = audios.map(el => {
-                const src = (el.currentSrc || el.src || '').toLowerCase();
-                let score = 0;
-                if (/notif|ping|beep|alert|message|chat|sound|pop|chime/.test(src)) { score += 2; }
-                if (/\\.(mp3|wav|ogg|m4a)/.test(src)) { score += 1; }
-                return { el, score };
-            }).filter(x => x.el.tagName === 'AUDIO' ? true : x.score > 0)
-              .sort((a, b) => b.score - a.score);
-            return scored.length ? scored[0].el : null;
-        }
-
-        function fallbackBeep() {
-            try {
-                const Ctx = window.AudioContext || window.webkitAudioContext;
-                if (!Ctx) { return; }
-                const ctx = window.__ichcAudioCtx || (window.__ichcAudioCtx = new Ctx());
-                if (ctx.state === 'suspended') { ctx.resume().catch(() => {}); }
-                const t = ctx.currentTime;
-                [880, 1320].forEach((freq, i) => {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = 'sine';
-                    osc.frequency.value = freq;
-                    const start = t + i * 0.12;
-                    gain.gain.setValueAtTime(0.0001, start);
-                    gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
-                    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
-                    osc.connect(gain).connect(ctx.destination);
-                    osc.start(start);
-                    osc.stop(start + 0.2);
-                });
-            } catch (_) {}
-        }
-
-        window.__ichcPlayMentionSound = function() {
-            // Try a site-provided play function first.
-            const fns = ['playNotificationSound', 'playNotifySound', 'playChatSound',
-                         'playSound', 'playPmSound', 'notifySound', 'playBeep', 'playPing'];
-            for (const name of fns) {
-                if (typeof window[name] === 'function') {
-                    try { window[name](); return; } catch (_) {}
-                }
-            }
-            const el = findSiteSound();
-            if (el && playEl(el)) { return; }
-            fallbackBeep();
-        };
-        window.__ichcPlayMentionSound();
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) { return; }
+        const ctx = window.__ichcPingCtx || (window.__ichcPingCtx = new Ctx());
+        if (ctx.state === 'suspended') { ctx.resume().catch(() => {}); }
+        const t0 = ctx.currentTime + 0.01;
+        const out = ctx.createGain();
+        out.gain.value = 0.9;
+        out.connect(ctx.destination);
+        [[880, 0], [1174.66, 0.085]].forEach(pair => {
+            const base = pair[0], delay = pair[1];
+            [[base, 0.17], [base * 2, 0.05]].forEach(part => {
+                const freq = part[0], peak = part[1];
+                const osc = ctx.createOscillator();
+                const g = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                const s = t0 + delay;
+                g.gain.setValueAtTime(0.0001, s);
+                g.gain.exponentialRampToValueAtTime(peak, s + 0.012);
+                g.gain.exponentialRampToValueAtTime(0.0001, s + 0.38);
+                osc.connect(g).connect(out);
+                osc.start(s);
+                osc.stop(s + 0.42);
+            });
+        });
     } catch (_) {}
 })();
         `);
@@ -4330,6 +4367,9 @@
             ensurePmAvatarItem(nick, null);
             _pulsePmAttention(nick);
             if (_isPmTabFocused(nick)) { return; }
+            // Same ping as an @mention, and only when the PM's tab is not focused —
+            // no point announcing a message you are already looking at.
+            _playPing();
             const item = _pmAvNode(nick);
             if (!item) { return; }
             const b = item.querySelector('.ichc-pm-avatar-badge');
@@ -4413,7 +4453,7 @@
 
         window.addEventListener('ichc-mention-alert', e => {
             _setMentionIndicator(true, e.detail || null);
-            _playMentionSound();
+            _playPing();
         });
         document.addEventListener('focusin', e => {
             if (e.target?.id === 'txtMsg') { _setMentionIndicator(false); }
@@ -7531,6 +7571,28 @@
             return;
         }
 
+        // The site's colour picker reports back through this (see the Text color item):
+        // the page writes the saved colour to documentElement.dataset and fires the
+        // event. Bound once per cog build; the guard keeps repeat builds from stacking
+        // listeners.
+        if (!window.__ichcColorListener) {
+            window.__ichcColorListener = true;
+            window.addEventListener('ichc-color-picked', () => {
+                const color = document.documentElement.dataset.ichcPickedColor;
+                if (!color) { return; }
+                try { localStorage.setItem('ichc_font_color', color); } catch (_) {}
+                const swatch = document.querySelector('#ichc-cog-menu .ichc-color-swatch');
+                if (swatch) { swatch.style.setProperty('background', color, 'important'); }
+                // Record it against the local user so their own userlist name picks the
+                // colour up straight away rather than after their next message.
+                const me = document.getElementById('ichc-userinfo-username')?.textContent?.trim();
+                if (me && typeof window.__ichcRecordNickColor === 'function') {
+                    window.__ichcRecordNickColor(me, color);
+                    scheduleUserListBuild(120);
+                }
+            });
+        }
+
         const wrapper = document.createElement('div');
         wrapper.id = 'ichc-cog-wrapper';
 
@@ -7566,7 +7628,21 @@
                     }, 50);
                 },
             },
-            { label: 'Sounds',          icon: ICONS.volume,    fn: 'toggleChatSound()' },
+            {
+                // Explicit two-state toggle for our own mention/PM ping. This used to
+                // call the site's toggleChatSound(), whose state we could not read and
+                // whose label therefore said nothing about what would actually happen.
+                label: 'Mention/PM sound: ' + (_pingEnabled() ? 'Ping' : 'Off'),
+                icon: ICONS.volume,
+                keepOpen: true,
+                action(labelEl) {
+                    const on = !_pingEnabled();
+                    _setPingEnabled(on);
+                    if (labelEl) { labelEl.textContent = 'Mention/PM sound: ' + (on ? 'Ping' : 'Off'); }
+                    // Preview on enable so the setting proves itself immediately
+                    if (on) { _playPing(true); }
+                },
+            },
             {
                 label: 'Broadcast quality: ' + _bcastQLabel(),
                 icon: ICONS.gauge,
@@ -7601,26 +7677,55 @@
                 icon: ICONS.palette,
                 swatch: true,
                 action() {
-                    let picker = document.getElementById('ichc-font-color-picker');
-                    if (!picker) {
-                        picker = document.createElement('input');
-                        picker.type = 'color';
-                        picker.id = 'ichc-font-color-picker';
-                        picker.style.cssText = 'position:fixed;width:0;height:0;opacity:0;pointer-events:none;top:-9999px;left:-9999px;';
-                        document.body.appendChild(picker);
-                        try { const s = localStorage.getItem('ichc_font_color'); if (s) { picker.value = s; } } catch (_) {}
-                        const _apply = color => {
-                            try { localStorage.setItem('ichc_font_color', color); } catch (_) {}
-                            const txtMsg = document.getElementById('txtMsg');
-                            if (txtMsg) { txtMsg.style.setProperty('color', color, 'important'); }
-                            const swatch = document.querySelector('#ichc-cog-menu .ichc-color-swatch');
-                            if (swatch) { swatch.style.setProperty('background', color, 'important'); }
-                            runInPageContext(`(function(c){try{window.chatFontColor=c;}catch(e){}var i=document.querySelector('#colorDiv input[type=color],#colorDiv input[type=text]');if(i)i.value=c;})('${color}');`);
-                        };
-                        picker.addEventListener('input', e => _apply(e.target.value));
-                        picker.addEventListener('change', e => _apply(e.target.value));
+                    // Drive the site's own picker. It is a jscolor dialog opened by the
+                    // global pickColor(), with onColorSave / onColorCancel callbacks —
+                    // confirmed against the live command bar, which links
+                    // javascript:pickColor(). This replaces a bespoke <input type=color>
+                    // that guessed at the site (it set window.chatFontColor and poked
+                    // #colorDiv, neither of which exists), so the colour never actually
+                    // applied to the user's messages.
+                    //
+                    // onColorSave is wrapped once so the saved colour also reaches us:
+                    // the page publishes it on documentElement.dataset and fires a plain
+                    // Event. A dataset string is used rather than CustomEvent detail
+                    // because object payloads do not cross the content-script boundary
+                    // reliably in Firefox.
+                    runInPageContext(`
+(() => {
+    try {
+        if (!window.__ichcColorHooked && typeof window.onColorSave === 'function') {
+            window.__ichcColorHooked = true;
+            const orig = window.onColorSave;
+            window.onColorSave = function() {
+                let ret;
+                try { ret = orig.apply(this, arguments); } catch (_) {}
+                try {
+                    let c = '';
+                    for (let i = 0; i < arguments.length; i++) {
+                        const a = arguments[i];
+                        if (typeof a === 'string' && /^#?[0-9a-fA-F]{3,8}$/.test(a.trim())) { c = a.trim(); break; }
+                        if (a && typeof a.toHEXString === 'function') { c = a.toHEXString(); break; }
                     }
-                    picker.click();
+                    if (!c) {
+                        const inp = document.querySelector('input.jscolor, input[class*="jscolor"]');
+                        if (inp && inp.value) { c = inp.value.trim(); }
+                    }
+                    if (c) {
+                        if (c[0] !== '#') { c = '#' + c; }
+                        document.documentElement.dataset.ichcPickedColor = c;
+                        window.dispatchEvent(new Event('ichc-color-picked'));
+                    }
+                } catch (_) {}
+                return ret;
+            };
+        }
+        if (typeof window.pickColor === 'function') { window.pickColor(); return; }
+        // Fallback: click the command bar's own pickColor link
+        const link = Array.from(document.querySelectorAll('a[href*="pickColor"]'))[0];
+        if (link) { link.click(); }
+    } catch (_) {}
+})();
+                    `);
                 },
             },
             { label: 'Image viewing',   icon: ICONS.imageIcon, fn: 'toggleImages()' },
@@ -9491,6 +9596,69 @@
             }
         }
 
+        // ── Per-user text colour on userlist names ────────────────────────────
+        // chat.js harvests each user's own chosen text colour from their messages
+        // (see the nick colour registry there) and shares it via window +
+        // localStorage. Applied here as --ichc-ul-name-color so a person reads as the
+        // same colour in the userlist as in chat. Two values are written because the
+        // panel background differs per theme: dark needs dark colours lifted, light
+        // needs light ones pushed down. CSS falls back to the role colour when a user
+        // has not been seen speaking yet.
+        const _nickColorMap = () => {
+            if (window.__ichcNickColors instanceof Map) { return window.__ichcNickColors; }
+            try {
+                const raw = JSON.parse(localStorage.getItem('ichc_nick_colors') || '{}');
+                const m = new Map(Object.entries(raw));
+                window.__ichcNickColors = m;
+                return m;
+            } catch (_) { return new Map(); }
+        };
+
+        const _parseRgb = (value) => {
+            const v = String(value || '').trim().toLowerCase();
+            const hex = v.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+            if (hex) {
+                const h = hex[1];
+                return h.length === 3
+                    ? [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16)]
+                    : [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+            }
+            const m = v.match(/^rgba?\(([^)]+)\)$/);
+            if (m) {
+                const p = m[1].split(',').map(n => parseFloat(n));
+                if (p.length >= 3 && p.every(n => !Number.isNaN(n))) { return [p[0], p[1], p[2]]; }
+            }
+            return null;
+        };
+
+        // Mirrors chat.js's makeReadableChatColor so both panels agree on the shade.
+        const _readableOnDark = (rgb) => {
+            const [r, g, b] = rgb;
+            const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+            if (lum >= 0.4) { return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`; }
+            const mix = Math.min(0.76, 0.2 + ((0.4 - lum) / 0.4) * 0.48);
+            return `rgb(${Math.round(r + (255 - r) * mix)}, ${Math.round(g + (255 - g) * mix)}, ${Math.round(b + (255 - b) * mix)})`;
+        };
+        const _readableOnLight = (rgb) => {
+            const [r, g, b] = rgb;
+            const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+            if (lum <= 0.62) { return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`; }
+            const mix = Math.min(0.72, 0.2 + ((lum - 0.62) / 0.38) * 0.52);
+            return `rgb(${Math.round(r * (1 - mix))}, ${Math.round(g * (1 - mix))}, ${Math.round(b * (1 - mix))})`;
+        };
+
+        const _applyNickColor = (span, name) => {
+            const raw = _nickColorMap().get((name || '').trim().toLowerCase());
+            const rgb = raw ? _parseRgb(raw) : null;
+            if (!rgb) {
+                span.style.removeProperty('--ichc-ul-name-color');
+                span.style.removeProperty('--ichc-ul-name-color-lt');
+                return;
+            }
+            span.style.setProperty('--ichc-ul-name-color', _readableOnDark(rgb));
+            span.style.setProperty('--ichc-ul-name-color-lt', _readableOnLight(rgb));
+        };
+
         // Inline role badges after the name: mod shield, then supporter heart.
         // Called from both row paths on purpose. Previously these were only created in
         // _buildNewRow, while the reuse path just rewrote className — so a user who
@@ -9630,6 +9798,7 @@
 
             // Inline role icons — rendered right after the name (§6).
             _syncRoleBadges(span, u);
+            _applyNickColor(span, u.name);
 
             // Cam-hidden users stay in ON CAM (§7) and carry an eye-slash to re-enable
             // them. Users whose cam is *showing* get no button: the old hover-to-reveal
@@ -9738,6 +9907,8 @@
                     }
                     // Mod shield / supporter heart can appear or disappear on a reused row
                     _syncRoleBadges(span, u);
+                    // Their text colour may have been harvested since the last pass
+                    _applyNickColor(span, u.name);
                     span.title = [
                         u.hidden && 'hidden',
                         u.mod && 'mod',
@@ -10199,6 +10370,33 @@
                     _refreshRetainItem();
                 });
                 moreMenu.appendChild(retainItem);
+
+                // Condensed join/leave — collapses all joins/leaves into two pinned
+                // lines at the top of the chat log instead of an inline event row.
+                // chat.js owns the rendering; this only flips the flag and announces it,
+                // because the flag is read on every event and chat.js may be listening
+                // before this menu is ever built.
+                const condItem = document.createElement('button');
+                condItem.type = 'button';
+                condItem.className = 'ichc-ul-more-item';
+                const _condOn = () => localStorage.getItem('ichc_condensed_events') === '1';
+                const _refreshCondItem = () => {
+                    const on = _condOn();
+                    condItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.chat}</span>` +
+                        `<span>Condensed join/leave</span>` +
+                        `<span class="ichc-ul-more-toggle" aria-hidden="true"></span>`;
+                    condItem.classList.toggle('ichc-on', on);
+                };
+                _refreshCondItem();
+                condItem.addEventListener('click', e => {
+                    e.stopPropagation();
+                    moreMenu.hidden = true;
+                    const next = !_condOn();
+                    localStorage.setItem('ichc_condensed_events', next ? '1' : '0');
+                    _refreshCondItem();
+                    window.dispatchEvent(new CustomEvent('ichc-condensed-events-change'));
+                });
+                moreMenu.appendChild(condItem);
 
                 document.body.appendChild(moreMenu);
 
