@@ -558,14 +558,35 @@
     // patch's bcastTarget at cam-up). No dependency on the diagnostics collector, so
     // broadcast quality keeps working even with the collector's WebRTC hooks disabled.
     const _AN = ';window.ichcApplyBcastNow&&ichcApplyBcastNow()';   // apply live to the current stream too
-    const _BCAST_Q = {
-        off:    { label: 'Off',                apply: 'window.__ichcBcastQ=null' + _AN },
-        sharp:  { label: 'Sharp (480p)',       apply: 'window.__ichcBcastQ={width:640,height:480,maxFps:30,maxKbps:1500,degradation:"maintain-resolution"}' + _AN },
-        smooth: { label: 'Smooth (480p·30fps)', apply: 'window.__ichcBcastQ={width:640,height:480,maxFps:30,maxKbps:2500,degradation:"maintain-framerate"}' + _AN },
-        hd:     { label: 'HD (720p)',          apply: 'window.__ichcBcastQ={width:1280,height:720,maxFps:30,maxKbps:4000,degradation:"balanced"}' + _AN },
-        fhd:    { label: 'Full HD (1080p)',    apply: 'window.__ichcBcastQ={width:1920,height:1080,maxFps:30,maxKbps:6000,degradation:"balanced"}' + _AN },
+    // `q` is the data; the apply string is derived from it. Both the page-context
+    // patch and the cog menu read the same table, so a preset can never mean two
+    // different things depending on which path set it.
+    const _BCAST_Q_SETTINGS = {
+        off:    null,
+        sharp:  { width: 640,  height: 480,  maxFps: 30, maxKbps: 1500, degradation: 'maintain-resolution' },
+        smooth: { width: 640,  height: 480,  maxFps: 30, maxKbps: 2500, degradation: 'maintain-framerate' },
+        hd:     { width: 1280, height: 720,  maxFps: 30, maxKbps: 4000, degradation: 'balanced' },
+        fhd:    { width: 1920, height: 1080, maxFps: 30, maxKbps: 6000, degradation: 'balanced' },
     };
-    function _bcastQKey() { try { return localStorage.getItem(_BCAST_Q_KEY) || 'off'; } catch (_) { return 'off'; } }
+    const _BCAST_Q = {
+        off:    { label: 'Off' },
+        sharp:  { label: 'Sharp (480p)' },
+        smooth: { label: 'Smooth (480p·30fps)' },
+        hd:     { label: 'HD (720p)' },
+        fhd:    { label: 'Full HD (1080p)' },
+    };
+    Object.keys(_BCAST_Q).forEach(k => {
+        _BCAST_Q[k].apply = 'window.__ichcBcastQ=' + JSON.stringify(_BCAST_Q_SETTINGS[k]) + _AN;
+    });
+    // Always returns a key that exists in _BCAST_Q. An unrecognised stored value used
+    // to make `_BCAST_Q[key].apply` throw, which the caller's try/catch swallowed —
+    // so boot pushed no preset at all and cam-up silently used the defaults.
+    function _bcastQKey() {
+        try {
+            const k = localStorage.getItem(_BCAST_Q_KEY) || 'off';
+            return Object.prototype.hasOwnProperty.call(_BCAST_Q, k) ? k : 'off';
+        } catch (_) { return 'off'; }
+    }
     function _bcastQLabel() { return (_BCAST_Q[_bcastQKey()] || _BCAST_Q.off).label; }
     function _cycleBcastQuality() {
         const order = ['off', 'sharp', 'smooth', 'hd', 'fhd'];
@@ -975,10 +996,48 @@
 
     // ─── JS ──────────────────────────────────────────────────────────────────────
 
-    // Apply saved theme before first paint
-    if (localStorage.getItem('ichc_theme') === 'light') {
-        document.documentElement.classList.add('ichc-light-theme');
+    // ── Themes ──────────────────────────────────────────────────────────────────
+    // Palettes live in theme.css as token blocks; this is only the registry and
+    // the class plumbing. `light` keeps the original `ichc-light-theme` class
+    // because ~150 pre-token override rules are still keyed to it — renaming it
+    // would silently strip the light theme back to its tokens.
+    // `swatch` is [surface, accent, text] and duplicates three values from each
+    // CSS block on purpose: the picker has to draw a theme that is not applied,
+    // and a var() can only ever resolve to the active palette.
+    const THEMES = [
+        { id: 'dark',       label: 'Dark',             cls: '',                      light: false, swatch: ['#18191c', '#5865f2', '#dbdee1'] },
+        { id: 'light',      label: 'Light',            cls: 'ichc-light-theme',      light: true,  swatch: ['#d4d7dc', '#5865f2', '#313338'] },
+        { id: 'mocha',      label: 'Catppuccin Mocha', cls: 'ichc-theme-mocha',      light: false, swatch: ['#1e1e2e', '#cba6f7', '#cdd6f4'] },
+        { id: 'tokyo',      label: 'Tokyo Night',      cls: 'ichc-theme-tokyo',      light: false, swatch: ['#1a1b26', '#7aa2f7', '#c0caf5'] },
+        { id: 'everforest', label: 'Everforest',       cls: 'ichc-theme-everforest', light: false, swatch: ['#2d353b', '#a7c080', '#d3c6aa'] },
+        { id: 'paper',      label: 'Paper',            cls: 'ichc-theme-paper',      light: true,  swatch: ['#e8e1d2', '#2f6d7a', '#3b3529'] },
+        { id: 'dawn',       label: 'Rosé Pine Dawn',   cls: 'ichc-theme-dawn',       light: true,  swatch: ['#fffaf3', '#907aa9', '#575279'] },
+    ];
+    const THEME_CLASSES = THEMES.map(t => t.cls).filter(Boolean).concat('ichc-theme-is-light');
+
+    function currentThemeId() {
+        const saved = localStorage.getItem('ichc_theme');
+        return THEMES.some(t => t.id === saved) ? saved : 'dark';
     }
+    function currentTheme() {
+        return THEMES.find(t => t.id === currentThemeId()) || THEMES[0];
+    }
+    function applyTheme(id, { persist = true } = {}) {
+        const theme = THEMES.find(t => t.id === id) || THEMES[0];
+        const root = document.documentElement;
+        root.classList.remove(...THEME_CLASSES);
+        if (theme.cls) { root.classList.add(theme.cls); }
+        // Polarity marker, read by the CSS that flips user nick colours and by
+        // isLightTheme() in chat.js. Kept separate from the palette class so a
+        // new light theme needs no changes anywhere but the registry.
+        if (theme.light) { root.classList.add('ichc-theme-is-light'); }
+        if (persist) { localStorage.setItem('ichc_theme', theme.id); }
+        document.dispatchEvent(new CustomEvent('ichc-theme-change'));
+        return theme;
+    }
+
+    // Apply saved theme before first paint
+    applyTheme(currentThemeId(), { persist: false });
 
     // ── Loading overlay — fills the Rocket Loader deferral gap ──────────────────
     (function _installLoadingOverlay() {
@@ -1048,43 +1107,6 @@
         // Push the saved broadcast-quality preset into the page (read by the quality
         // patch at cam-up). Independent of the diagnostics collector.
         try { runInPageContext(_BCAST_Q[_bcastQKey()].apply); } catch (_) {}
-        // Coalesce refreshCams in page context. The site can call it in quick bursts;
-        // keep deliberate extension reloads immediate, but queue one skipped site call
-        // instead of swallowing refreshes that may keep cams/chat state alive.
-        const _wrapRefreshCams = () => {
-            runInPageContext(`
-                if (typeof refreshCams === 'function' && !refreshCams._ichcThrottled) {
-                    const _orig = refreshCams;
-                    window._ichcLastRefresh = window._ichcLastRefresh || 0;
-                    window._ichcQueuedRefreshTimer = window._ichcQueuedRefreshTimer || 0;
-                    window.refreshCams = function(force) {
-                        const now = Date.now();
-                        const minGap = 2000;
-                        const elapsed = now - window._ichcLastRefresh;
-                        if (!force && elapsed < minGap) {
-                            if (!window._ichcQueuedRefreshTimer) {
-                                window._ichcQueuedRefreshTimer = window.setTimeout(function() {
-                                    window._ichcQueuedRefreshTimer = 0;
-                                    window._ichcLastRefresh = Date.now();
-                                    _orig.call(window);
-                                }, Math.max(250, minGap - elapsed));
-                            }
-                            return;
-                        }
-                        if (window._ichcQueuedRefreshTimer) {
-                            window.clearTimeout(window._ichcQueuedRefreshTimer);
-                            window._ichcQueuedRefreshTimer = 0;
-                        }
-                        window._ichcLastRefresh = now;
-                        return _orig.apply(this, arguments);
-                    };
-                    window.refreshCams._ichcThrottled = true;
-                }
-            `);
-        };
-        _wrapRefreshCams();
-        window.setTimeout(_wrapRefreshCams, 2000);
-        window.setTimeout(_wrapRefreshCams, 5000);
         // Clear the init transition-suppression class unconditionally.
         // CSS vars are already set from the localStorage cache, so no layout reflow needed here.
         // The initDynamicLayout retries will refine the layout once the DOM is measurable.
@@ -1332,12 +1354,32 @@
         bitrate: 1500000,
     };
 
-    // Effective target: the user's broadcast-quality preset (window.__ichcBcastQ, set by
-    // the cam-stats collector) overrides the defaults. Read live so a preset change takes
-    // effect on the NEXT cam-up — we deliberately never touch the live broadcast track,
-    // which is what desyncs ICHC into the stuck "broadcasting audio" state.
+    // Effective target: the user's broadcast-quality preset overrides the defaults.
+    // Read live so a preset change takes effect on the NEXT cam-up — we deliberately
+    // never touch the live broadcast track, which is what desyncs ICHC into the stuck
+    // "broadcasting audio" state.
+    //
+    // localStorage is the source of truth, NOT window.__ichcBcastQ. The page-global is
+    // only a cache: it is pushed in by a fire-and-forget extension message, so it can be
+    // missing at cam-up if that message raced or the page context was rebuilt. When that
+    // happened the preset silently reverted to the defaults, and the only way back was to
+    // cycle presets until the setting was re-pushed. Reading the store here means a saved
+    // preset applies on the first cam-up with no push at all.
+    var __ichcQPresets = ${JSON.stringify(_BCAST_Q_SETTINGS)};
+    function savedBcastQ() {
+        try {
+            var k = localStorage.getItem(${JSON.stringify(_BCAST_Q_KEY)});
+            if (k && Object.prototype.hasOwnProperty.call(__ichcQPresets, k)) {
+                return __ichcQPresets[k];
+            }
+        } catch (_) {}
+        return null;
+    }
     function bcastTarget() {
-        const q = window.__ichcBcastQ;
+        // undefined means nothing was ever pushed — fall back to the store. An explicit
+        // null means the user chose "Off", which must NOT be overridden by the fallback.
+        var q = window.__ichcBcastQ;
+        if (q === undefined) { q = savedBcastQ(); }
         if (q && q.width && q.height) {
             return {
                 width:  { ideal: q.width,  max: q.width },
@@ -1760,42 +1802,43 @@
         element.setAttribute('data-ichc-bridge', bridgeToken);
 
         const selector = `[data-ichc-bridge="${bridgeToken}"]`;
-        const href = element.getAttribute('href') || '';
-        const onclick = element.getAttribute('onclick') || '';
 
         runInPageContext(`
+(() => {
             const el = document.querySelector(${JSON.stringify(selector)});
             if (!el) { return; }
+            el.removeAttribute('data-ichc-bridge');
 
-            try {
-                ['mousedown', 'mouseup', 'click'].forEach(type => {
-                    el.dispatchEvent(new MouseEvent(type, {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window,
-                    }));
-                });
-            } catch (_) {}
+            const nativeHref = el.getAttribute('href') || '';
+            const nativeOnclick = el.getAttribute('onclick') || '';
+            if (/^\\s*javascript:/i.test(nativeHref)) {
+                const js = nativeHref.replace(/^\\s*javascript:\\s*/i, '');
+                try { Function(js).call(el); } catch (_) {
+                    try { (0, eval)(js); } catch (_) {}
+                }
+                return;
+            }
+
+            if (nativeOnclick) {
+                try { Function(nativeOnclick).call(el); } catch (_) {}
+                return;
+            }
 
             try {
                 if (typeof el.click === 'function') { el.click(); }
             } catch (_) {}
-
-            const nativeHref = ${JSON.stringify(href)};
-            if (/^\s*javascript:/i.test(nativeHref)) {
-                const js = nativeHref.replace(/^\s*javascript:\s*/i, '');
-                try { Function(js).call(el); } catch (_) {
-                    try { (0, eval)(js); } catch (_) {}
-                }
-            }
-
-            const nativeOnclick = ${JSON.stringify(onclick)};
-            if (nativeOnclick) {
-                try { Function(nativeOnclick).call(el); } catch (_) {}
-            }
+})();
         `);
 
-        element.removeAttribute('data-ichc-bridge');
+        // The main-world call removes the marker after it finds the element. This
+        // timeout only cleans up if extension messaging/injection fails. Removing it
+        // synchronously here races the service worker and makes every bridged click a
+        // silent no-op.
+        window.setTimeout(() => {
+            if (element.getAttribute('data-ichc-bridge') === bridgeToken) {
+                element.removeAttribute('data-ichc-bridge');
+            }
+        }, 3000);
     }
 
     function loadPrefs() {
@@ -2378,7 +2421,7 @@
             // Align the resting face with the current state at build time (e.g. page
             // loaded while already broadcasting) — no animation, just snap.
             if (!faceMatchesState()) { rot += 90; apply(0, 'linear'); }
-            new MutationObserver(() => {
+            const liveStateObserver = new MutationObserver(() => {
                 peeking = false;
                 clearTilt();
                 const nowLive = live();
@@ -2396,7 +2439,8 @@
                     rot += 90 * rnd();
                     apply(600, 'cubic-bezier(.4,.12,.22,1)');
                 }
-            }).observe(btn, { attributes: true, attributeFilter: ['class'] });
+            });
+            liveStateObserver.observe(btn, { attributes: true, attributeFilter: ['class'] });
 
             // Click only drops a pending peek so it doesn't stick post-toggle; the spin
             // is driven by the .ichc-live observer above.
@@ -2407,7 +2451,12 @@
             // foreshortened). When NOT live and idle, roll ±180° to the 2nd GO face.
             // Skipped under prefers-reduced-motion.
             if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                setInterval(() => {
+                const idleTimer = window.setInterval(() => {
+                    if (!btn.isConnected) {
+                        window.clearInterval(idleTimer);
+                        liveStateObserver.disconnect();
+                        return;
+                    }
                     if (!reallyHover()) { clearTilt(); }
                     if (live() || reallyHover()) { return; }
                     rot += 180 * rnd();
@@ -3567,8 +3616,14 @@
     }
 
     // ── Chat log pruning ──────────────────────────────────────────────────────
-    const _CHAT_MAX_ROWS = 5000;
-    const _CHAT_TRIM_TO  = 4000;
+    // A busy room can hit several thousand richly-decorated rows in a couple of
+    // hours.  Keeping that many live nodes makes every delegated click, selector,
+    // and chat MutationObserver progressively more expensive.  The rolling history
+    // cache already preserves the newest 800 messages across refreshes/clears, so a
+    // smaller live window still leaves generous scrollback without retaining the
+    // multi-thousand-node DOM that caused long-session interaction lag.
+    const _CHAT_MAX_ROWS = 1600;
+    const _CHAT_TRIM_TO  = 1200;
 
     function _pruneChatLog(log) {
         if (!log) { return; }
@@ -3579,7 +3634,13 @@
         // Compensate scrollTop so the viewport doesn't jump when top rows are removed.
         const heightBefore = log.scrollHeight;
         const scrollBefore = log.scrollTop;
-        rows.forEach(r => r.remove());
+        rows.forEach(r => {
+            // chat.js watches removals to preserve moderator-silenced messages.
+            // Mark deliberate age pruning so it is not mistaken for moderation and
+            // replaced with a row of "removed message" placeholders.
+            r.dataset.ichcAgePruned = '1';
+            r.remove();
+        });
         const removed = heightBefore - log.scrollHeight;
         const newTop = Math.max(0, scrollBefore - removed);
         log.scrollTop = newTop;
@@ -3626,6 +3687,9 @@
         if (!log || log === _chatBadgeRoot) { return; }
         _chatBadgeObs?.disconnect();
         _chatBadgeRoot = log;
+        // Enforce the bound immediately on attach as well as after new rows. This
+        // also repairs an already-long-running tab as soon as the extension reloads.
+        _pruneChatLog(log);
         _applyChatBadgesScope(log);
         _initChatScrollLock(log);
         _chatAtBottom = true; // reset on reconnect — treat as following mode
@@ -3648,6 +3712,32 @@
         _chatBadgeObs.observe(log, { childList: true, subtree: true });
     }
 
+    const _CAM_DECORATION_SELECTOR = [
+        '.ichc-cam-stats-overlay',
+        '.ichc-cam-timer',
+        '.ichc-cam-fail-badge',
+        '.ichc-cam-year-badge',
+        '.ichc-card-tools',
+        '.ichc-disabled-overlay',
+        '.ichc-scan-line',
+    ].join(',');
+
+    // Extension-owned badges and overlays change frequently but never change the
+    // set/order/identity of camera cards.  Letting those mutations reach all three
+    // cam observers turned the one-second Live-overlay sample into a full layout,
+    // user-list scan, and chat-cam status refresh every second.
+    function _isCamDecorationMutation(mutation) {
+        const target = mutation.target instanceof Element
+            ? mutation.target
+            : mutation.target?.parentElement;
+        if (target?.closest?.(_CAM_DECORATION_SELECTOR)) { return true; }
+        if (mutation.type !== 'childList') { return false; }
+
+        const changed = [...mutation.addedNodes, ...mutation.removedNodes];
+        return changed.length > 0 && changed.every(node =>
+            node instanceof Element && node.matches(_CAM_DECORATION_SELECTOR));
+    }
+
     function _attachCamBadgeObserver() {
         const cams = document.getElementById('cams');
         if (!cams || cams === _camBadgeRoot) { return; }
@@ -3656,6 +3746,7 @@
         cams.querySelectorAll('.name-on-cam').forEach(_applyCamBadge);
         _camBadgeObs = new MutationObserver(mutations => {
             mutations.forEach(m => {
+                if (_isCamDecorationMutation(m)) { return; }
                 m.addedNodes.forEach(node => {
                     // Text node added to .name-on-cam: the name was just populated, try again
                     if (node.nodeType === 3) {
@@ -4741,10 +4832,10 @@
         layoutChat();
     }
 
-    // New-cam detection is intentionally disabled — the auto-reload caused random
-    // stream disruptions.  The site's own refreshCams() polling (coalesced to 2s
-    // via _wrapRefreshCams) handles picking up new cams within a reasonable delay.
-    // The manual reload button in the header is available for on-demand refresh.
+    // Automatic new-cam list refresh remains disabled. The polling protocol can
+    // emit [c+] during list rebuilds, so answering it with /cam refresh creates a
+    // feedback loop. Manual list refresh and inactivity auto-restart are handled
+    // separately below.
 
     const camDiagnosticState = {
         rows: [],
@@ -6189,7 +6280,11 @@
         window.addEventListener('message', ev => {
             if (ev.source !== window || !ev.data) { return; }
             if (ev.data.__ichc === 'camstats-data') {
-                if (_camStatsOn) { _renderCamStats(ev.data.feeds || []); }
+                if (_camStatsOn) {
+                    const feeds = ev.data.feeds || [];
+                    _updateCamMediaHealth(feeds);
+                    _renderCamStats(feeds);
+                }
             } else if (ev.data.__ichc === 'camstats-event') {
                 _handleCamEvent(ev.data.ev);
             }
@@ -6207,7 +6302,15 @@
         if (_camStatsOn && !_camStatsBootstrapped) { _camStatsBootstrapped = true; setCamStats(true); }
     }
 
-    const _camFailState = new Map();   // nameKey -> last-known-failed bool
+    const _camConnectionFailState = new Map();
+    const _camMediaHealthState = new Map();
+    const CAM_MEDIA_HEALTH = Object.freeze({
+        startupGraceS: 8,
+        lowFps: 1,
+        lowKbps: 8,
+        failSamples: 3,
+        recoverSamples: 2,
+    });
 
     function _camCardByName(name) {
         const key = (name || '').trim().toLowerCase();
@@ -6217,31 +6320,54 @@
         return el ? el.closest('.rounded_square') : null;
     }
 
-    function _handleCamEvent(ev) {
+    function _recordCamHealthEvent(ev) {
         if (!ev) { return; }
-        // Mirror every connection-state change into the diagnostics panel log.
-        camDiagnosticState.camEvents.push({
+        const entry = {
             time: new Date().toLocaleTimeString(),
             state: ev.state || '',
             name: ev.name || '(unknown)',
             server: ev.server || '',
             candType: ev.candType || '',
             proto: ev.proto || '',
-            info: [ev.server, ev.candType ? `(${ev.candType}${ev.proto ? '/' + ev.proto : ''})` : '']
+            info: ev.info || [ev.server, ev.candType ? `(${ev.candType}${ev.proto ? '/' + ev.proto : ''})` : '']
                 .filter(Boolean).join(' '),
-        });
+        };
+        camDiagnosticState.camEvents.push(entry);
         if (camDiagnosticState.camEvents.length > 50) {
             camDiagnosticState.camEvents.splice(0, camDiagnosticState.camEvents.length - 50);
         }
-        correlateRelaySessionsForCamEvent(camDiagnosticState.camEvents[camDiagnosticState.camEvents.length - 1]);
+        correlateRelaySessionsForCamEvent(entry);
         renderCamDiagnostics();
+    }
+
+    function _syncCamFailBadge(name) {
+        const key = (name || '').trim().toLowerCase();
+        if (!key) { return; }
+        const connection = _camConnectionFailState.get(key);
+        const media = _camMediaHealthState.get(key);
+        if (connection?.failed) {
+            _showCamFailBadge(name, connection.label, connection.server);
+        } else if (media?.failed) {
+            _showCamFailBadge(name, media.label, media.server);
+        } else {
+            _clearCamFailBadge(name);
+        }
+    }
+
+    function _handleCamEvent(ev) {
+        if (!ev) { return; }
+        _recordCamHealthEvent(ev);
         const failed = ev.state === 'failed' || ev.state === 'disconnected';
         const who = ev.name || '(unknown cam)';
         const key = (ev.name || '').toLowerCase();
         const srv = ev.server || ev.iceServers || 'server unknown';
         if (failed) {
-            const wasFailed = _camFailState.get(key);
-            _camFailState.set(key, true);
+            const wasFailed = _camConnectionFailState.get(key)?.failed;
+            _camConnectionFailState.set(key, {
+                failed: true,
+                label: ev.state === 'failed' ? 'feed failed' : 'reconnecting…',
+                server: ev.server || '',
+            });
             (window.ichcCamFailures = window.ichcCamFailures || []).push({
                 time: new Date().toISOString(), cam: who, state: ev.state,
                 server: ev.server || '', iceServers: ev.iceServers || '',
@@ -6251,15 +6377,15 @@
                 (ev.candType ? ' (' + ev.candType + (ev.proto ? '/' + ev.proto : '') + ')' : '') +
                 (ev.iceServers ? ' · ice: ' + ev.iceServers : ''),
                 'color:#f85149;font-weight:bold', 'color:#9aa0a6', ev);
-            _showCamFailBadge(ev.name, ev.state === 'failed' ? 'feed failed' : 'reconnecting…', ev.server || '');
+            _syncCamFailBadge(ev.name);
             if (ev.state === 'failed' && !wasFailed) { _camToast('⚠ ' + who + ' — feed failed\n' + srv, 'fail'); }
         } else {
-            const wasFailed = _camFailState.get(key);
-            _camFailState.set(key, false);
-            _clearCamFailBadge(ev.name);
+            const wasFailed = _camConnectionFailState.get(key)?.failed;
+            _camConnectionFailState.set(key, { failed: false, label: '', server: '' });
+            _syncCamFailBadge(ev.name);
             if (wasFailed) {
                 console.info('%c[ichc cam-ok]%c ' + who + ' recovered (' + ev.state + ')', 'color:#3ba55c;font-weight:bold', 'color:#9aa0a6');
-                _camToast(who + ' — recovered', 'ok');
+                if (!_camMediaHealthState.get(key)?.failed) { _camToast(who + ' — recovered', 'ok'); }
             }
         }
     }
@@ -6279,6 +6405,97 @@
     function _clearCamFailBadge(name) {
         const card = _camCardByName(name);
         if (card) { card.querySelector('.ichc-cam-fail-badge')?.remove(); }
+    }
+
+    function _classifyCamMediaHealth(feed) {
+        if (!feed || feed.dir !== 'in' || !feed.name || (feed.upS ?? 0) < CAM_MEDIA_HEALTH.startupGraceS) {
+            return null;
+        }
+        const fps = Number.isFinite(feed.fps) ? feed.fps : null;
+        const kbps = Number.isFinite(feed.kbps) ? feed.kbps : null;
+        if (fps == null && kbps == null) { return null; }
+
+        const lowFps = fps != null && fps <= CAM_MEDIA_HEALTH.lowFps;
+        const lowKbps = kbps != null && kbps <= CAM_MEDIA_HEALTH.lowKbps;
+        if (!lowFps && !lowKbps) { return { failed: false, label: '' }; }
+
+        const metrics = [];
+        if (lowFps) { metrics.push(fps + 'fps'); }
+        if (lowKbps) { metrics.push(kbps + 'kbps'); }
+        return { failed: true, label: 'feed stalled · ' + metrics.join(' · ') };
+    }
+
+    function _updateCamMediaHealth(feeds) {
+        for (const feed of feeds) {
+            const result = _classifyCamMediaHealth(feed);
+            if (!result) { continue; }
+            const key = feed.name.trim().toLowerCase();
+            const state = _camMediaHealthState.get(key) || {
+                failed: false,
+                badSamples: 0,
+                goodSamples: 0,
+                label: '',
+                server: '',
+            };
+
+            if (result.failed) {
+                state.badSamples++;
+                state.goodSamples = 0;
+                state.label = result.label;
+                state.server = feed.server || '';
+                if (!state.failed && state.badSamples >= CAM_MEDIA_HEALTH.failSamples) {
+                    state.failed = true;
+                    _recordCamHealthEvent({
+                        state: 'stalled',
+                        name: feed.name,
+                        server: feed.server || '',
+                        info: result.label + (feed.server ? ' · ' + feed.server : ''),
+                    });
+                    (window.ichcCamFailures = window.ichcCamFailures || []).push({
+                        time: new Date().toISOString(),
+                        cam: feed.name,
+                        state: 'stalled',
+                        fps: feed.fps,
+                        kbps: feed.kbps,
+                        server: feed.server || '',
+                    });
+                    console.warn('%c[ichc cam-fail]%c ' + feed.name + ' · ' + result.label,
+                        'color:#f85149;font-weight:bold', 'color:#9aa0a6', feed);
+                    _camToast('⚠ ' + feed.name + ' — ' + result.label, 'fail');
+                }
+            } else {
+                state.badSamples = 0;
+                state.goodSamples++;
+                if (state.failed && state.goodSamples >= CAM_MEDIA_HEALTH.recoverSamples) {
+                    state.failed = false;
+                    state.label = '';
+                    state.server = '';
+                    _recordCamHealthEvent({
+                        state: 'recovered',
+                        name: feed.name,
+                        server: feed.server || '',
+                        info: 'media flow recovered' + (feed.server ? ' · ' + feed.server : ''),
+                    });
+                    console.info('%c[ichc cam-ok]%c ' + feed.name + ' media flow recovered',
+                        'color:#3ba55c;font-weight:bold', 'color:#9aa0a6', feed);
+                    if (!_camConnectionFailState.get(key)?.failed) {
+                        _camToast(feed.name + ' — recovered', 'ok');
+                    }
+                }
+            }
+
+            _camMediaHealthState.set(key, state);
+            if (state.failed || result.failed === false) { _syncCamFailBadge(feed.name); }
+        }
+    }
+
+    function _resetCamMediaHealth() {
+        for (const [key, state] of _camMediaHealthState) {
+            if (state.failed && !_camConnectionFailState.get(key)?.failed) {
+                _clearCamFailBadge(key);
+            }
+        }
+        _camMediaHealthState.clear();
     }
 
     let _camToastWrap = null;
@@ -6322,6 +6539,7 @@
         } else {
             window.postMessage({ __ichc: 'camstats-cmd', cmd: 'stop' }, '*');
             _clearCamStatsOverlays();
+            _resetCamMediaHealth();
             console.log('%c[ichc] cam stats OFF', 'color:#80848e');
         }
     }
@@ -6335,25 +6553,22 @@
         return h + 'h' + (mm < 10 ? '0' : '') + mm;
     }
 
+    function _fmtCamRate(kbps) {
+        if (kbps == null) { return ''; }
+        if (kbps < 1000) { return kbps + 'k'; }
+        return (kbps / 1000).toFixed(kbps >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'M';
+    }
+
     function _camStatsLines(feed) {
         const lines = [];
         // Line 1: resolution + fps + bitrate (often uniform across cams on this service).
         const res = (feed.w && feed.h) ? (feed.w + '×' + feed.h) : '—';
-        let l1 = res + (feed.fps != null ? '  ' + feed.fps + 'fps' : '');
-        if (feed.kbps != null) { l1 += '  ' + feed.kbps.toLocaleString() + 'kbps'; }
+        let l1 = res + (feed.fps != null ? ' · ' + feed.fps + 'fps' : '');
+        if (feed.kbps != null) { l1 += ' · ' + _fmtCamRate(feed.kbps); }
         lines.push(l1);
-        // Line 2: the per-path metrics that actually vary cam-to-cam.
-        const q = [];
-        if (feed.codec) { q.push(feed.codec); }
-        if (feed.rttMs != null) { q.push('rtt ' + feed.rttMs + 'ms'); }
-        if (feed.jitterMs != null) { q.push('jit ' + feed.jitterMs + 'ms'); }
-        if (feed.lossPct != null) { q.push('loss ' + feed.lossPct + '%'); }
-        if (q.length) { lines.push(q.join('  ')); }
-        // Line 3: health — uptime, dropped frames, freezes, audio (all genuinely per-cam).
+        // Line 2: audio first — this is the primary at-a-glance diagnostic.
+        // Uptime/drop/freeze follow it on the same compact health row.
         const h = [];
-        if (feed.upS != null) { h.push('up ' + _fmtDur(feed.upS)); }
-        if (feed.framesDropped) { h.push('drop ' + feed.framesDropped); }
-        if (feed.freeze) { h.push('frz ' + feed.freeze); }
         // Audio: kbps + packet rate + level. ~50pps = encoder running (14k+lvl 0 =
         // encoded silence, DTX off); ~1-3pps = DTX comfort noise; lvl > 0 = audible.
         if (feed.audio) {
@@ -6364,8 +6579,18 @@
         } else {
             h.push('🔇');
         }
+        if (feed.upS != null) { h.push('up ' + _fmtDur(feed.upS)); }
+        if (feed.framesDropped) { h.push('drop ' + feed.framesDropped); }
+        if (feed.freeze) { h.push('frz ' + feed.freeze); }
         lines.push(h.join('  '));
-        // Line 4: the edge/server serving this cam — the clearest per-cam differentiator.
+        // Remaining path/server detail stays available to the console mirror but is
+        // hidden by the compact overlay styling.
+        const q = [];
+        if (feed.codec) { q.push(feed.codec); }
+        if (feed.rttMs != null) { q.push('rtt ' + feed.rttMs + 'ms'); }
+        if (feed.jitterMs != null) { q.push('jit ' + feed.jitterMs + 'ms'); }
+        if (feed.lossPct != null) { q.push('loss ' + feed.lossPct + '%'); }
+        if (q.length) { lines.push(q.join('  ')); }
         if (feed.server) { lines.push('⇄ ' + feed.server + (feed.srvType ? ' (' + feed.srvType + ')' : '')); }
         return lines;
     }
@@ -6401,7 +6626,20 @@
                 card.appendChild(ov);
             }
             ov.dataset.tick = tick;
-            ov.innerHTML = _camStatsLines(feed).map(l => '<span>' + escapeHtml(l) + '</span>').join('');
+            // The compact overlay displays video first and audio second; the full
+            // diagnostics remain in the console.  Reuse those two spans instead of
+            // destroying/recreating every metrics node once per second, which cuts
+            // allocation and observer churn during long Live-overlay sessions.
+            const visibleLines = _camStatsLines(feed).slice(0, 2);
+            while (ov.children.length < visibleLines.length) {
+                ov.appendChild(document.createElement('span'));
+            }
+            while (ov.children.length > visibleLines.length) {
+                ov.lastElementChild.remove();
+            }
+            visibleLines.forEach((line, i) => {
+                if (ov.children[i].textContent !== line) { ov.children[i].textContent = line; }
+            });
         }
         // Drop overlays for cams that didn't report this tick.
         document.querySelectorAll('#cams .ichc-cam-stats-overlay').forEach(ov => {
@@ -6685,7 +6923,7 @@
                     <span>${escapeHtml(event.info)}</span>
                 </div>
             `).join('')
-            : '<div class="ichc-camdiag-empty">No cam connection changes yet. Feed connects, drops, and recoveries show up here with the edge server involved.</div>';
+            : '<div class="ichc-camdiag-empty">No cam health changes yet. Connections, media stalls, and recoveries show up here with the edge server involved.</div>';
 
         const nativeActions = camDiagnosticState.nativeActionInspections.length
             ? camDiagnosticState.nativeActionInspections.slice(-8).map(event => {
@@ -6832,7 +7070,7 @@
                 ${nativeActions}
             </div>
             <div class="ichc-camdiag-section">
-                <div class="ichc-camdiag-section-title">Cam connection events</div>
+                <div class="ichc-camdiag-section-title">Cam health events</div>
                 ${camEvents}
             </div>
             <div class="ichc-camdiag-section">
@@ -7348,7 +7586,7 @@
                 )
                 : ['none']),
             '',
-            'Cam connection events:',
+            'Cam health events:',
             ...(camDiagnosticState.camEvents.length
                 ? camDiagnosticState.camEvents.map(event => `${event.time} ${event.state} ${event.name} ${event.info}`)
                 : ['none']),
@@ -7410,11 +7648,12 @@
     document.addEventListener('ichc-trigger-reload', () => triggerReload());
 
     function reloadCams() {
-        // Throttle: at most one reload per 15 seconds.
+        // Match the site's native five-second cam-refresh cooldown. If another
+        // request arrives during it, keep one trailing refresh rather than drop it.
         // If a reload is requested during the cooldown, queue one for when it expires
         // so new cams that arrive mid-cooldown aren't permanently missed.
         const now = Date.now();
-        const remaining = _lastReloadAt + 15000 - now;
+        const remaining = _lastReloadAt + 5000 - now;
         if (remaining > 0) {
             window.clearTimeout(_reloadQueuedTimer);
             _reloadQueuedTimer = window.setTimeout(() => {
@@ -7426,8 +7665,6 @@
         window.clearTimeout(_reloadQueuedTimer);
         _reloadQueuedTimer = null;
         _lastReloadAt = now;
-        if (typeof window._ichcSuppressNewCamDetect === 'function') { window._ichcSuppressNewCamDetect(30000); }
-
         // Reset ghost-classifier timestamps BEFORE the refresh so any early
         // MutationObserver-driven relayout (which can fire before 150ms) uses
         // fresh timestamps and doesn't immediately ghost-lock cards whose
@@ -7438,8 +7675,21 @@
         };
         _resetFirstSeen();
 
-        // Pass true to bypass the 2s coalescing wrapper — this is a deliberate reload.
-        runInPageContext(`if (typeof refreshCams === 'function') { window._ichcLastRefresh = 0; refreshCams(true); }`);
+        // The native refreshCams() silently returns while its shared flood flag is
+        // set. Send the exact command it wraps so a manual refresh always works and
+        // never reloads the tab (which would stop an outbound broadcast).
+        runInPageContext(`
+(() => {
+    if (typeof window.send_command === 'function') {
+        window.send_command('/cam refresh');
+        return;
+    }
+    if (typeof window.refreshCams === 'function') {
+        if (typeof window.canPushAgain === 'function') { window.canPushAgain(); }
+        window.refreshCams();
+    }
+})();
+        `);
 
         // Reset once more after 200ms for cards created/kept by refreshCams(),
         // then trigger an explicit relayout.
@@ -7731,20 +7981,10 @@
             { label: 'Image viewing',   icon: ICONS.imageIcon, fn: 'toggleImages()' },
             { label: 'PM preferences',  icon: ICONS.phone,     fn: 'togglePMPrefs()' },
             {
-                label: document.documentElement.classList.contains('ichc-light-theme') ? 'Dark mode' : 'Light mode',
-                icon:  document.documentElement.classList.contains('ichc-light-theme') ? ICONS.moon  : ICONS.sun,
-                action(labelEl) {
-                    const nowLight = document.documentElement.classList.toggle('ichc-light-theme');
-                    localStorage.setItem('ichc_theme', nowLight ? 'light' : 'dark');
-                    document.dispatchEvent(new CustomEvent('ichc-theme-change'));
-                    const footerBtn = document.getElementById('ichc-theme-toggle-btn');
-                    if (footerBtn) { footerBtn.innerHTML = nowLight ? ICONS.moon : ICONS.sun; }
-                    if (labelEl) {
-                        labelEl.textContent = nowLight ? 'Dark mode' : 'Light mode';
-                        const iconEl = labelEl.previousElementSibling;
-                        if (iconEl) { iconEl.innerHTML = nowLight ? ICONS.moon : ICONS.sun; }
-                    }
-                },
+                label: `Theme: ${currentTheme().label}`,
+                icon:  currentTheme().light ? ICONS.sun : ICONS.moon,
+                themePicker: true,
+                keepOpen: true,
             },
             { label: 'Help',            icon: ICONS.question,  href: 'help' },
         ];
@@ -7775,11 +8015,54 @@
                 });
             }
             el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span class="ichc-cog-item-label">${item.label}</span>${item.swatch ? '<span class="ichc-color-swatch" aria-hidden="true"></span>' : ''}`;
+            if (item.themePicker) {
+                // Expands in place rather than flying out sideways: the cog menu is
+                // already anchored near the viewport edge, so a nested popover would
+                // need collision handling for one list of six fixed rows.
+                el.classList.add('ichc-cog-item-expandable');
+                el.setAttribute('aria-expanded', 'false');
+                const list = document.createElement('div');
+                list.className = 'ichc-theme-list';
+                list.hidden = true;
+                THEMES.forEach(theme => {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'ichc-theme-row';
+                    row.dataset.themeId = theme.id;
+                    row.setAttribute('aria-current', String(theme.id === currentThemeId()));
+                    row.innerHTML =
+                        `<span class="ichc-theme-swatch" aria-hidden="true">` +
+                        theme.swatch.map(c => `<i style="background:${c}"></i>`).join('') +
+                        `</span><span class="ichc-theme-name"></span>`;
+                    row.querySelector('.ichc-theme-name').textContent = theme.label;
+                    row.addEventListener('click', e => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        applyTheme(theme.id);
+                        list.querySelectorAll('.ichc-theme-row').forEach(r => {
+                            r.setAttribute('aria-current', String(r.dataset.themeId === theme.id));
+                        });
+                        const labelEl = el.querySelector('.ichc-cog-item-label');
+                        if (labelEl) { labelEl.textContent = `Theme: ${theme.label}`; }
+                        const iconEl = el.querySelector('.ichc-cog-item-icon');
+                        if (iconEl) { iconEl.innerHTML = theme.light ? ICONS.sun : ICONS.moon; }
+                        const footerBtn = document.getElementById('ichc-theme-toggle-btn');
+                        if (footerBtn) { footerBtn.innerHTML = theme.light ? ICONS.moon : ICONS.sun; }
+                    });
+                    list.appendChild(row);
+                });
+                el.addEventListener('click', () => {
+                    list.hidden = !list.hidden;
+                    el.setAttribute('aria-expanded', String(!list.hidden));
+                });
+                item.afterEl = list;
+            }
             if (item.swatch) {
                 const sw = el.querySelector('.ichc-color-swatch');
                 try { const s = localStorage.getItem('ichc_font_color'); if (s && sw) { sw.style.background = s; } } catch (_) {}
             }
             menu.appendChild(el);
+            if (item.afterEl) { menu.appendChild(item.afterEl); }
         });
 
         // Portal the menu to #ichc-room-root so it escapes nested stacking contexts
@@ -7966,9 +8249,10 @@
                 // The gif cache may still be loading on first build — re-render the faces
                 // a few times so text placeholders flip to images once codes resolve.
                 let _gifFaceTries = 0;
-                const _gifFacePoll = setInterval(() => {
+                const _gifFacePoll = window.setInterval(() => {
+                    if (!gifBtn.isConnected) { window.clearInterval(_gifFacePoll); return; }
                     refreshFaces();
-                    if (_gifDataCache || ++_gifFaceTries > 20) { clearInterval(_gifFacePoll); }
+                    if (_gifDataCache || ++_gifFaceTries > 20) { window.clearInterval(_gifFacePoll); }
                 }, 500);
 
                 // Peek on hover.
@@ -7995,7 +8279,11 @@
                 // Idle rotation: roll to the next emote face every few seconds when not
                 // hovered and the picker is closed. Skipped under reduced-motion.
                 if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                    setInterval(() => {
+                    const _gifIdleTimer = window.setInterval(() => {
+                        if (!gifBtn.isConnected) {
+                            window.clearInterval(_gifIdleTimer);
+                            return;
+                        }
                         if (!reallyHover()) { clearTilt(); }
                         if (reallyHover() || panelOpen()) { return; }
                         refreshFaces();
@@ -8341,14 +8629,16 @@
             themeBtn.id = 'ichc-theme-toggle-btn';
             themeBtn.type = 'button';
             themeBtn.className = 'ichc-footer-icon-btn';
-            themeBtn.title = 'Toggle light/dark theme';
-            const isLight = document.documentElement.classList.contains('ichc-light-theme');
-            themeBtn.innerHTML = isLight ? ICONS.moon : ICONS.sun;
+            themeBtn.title = 'Cycle theme (full list in the cog menu)';
+            themeBtn.innerHTML = currentTheme().light ? ICONS.moon : ICONS.sun;
             themeBtn.addEventListener('click', () => {
-                const nowLight = document.documentElement.classList.toggle('ichc-light-theme');
-                themeBtn.innerHTML = nowLight ? ICONS.moon : ICONS.sun;
-                localStorage.setItem('ichc_theme', nowLight ? 'light' : 'dark');
-                document.dispatchEvent(new CustomEvent('ichc-theme-change'));
+                // Cycles rather than opening a picker — the cog menu already has the
+                // named list, and this button is a 20px footer icon.
+                const i = THEMES.findIndex(t => t.id === currentThemeId());
+                const next = THEMES[(i + 1) % THEMES.length];
+                applyTheme(next.id);
+                themeBtn.innerHTML = next.light ? ICONS.moon : ICONS.sun;
+                themeBtn.title = `Theme: ${next.label} — click to cycle`;
             });
         }
         const footerLeft = footerBar?.querySelector('#ichc-footer-left') || footerBar;
@@ -8382,7 +8672,7 @@
             reloadCamsBtn.id = 'ichc-reload-cams-btn';
             reloadCamsBtn.type = 'button';
             reloadCamsBtn.className = 'ichc-reload-cams-btn';
-            reloadCamsBtn.title = 'Reload cams';
+            reloadCamsBtn.title = 'Refresh cam list (keeps your broadcast live)';
             reloadCamsBtn.innerHTML = ICONS.rotate;
             reloadCamsBtn.addEventListener('click', () => { triggerReload(); });
         }
@@ -8430,8 +8720,38 @@
         _updateCamResumeCountdown();
     }
 
+    function _afterCamRestart() {
+        window.setTimeout(() => {
+            document.getElementById('lurkMessageDiv')?.classList.remove('ichc-visible');
+            // Reset first-seen timestamps on all cam cards so the age-based ghost
+            // classification re-evaluates from zero while streams reconnect.
+            document.querySelectorAll('#cams .rounded_square[data-ichc-first-seen-at]').forEach(card => {
+                delete card.dataset.ichcFirstSeenAt;
+            });
+            requestCamRelayout(1200);
+        }, 400);
+    }
+
     function _triggerCamRestart() {
-        document.getElementById('lurkMessageDiv')?.querySelector('a')?.click();
+        const actionLink = document.getElementById('lurkMessageDiv')?.querySelector('a');
+        if (actionLink) {
+            invokeNativeElementAction(actionLink);
+            // invokeNativeElementAction executes a javascript: href directly, so a
+            // content-world click listener on the anchor would not fire.
+            _afterCamRestart();
+            return;
+        }
+
+        // Fallback for a site markup change: these are the two calls in the native
+        // inactivity link. They only restart inbound viewers; they do not touch the
+        // user's outbound broadcast.
+        runInPageContext(`
+(() => {
+    if (typeof window.hideLurkMessage === 'function') { window.hideLurkMessage(); }
+    if (typeof window.toggleCams === 'function') { window.toggleCams(); }
+})();
+        `);
+        _afterCamRestart();
     }
 
     function _scheduleCamAutoRestart() {
@@ -8500,21 +8820,9 @@
             }
             if (actionLink.dataset.ichcBound !== '1') {
                 actionLink.dataset.ichcBound = '1';
-                // Let the site's native onclick/href restart cams — don't intercept.
-                // After the site re-enables cams, reset ghost-aging timestamps so
-                // prepareCamCard doesn't immediately re-hide the restarted cards,
-                // then reload the cam stream list.
-                actionLink.addEventListener('click', () => {
-                    window.setTimeout(() => {
-                        lurkDiv.classList.remove('ichc-visible');
-                        // Reset first-seen timestamps on all cam cards so the
-                        // age-based ghost classification re-evaluates from zero.
-                        document.querySelectorAll('#cams .rounded_square[data-ichc-first-seen-at]').forEach(card => {
-                            delete card.dataset.ichcFirstSeenAt;
-                        });
-                        requestCamRelayout(1200);
-                    }, 400);
-                });
+                // A direct click on the site's hidden action still gets the same
+                // reconnect cleanup as the mirrored/manual and automatic paths.
+                actionLink.addEventListener('click', _afterCamRestart);
             }
         }
 
@@ -8540,7 +8848,7 @@
                 wrap.appendChild(btn);
 
                 // Opt-in auto-restart toggle. Once enabled, future inactivity
-                // timeouts auto-restart after a random 5–30s delay.
+                // timeouts auto-restart after a random 2–10s delay.
                 const toggle = document.createElement('button');
                 toggle.type = 'button';
                 toggle.className = 'ichc-cam-resume-toggle';
@@ -8661,8 +8969,16 @@
     // ── User dropdown (replaces native profile modal for userlist clicks) ───────
 
     let _activeUserDropdown = null;
+    let _activeUserDropdownCleanup = null;
 
     function closeUserDropdown() {
+        // All close paths (close button, action, outside click, Escape, opening a
+        // different user) must release the document-level dismiss handlers.  The
+        // old local-only cleanup ran for outside/Escape but not the common button
+        // paths, leaving one more capture listener behind after every interaction.
+        const cleanup = _activeUserDropdownCleanup;
+        _activeUserDropdownCleanup = null;
+        cleanup?.();
         if (_activeUserDropdown) {
             _activeUserDropdown.remove();
             _activeUserDropdown = null;
@@ -8967,13 +9283,21 @@
         dd.style.top  = top  + 'px';
 
         // ── Dismiss ──
+        let _dismissTimer = null;
         const _cleanup = () => {
+            if (_dismissTimer !== null) {
+                window.clearTimeout(_dismissTimer);
+                _dismissTimer = null;
+            }
             document.removeEventListener('pointerdown', _onDown, true);
             document.removeEventListener('keydown',    _onKey,  true);
         };
-        const _onDown = e => { if (!dd.contains(e.target)) { closeUserDropdown(); _cleanup(); } };
-        const _onKey  = e => { if (e.key === 'Escape')      { closeUserDropdown(); _cleanup(); } };
-        setTimeout(() => {
+        const _onDown = e => { if (!dd.contains(e.target)) { closeUserDropdown(); } };
+        const _onKey  = e => { if (e.key === 'Escape')      { closeUserDropdown(); } };
+        _activeUserDropdownCleanup = _cleanup;
+        _dismissTimer = window.setTimeout(() => {
+            _dismissTimer = null;
+            if (_activeUserDropdown !== dd) { return; }
             document.addEventListener('pointerdown', _onDown, true);
             document.addEventListener('keydown',    _onKey,  true);
         }, 0);
@@ -9086,6 +9410,10 @@
         }
         if (on) { buildUserList({ force: true }); }
         updateCamDensity();
+        // Full relayout so applyFeaturedCam can hand off between freeform
+        // packing (WC hidden) and the legacy grid (WC visible) — density
+        // alone never removes/restores the ichc-cams-freeform placement.
+        requestCamRelayout(40);
     }
 
     function bindUserListMoreMenuDismiss() {
@@ -9452,8 +9780,9 @@
             bar.style.width = barW.toFixed(1) + 'px';
         };
 
-        const _prevCammed = userListState.prevCammedCount ?? null;
-        const _prevUsers  = userListState.prevUserCount  ?? null;
+        // Previous counts for the flip animation now live in
+        // userListState.prevSectionCounts, written by renderUsers() where the section
+        // headers are built — the header no longer carries a counter of its own.
         const _totalUsers = activeCount + idleCount;
 
         const chatShell = document.getElementById('ichc-chat-shell');
@@ -9467,19 +9796,10 @@
         const header = document.createElement('div');
         header.className = 'ichc-ul-header';
 
-        const userMeta = idleCount > 0 ? `<span class="ichc-ul-count-meta"> (${idleCount} idle)</span>` : '';
-        // §8 — header carries digits only; no hidden-count chip.
-        const camMeta  = '';
-
-        // Single-row header: [metrics (flex:1)] [search | more | collapse]
+        // Single-row header: [metrics (flex:1)] [collapse]
         const titleRow = document.createElement('div');
         titleRow.className = 'ichc-ul-title-row';
 
-        // Metrics — fills left space
-        const _camChanged   = _prevCammed !== null && cammedCount !== _prevCammed;
-        const _usersChanged = _prevUsers  !== null && _totalUsers !== _prevUsers;
-        const _camOld  = _camChanged   ? _prevCammed : cammedCount;
-        const _userOld = _usersChanged ? _prevUsers  : _totalUsers;
         // Per-digit flip cells: one .ichc-fh-digit per character position.
         // Ghost "0" inside each cell sizes it; the absolute .ichc-fh covers it.
         const _fh = (n, o) => {
@@ -9492,31 +9812,19 @@
                 `<span>${oPad[i]}</span><span>${oPad[i]}</span></span></span>`
             ).join('');
         };
+        // The big cams/total readout used to live here. It moved onto the ON CAM /
+        // ACTIVE section headers, which already name what they are counting — the
+        // header was restating it in a second place. _fh() and _flipCountWAAPI() are
+        // unchanged and now drive the section counts instead; see buildSectionCount()
+        // in renderUsers(). Kept as an empty flex child so the title row keeps its
+        // shape and the controls stay right-aligned.
         const metricsRow = document.createElement('div');
         metricsRow.className = 'ichc-ul-metrics-row';
-        metricsRow.innerHTML = `<span class="ichc-ul-metric ichc-ul-metric-cam"><span class="ichc-ul-count-cams" data-val="${cammedCount}">${_fh(cammedCount, _camOld)}</span>${camMeta}</span><span class="ichc-ul-metric ichc-ul-metric-users"><span class="ichc-ul-count-users" data-val="${_totalUsers}">${_fh(_totalUsers, _userOld)}</span>${userMeta}</span>`;
-        const _snapCam  = _prevCammed;
-        const _snapUsr  = _prevUsers;
-        userListState.prevCammedCount = cammedCount;
-        userListState.prevUserCount   = _totalUsers;
-        if (_camChanged || _usersChanged) {
-            requestAnimationFrame(() => {
-                if (_camChanged)   { _flipCountWAAPI(panel.querySelector('.ichc-ul-count-cams'),  _snapCam, cammedCount); }
-                if (_usersChanged) { _flipCountWAAPI(panel.querySelector('.ichc-ul-count-users'), _snapUsr, _totalUsers); }
-            });
-        }
 
-        // Controls: [search] — collapse tab is absolute on the header right edge
+        // Controls: collapse tab is absolute on the header right edge. The search
+        // button is gone — clicking any section header opens search instead.
         const controlsRow = document.createElement('div');
         controlsRow.className = 'ichc-ul-controls-row';
-
-        const searchBtn = document.createElement('button');
-        searchBtn.type = 'button';
-        searchBtn.className = 'ichc-ul-search-btn';
-        searchBtn.setAttribute('aria-label', 'Search users');
-        searchBtn.setAttribute('title', 'Search users');
-        searchBtn.innerHTML = ICONS.search;
-        controlsRow.appendChild(searchBtn);
 
         const collapseBtn = document.createElement('button');
         collapseBtn.type = 'button';
@@ -9552,14 +9860,19 @@
         // Collapse tab — absolute strip on the right edge of the header
         header.appendChild(collapseBtn);
 
-        // Resize handle: absolute-positioned at the left edge of the header
+        // Resize handle: absolute against #ichc-userlist (already position: relative),
+        // NOT the header. Anchored to the header it was only as tall as that bar, which
+        // made it a small target; spanning the panel puts it alongside the PM strip and
+        // the ON CAM / ACTIVE section rules too. Appended to the panel below, once the
+        // header is in place.
         const ulResizer = savedResizer || document.createElement('div');
         ulResizer.id = 'ichc-userlist-resizer';
-        header.insertBefore(ulResizer, header.firstChild);
         initUserlistResizer(ulResizer);
 
         // Insert header; scroll body will go at end so header lands before it.
         panel.insertBefore(header, panel.firstChild || null);
+        // Resizer last so it paints above the header and section rules it now spans.
+        panel.appendChild(ulResizer);
 
         // Reattach PM avatars below the header/title row
         if (savedPmAvatars) {
@@ -9639,12 +9952,32 @@
             const mix = Math.min(0.76, 0.2 + ((0.4 - lum) / 0.4) * 0.48);
             return `rgb(${Math.round(r + (255 - r) * mix)}, ${Math.round(g + (255 - g) * mix)}, ${Math.round(b + (255 - b) * mix)})`;
         };
+        // Targets a contrast ratio rather than a luminance threshold — see the matching
+        // makeReadableOnLightChatColor() in chat.js for why (a threshold lets
+        // mid-luminance colours through at ~2.5:1). Kept identical to it on purpose so a
+        // person's colour reads the same in the userlist as in chat.
         const _readableOnLight = (rgb) => {
             const [r, g, b] = rgb;
-            const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-            if (lum <= 0.62) { return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`; }
-            const mix = Math.min(0.72, 0.2 + ((lum - 0.62) / 0.38) * 0.52);
-            return `rgb(${Math.round(r * (1 - mix))}, ${Math.round(g * (1 - mix))}, ${Math.round(b * (1 - mix))})`;
+            const chan = c => {
+                const s = c / 255;
+                return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+            };
+            // Reference is the darkest light-theme row, not white — see chat.js.
+            const lum = (rr, gg, bb) => 0.2126 * chan(rr) + 0.7152 * chan(gg) + 0.0722 * chan(bb);
+            const bgL = lum(206, 210, 216);
+            const contrast = (rr, gg, bb) => {
+                const f = lum(rr, gg, bb);
+                return (Math.max(f, bgL) + 0.05) / (Math.min(f, bgL) + 0.05);
+            };
+            if (contrast(r, g, b) >= 4.5) {
+                return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+            }
+            let lo = 0, hi = 1;
+            for (let i = 0; i < 16; i++) {
+                const mid = (lo + hi) / 2;
+                if (contrast(r * mid, g * mid, b * mid) >= 4.5) { lo = mid; } else { hi = mid; }
+            }
+            return `rgb(${Math.round(r * lo)}, ${Math.round(g * lo)}, ${Math.round(b * lo)})`;
         };
 
         const _applyNickColor = (span, name) => {
@@ -9945,21 +10278,62 @@
                 ['active', 'Active'],
                 ['idle',   'Idle'],
             ];
+            // Counts carry the flip animation that used to sit in the big header.
+            // Section headers are rebuilt every render, which would normally kill a
+            // running animation — it survives because _fh() bakes BOTH the old and new
+            // digits into the markup, so the fresh nodes already contain the frames
+            // _flipCountWAAPI() animates between. The previous values therefore have to
+            // be read before this render overwrites them.
+            const _prevSec = userListState.prevSectionCounts || {};
+            const _secNow = { cam: buckets.cam.length, active: buckets.active.length, idle: buckets.idle.length, total: _totalUsers };
+            const _flipQueue = [];
+
+            // One count cell. `sub` is the "/ N" companion shown on ACTIVE, which the
+            // user asked to carry the room total alongside the active figure.
+            const buildSectionCount = (key, value, sub) => {
+                const prev = Object.prototype.hasOwnProperty.call(_prevSec, key) ? _prevSec[key] : value;
+                const cnt = document.createElement('span');
+                cnt.className = 'ichc-ul-section-count';
+                cnt.dataset.val = value;
+                cnt.innerHTML = `<span class="ichc-ul-sec-n" data-k="${key}">${_fh(value, prev)}</span>`;
+                if (sub != null) {
+                    const prevT = Object.prototype.hasOwnProperty.call(_prevSec, 'total') ? _prevSec.total : sub;
+                    cnt.insertAdjacentHTML('beforeend',
+                        `<span class="ichc-ul-sec-sep">/</span>` +
+                        `<span class="ichc-ul-sec-n ichc-ul-sec-total" data-k="total">${_fh(sub, prevT)}</span>`);
+                    if (prevT !== sub) { _flipQueue.push(['total', prevT, sub]); }
+                }
+                if (prev !== value) { _flipQueue.push([key, prev, value]); }
+                return cnt;
+            };
+
             sections.forEach(([key, label]) => {
                 const rows = buckets[key];
                 if (!rows.length) { return; }
                 const hd = document.createElement('div');
                 hd.className = `ichc-ul-section ${key}`;
+                // Clicking a section header opens the user search — it replaced the
+                // dedicated search button. Search always spans every user, not just
+                // the section clicked, so the affordance reads the same wherever it is.
+                hd.setAttribute('role', 'button');
+                hd.setAttribute('tabindex', '0');
+                hd.title = 'Search users';
                 const lbl = document.createElement('span');
                 lbl.className = 'ichc-ul-section-label';
                 lbl.textContent = label;
-                const cnt = document.createElement('span');
-                cnt.className = 'ichc-ul-section-count';
-                cnt.textContent = rows.length;
-                hd.append(lbl, cnt);
+                hd.append(lbl, buildSectionCount(key, rows.length, key === 'active' ? _totalUsers : null));
                 desired.push(hd);
                 rows.forEach(r => desired.push(r));
             });
+            userListState.prevSectionCounts = _secNow;
+            if (_flipQueue.length) {
+                requestAnimationFrame(() => {
+                    _flipQueue.forEach(([k, from, to]) => {
+                        scrollBody.querySelectorAll(`.ichc-ul-sec-n[data-k="${k}"]`)
+                            .forEach(el => _flipCountWAAPI(el, from, to));
+                    });
+                });
+            }
 
             // Pass 2: position nodes in correct order with minimal DOM moves.
             // Walk from the first slot in the scroll body and only move a node when
@@ -10061,16 +10435,40 @@
             });
 
         // ── Search toggle ──
-        searchBtn.addEventListener('click', () => {
+        // Opened by clicking any section header (ON CAM / ACTIVE / IDLE) rather than a
+        // dedicated button. Delegated from the scroll body because those headers are
+        // rebuilt on every render, so a listener bound to them would not survive.
+        const openUserSearch = () => {
             const open = panel.classList.toggle('ichc-ul-search-open');
             if (open) {
                 searchInput.focus();
+                searchInput.select();
             } else {
                 searchInput.value = '';
                 renderUsers('');
                 observeAvatarRows();
             }
-        });
+        };
+        // buildUserList() runs on every roster change and REUSES the scroll body, so an
+        // unguarded bind would stack a listener per rebuild and each click would toggle
+        // search once per listener — i.e. it would look like the click did nothing.
+        // The latest openUserSearch closure is kept on the element so the handler always
+        // calls the current one rather than one captured from a stale build.
+        scrollBody._ichcOpenSearch = openUserSearch;
+        if (!scrollBody._ichcSectionSearchBound) {
+            scrollBody._ichcSectionSearchBound = true;
+            const sectionActivate = e => {
+                const hd = e.target.closest?.('.ichc-ul-section');
+                if (!hd || !scrollBody.contains(hd)) { return; }
+                e.preventDefault();
+                e.stopPropagation();
+                scrollBody._ichcOpenSearch?.();
+            };
+            scrollBody.addEventListener('click', sectionActivate);
+            scrollBody.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') { sectionActivate(e); }
+            });
+        }
 
         const filterOfflineHidden = (q) => {
             const list = panel.querySelector('.ichc-ul-offline-hidden-list');
@@ -10506,9 +10904,7 @@
             userListState.camsObserver?.disconnect();
             userListState.camsObserver = new MutationObserver(mutations => {
                 for (const m of mutations) {
-                    // Cam-timer textContent updates fire every second — ignore them; they don't affect the user list.
-                    const el = m.target instanceof Element ? m.target : m.target.parentElement;
-                    if (el?.classList.contains('ichc-cam-timer')) { continue; }
+                    if (_isCamDecorationMutation(m)) { continue; }
                     scheduleUserListBuild(220);
                     return;
                 }
@@ -10594,8 +10990,18 @@
             const rect = node.getBoundingClientRect();
             const attrWidth = Number(node.getAttribute?.('width')) || 0;
             const attrHeight = Number(node.getAttribute?.('height')) || 0;
-            const width = Math.max(rect.width, node.clientWidth || 0, node.offsetWidth || 0, attrWidth);
-            const height = Math.max(rect.height, node.clientHeight || 0, node.offsetHeight || 0, attrHeight);
+            // Intrinsic media size counts too. This asks "does the card have
+            // real media?", and the rendered box was only ever a proxy for it.
+            // Freeform packing sizes cams to fit the panel, so a perfectly
+            // healthy feed can render well under 120x90 in a busy room — that
+            // used to be impossible when the grid enforced a 160px minimum.
+            // Judging by the box alone marked 9 of 20 live cams "loading",
+            // which drags in `.ichc-cam-loading { min-height: 90px }` and can
+            // override the packed height. A dead slot still reports 0 here.
+            const introWidth = node.videoWidth || node.naturalWidth || 0;
+            const introHeight = node.videoHeight || node.naturalHeight || 0;
+            const width = Math.max(rect.width, node.clientWidth || 0, node.offsetWidth || 0, attrWidth, introWidth);
+            const height = Math.max(rect.height, node.clientHeight || 0, node.offsetHeight || 0, attrHeight, introHeight);
 
             return width >= 120 && height >= 90;
         });
@@ -10812,6 +11218,10 @@
             card.style.removeProperty('width');
             card.style.removeProperty('height');
             card.style.removeProperty('min-width');
+            card.style.removeProperty('position');
+            card.style.removeProperty('left');
+            card.style.removeProperty('top');
+            card.style.removeProperty('margin');
         }
         if (level === 4) {
             card.style.setProperty('grid-column', '1 / -1', 'important');
@@ -10847,6 +11257,7 @@
         const spans = _loadCamSpans();
         const columns = _getCamColumns();
         const hasFeatured = !!document.querySelector('#cams .ichc-featured');
+        const freeform = !!document.getElementById('cams')?.classList.contains('ichc-cams-freeform');
         getCamCards().forEach(card => {
             if (card.classList.contains('ichc-featured')) {
                 const s = card.querySelector('.ichc-cam-shrink-btn');
@@ -10855,12 +11266,16 @@
                 if (g) { g.disabled = true; }
                 return;
             }
-            // In featured/side-by-side mode applyFeaturedCam owns grid placement.
+            // In featured mode applyFeaturedCam owns placement outright.
             if (hasFeatured) { return; }
             const key = getCardKey(card);
             const level = key ? Math.max(0, Math.min(4, (key in spans) ? spans[key] : 1)) : 1;
-            _applySpanLevel(card, level, columns);
             _syncCardSpanBtns(card, level);
+            // In normal freeform mode the packing engine owns placement and the
+            // level acts as a width weight — _applySpanLevel would clobber the
+            // absolute position with grid spans and strip left/top.
+            if (freeform) { return; }
+            _applySpanLevel(card, level, columns);
         });
     }
     function _adjustCardSpan(card, delta) {
@@ -10887,25 +11302,46 @@
             e.preventDefault();
             e.stopPropagation();
             btn.classList.add('ichc-refreshing');
-            setTimeout(() => btn.classList.remove('ichc-refreshing'), 700);
-            const videos = [...card.querySelectorAll('video')];
-            if (videos.length) {
-                videos.forEach(v => {
-                    const src = v.currentSrc || v.src;
-                    if (!src) { return; }
-                    v.pause();
-                    v.src = '';
-                    v.load();
-                    v.src = src;
-                    v.load();
-                    v.play?.().catch?.(() => {});
-                });
-            } else {
-                card.querySelectorAll('iframe').forEach(f => {
-                    const src = f.src;
-                    if (src) { f.src = ''; requestAnimationFrame(() => { f.src = src; }); }
-                });
-            }
+            setTimeout(() => btn.classList.remove('ichc-refreshing'), 3000);
+
+            // WebRTC videos have a MediaStream in srcObject and no reloadable src URL,
+            // so clearing video.src only made the icon spin. Drive ICHC's own
+            // disable→start sequence in the page world instead; that stops the one
+            // inbound peer connection and negotiates a fresh one without touching the
+            // user's outbound broadcast.
+            const bridgeToken = `ichc-cam-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            card.setAttribute('data-ichc-cam-refresh', bridgeToken);
+            const selector = `[data-ichc-cam-refresh="${bridgeToken}"]`;
+            runInPageContext(`
+(() => {
+    const card = document.querySelector(${JSON.stringify(selector)});
+    if (!card) { return; }
+    card.removeAttribute('data-ichc-cam-refresh');
+
+    const disabled = card.querySelector('video[id$="-disabled"]');
+    const disable = card.querySelector('.cam-button2, [id^="cambtn2-"]');
+    if (!disabled && disable && typeof disable.click === 'function') {
+        disable.click();
+    }
+
+    window.setTimeout(() => {
+        const retry = card.querySelector('[id^="cambtn1-"][id$="-retry"]');
+        if (retry && typeof retry.click === 'function') {
+            retry.click();
+        } else if (typeof window.send_command === 'function') {
+            window.send_command('/cam refresh');
+        }
+    }, 180);
+})();
+            `);
+            window.setTimeout(() => {
+                if (card.getAttribute('data-ichc-cam-refresh') === bridgeToken) {
+                    card.removeAttribute('data-ichc-cam-refresh');
+                }
+            }, 3000);
+            [300, 1500, 5000].forEach(delay => {
+                window.setTimeout(() => requestCamRelayout(60), delay);
+            });
         });
         return btn;
     }
@@ -11421,6 +11857,299 @@
     let _featuredSetAt = localStorage.getItem(FEATURED_KEY) ? Date.now() : 0;
     let _featuredWasFound = false;
 
+    // ── Focused-mode freeform packing ──────────────────────────────────────
+    // The focused cam is pinned to the top-left corner at its real aspect
+    // ratio; every other visible cam is packed into the L-shaped free region
+    // beside and below it. Cams are scalable rectangles with FIXED aspect
+    // ratios, so this is not classic bin packing (MaxRects/skyline/guillotine
+    // all assume fixed box sizes) — it is the justified-gallery problem: each
+    // strip line can be solved in closed form to exactly fill the strip's
+    // main axis, and a Knuth–Plass style DP picks the line breaks whose cross
+    // sizes stay nearest the strip's target.
+    //
+    // Line math: item i has main-axis extent e_i per unit of cross size
+    // (e = w/h for a horizontal row, e = h/w for a vertical column). A line
+    // holding items S fills the main axis exactly when
+    //     cross(S) = (stripMain − (|S|−1)·gap) / Σ_{i∈S} e_i
+    // and the DP minimizes Σ_lines (cross − target)² over contiguous
+    // partitions, with target = (stripCross − (L−1)·gap) / L for L lines.
+
+    // exts: per-item main-axis extent per unit cross. Returns the best line
+    // count and break points, or null when the strip is unusable.
+    function _ichcSolveLines(exts, stripMain, stripCross, gap, maxLines) {
+        const m = exts.length;
+        if (!m || !(stripMain > 0) || !(stripCross > 0)) { return null; }
+        const pre = new Array(m + 1).fill(0);
+        for (let i = 0; i < m; i++) { pre[i + 1] = pre[i] + exts[i]; }
+        // Cross size of a line holding items i..j-1 (exact main-axis fill).
+        const crossOf = (i, j) => (stripMain - (j - i - 1) * gap) / (pre[j] - pre[i]);
+        const lim = Math.min(m, Math.max(1, maxLines));
+        let best = null;
+        for (let L = 1; L <= lim; L++) {
+            const target = (stripCross - (L - 1) * gap) / L;
+            if (target <= 0) { break; }
+            const dp = [new Array(m + 1).fill(Infinity)];
+            dp[0][0] = 0;
+            const cut = [];
+            for (let l = 1; l <= L; l++) {
+                dp[l] = new Array(m + 1).fill(Infinity);
+                cut[l] = new Array(m + 1).fill(0);
+                for (let j = l; j <= m; j++) {
+                    for (let i = l - 1; i < j; i++) {
+                        if (dp[l - 1][i] === Infinity) { continue; }
+                        const d = crossOf(i, j) - target;
+                        const cost = dp[l - 1][i] + d * d;
+                        if (cost < dp[l][j]) { dp[l][j] = cost; cut[l][j] = i; }
+                    }
+                }
+            }
+            if (dp[L][m] === Infinity) { continue; }
+            if (!best || dp[L][m] < best.cost) {
+                const bounds = [];
+                let j = m;
+                for (let l = L; l >= 1; l--) { bounds.unshift([cut[l][j], j]); j = cut[l][j]; }
+                best = {
+                    cost: dp[L][m],
+                    lines: bounds.map(([i, jj]) => ({ start: i, end: jj, cross: crossOf(i, jj) })),
+                };
+            }
+        }
+        return best;
+    }
+
+    // Turn a line solution into concrete rects inside `strip` ({x,y,w,h}).
+    // axis 'row': lines stack top→bottom, items flow left→right (wide cams).
+    // axis 'col': lines stack left→right, items flow top→bottom (tall cams).
+    // Lines are only ever DOWN-scaled (upscaling would overflow the main
+    // axis); leftover cross space is spread evenly around the lines, and each
+    // line's own main-axis slack centers it in the strip.
+    function _ichcRealizeStrip(items, strip, gap, axis, maxLines) {
+        if (!strip || !(strip.w > 0) || !(strip.h > 0)) { return null; }
+        const exts = items.map(it => axis === 'row' ? it.ar : 1 / it.ar);
+        const main = axis === 'row' ? strip.w : strip.h;
+        const cross = axis === 'row' ? strip.h : strip.w;
+        const solved = _ichcSolveLines(exts, main, cross, gap, maxLines);
+        if (!solved) { return null; }
+        const L = solved.lines.length;
+        const sumCross = solved.lines.reduce((a, l) => a + l.cross, 0);
+        const usedCross = sumCross + (L - 1) * gap;
+        const scale = usedCross > cross ? (cross - (L - 1) * gap) / sumCross : 1;
+        if (!(scale > 0)) { return null; }
+        const slack = Math.max(0, cross - (sumCross * scale + (L - 1) * gap));
+        const pad = slack / (L + 1);
+        const rects = [];
+        let crossPos = pad;
+        for (const line of solved.lines) {
+            const lineCross = line.cross * scale;
+            let mainLen = (line.end - line.start - 1) * gap;
+            for (let i = line.start; i < line.end; i++) { mainLen += exts[i] * lineCross; }
+            let mainPos = Math.max(0, (main - mainLen) / 2);
+            for (let i = line.start; i < line.end; i++) {
+                const len = exts[i] * lineCross;
+                rects.push(axis === 'row'
+                    ? { index: items[i].index, x: strip.x + mainPos, y: strip.y + crossPos, w: len, h: lineCross }
+                    : { index: items[i].index, x: strip.x + crossPos, y: strip.y + mainPos, w: lineCross, h: len });
+                mainPos += len + gap;
+            }
+            crossPos += lineCross + gap + pad;
+        }
+        return rects;
+    }
+
+    // Full search: focus width candidates × two L-decompositions (right strip
+    // full-height vs focus-height) × how many cams go beside vs below. The
+    // right strip is claimed by the TALLEST cams (smallest w/h) because they
+    // stack efficiently in a narrow column; everything keeps DOM order within
+    // its strip so cams don't shuffle when aspect ratios drift.
+    // Score = 1.25·focusArea + Σ thumbArea + n·minThumbArea − tiny-cam
+    // penalties: coverage and fairness pull against each other, so the focus
+    // share is an outcome of the optimization rather than a hardcoded ratio.
+    function _packFocusedLayout(W, H, gap, focusAR, thumbARs) {
+        if (!(W > 0) || !(H > 0) || !(focusAR > 0)) { return null; }
+        const n = thumbARs.length;
+        const fitW = Math.min(W, H * focusAR);
+        if (!n) {
+            return { focus: { x: 0, y: 0, w: fitW, h: fitW / focusAR }, rects: [] };
+        }
+        const byTallness = thumbARs.map((ar, index) => ({ index, ar }))
+            .sort((a, b) => a.ar - b.ar || a.index - b.index);
+        const all = thumbARs.map((ar, index) => ({ index, ar }));
+        const MINDIM = 64;
+        const step = n > 12 ? 0.05 : 0.025;
+        const widths = [];
+        for (let f = 0.40; f <= 0.851; f += step) { widths.push(f * W); }
+        widths.push(fitW);
+        const seen = new Set();
+        let best = null;
+        for (const fwRaw of widths) {
+            // Floor, never round up: a 1px overshoot past the panel edge would
+            // push the full-height/full-width strips out of bounds with it.
+            let fw = Math.floor(Math.min(fwRaw, fitW));
+            let fh = Math.round(fw / focusAR);
+            if (fh > H) { fh = Math.floor(H); fw = Math.min(fw, Math.floor(fh * focusAR)); }
+            if (fw <= 0 || fh <= 0 || seen.has(fw)) { continue; }
+            seen.add(fw);
+            const rightW = W - fw - gap;
+            const bottomH = H - fh - gap;
+            const canRight = rightW >= MINDIM * 0.7;
+            const canBottom = bottomH >= MINDIM * 0.7;
+            if (!canRight && !canBottom) { continue; }
+            for (const fullHeightRight of [true, false]) {
+                if (!canRight && fullHeightRight) { continue; } // both variants identical
+                const right = canRight
+                    ? { x: fw + gap, y: 0, w: rightW, h: fullHeightRight ? H : fh }
+                    : null;
+                const bottom = canBottom
+                    ? { x: 0, y: fh + gap, w: fullHeightRight ? fw : W, h: bottomH }
+                    : null;
+                const sMin = bottom ? 0 : n;
+                const sMax = right ? Math.min(n, 12) : 0;
+                for (let s = sMin; s <= Math.max(sMin, sMax); s++) {
+                    if (!right && s > 0) { break; }
+                    if (!bottom && s < n) { continue; }
+                    const chosen = new Set(byTallness.slice(0, s).map(it => it.index));
+                    const rects = [];
+                    // Line caps keep the strips reading as margins around the
+                    // focus — unless a strip is the ONLY region, in which case
+                    // it is the whole stage and may use as many lines as fit.
+                    if (s > 0) {
+                        const colLim = bottom ? 3 : Math.min(8, s);
+                        const rr = _ichcRealizeStrip(all.filter(it => chosen.has(it.index)), right, gap, 'col', colLim);
+                        if (!rr) { continue; }
+                        rects.push(...rr);
+                    }
+                    if (s < n) {
+                        const rowLim = right ? 5 : Math.min(8, n - s);
+                        const br = _ichcRealizeStrip(all.filter(it => !chosen.has(it.index)), bottom, gap, 'row', rowLim);
+                        if (!br) { continue; }
+                        rects.push(...br);
+                    }
+                    let sum = 0;
+                    let min = Infinity;
+                    let max = 0;
+                    let penalty = 0;
+                    let unusable = false;
+                    for (const r of rects) {
+                        const d = Math.min(r.w, r.h);
+                        if (d < 24) { unusable = true; break; }
+                        if (d < MINDIM) { penalty += (MINDIM - d) * (MINDIM - d) * 260; }
+                        const a = r.w * r.h;
+                        sum += a;
+                        if (a < min) { min = a; }
+                        if (a > max) { max = a; }
+                    }
+                    if (unusable) { continue; }
+                    // Focused semantics: the selected feed should stay clearly
+                    // the largest. Penalize candidates where any thumb rivals it.
+                    const focusArea = fw * fh;
+                    if (focusArea < 1.3 * max) { penalty += (1.3 * max - focusArea) * 3; }
+                    const score = 1.25 * focusArea + sum + n * min - penalty;
+                    if (!best || score > best.score) {
+                        best = { score, focus: { x: 0, y: 0, w: fw, h: fh }, rects };
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    // Normal (unfocused) freeform layout. Level ≤1 cams flow through
+    // justified rows (mini = half extent). Level ≥2 cams break onto their own
+    // line whose height targets a real multiple of what the plain solve gave
+    // them. Multiplying the row EXTENT instead (the obvious mapping) actually
+    // SHRINKS the feed: the row gets shorter to keep filling the width, and a
+    // contained video's rendered size depends only on the row height.
+    function _packNormalLayout(W, H, gap, items) {
+        if (!(W > 0) || !(H > 0) || !items.length) { return null; }
+        const extOf = it => it.level === 0 ? it.ar * 0.5 : it.ar;
+        const plain = _ichcRealizeStrip(
+            items.map(it => ({ index: it.index, ar: extOf(it) })),
+            { x: 0, y: 0, w: W, h: H }, gap, 'row', Math.min(8, items.length));
+        if (!plain) { return null; }
+        if (!items.some(it => it.level >= 2)) { return plain; }
+
+        const baseCross = new Map(plain.map(r => [r.index, r.h]));
+        const BOOST = [0, 0, 1.35, 1.7, 2.1];
+
+        const grown = items.filter(it => it.level >= 2);
+        const normals = items.filter(it => it.level <= 1);
+        let grownCross = 0;
+        const grownLines = grown.map(it => {
+            const cross = Math.min(
+                H * 0.85,
+                (baseCross.get(it.index) || H * 0.3) * BOOST[it.level],
+                W / it.ar);
+            grownCross += cross;
+            return { it, cross };
+        });
+        // Keep at least a quarter of the panel for the ungrown cams.
+        if (normals.length) {
+            const avail = H - Math.max(120, H * 0.25);
+            if (grownCross > avail) {
+                const s = Math.max(0.3, avail / grownCross);
+                grownLines.forEach(l => { l.cross *= s; });
+                grownCross *= s;
+            }
+        }
+
+        // All ungrown cams justify TOGETHER against the remaining height —
+        // solving the stretches between grown cams separately would strand
+        // one or two cams on full-width lines and blow the height budget.
+        const lines = []; // {members: [{index, ext}], cross, normalsEnd?}
+        if (normals.length) {
+            const exts = normals.map(extOf);
+            const solved = _ichcSolveLines(exts, W, Math.max(80, H - grownCross), gap,
+                Math.min(8, exts.length));
+            if (!solved) { return plain; }
+            for (const line of solved.lines) {
+                lines.push({
+                    members: normals.slice(line.start, line.end)
+                        .map((it, k) => ({ index: it.index, ext: exts[line.start + k] })),
+                    normalsEnd: line.end,
+                    cross: line.cross,
+                });
+            }
+        }
+        // Insert each grown line at the line boundary nearest its original
+        // position (reverse order keeps multiple grown cams in DOM order).
+        for (let g = grownLines.length - 1; g >= 0; g--) {
+            const it = grownLines[g].it;
+            const itPos = items.indexOf(it);
+            const before = normals.filter(nrm => items.indexOf(nrm) < itPos).length;
+            let at = lines.length;
+            for (let i = 0; i < lines.length; i++) {
+                if ((lines[i].normalsEnd ?? 0) > before) { at = i; break; }
+            }
+            lines.splice(at, 0, {
+                members: [{ index: it.index, ext: it.ar }],
+                cross: grownLines[g].cross,
+            });
+        }
+
+        // Global fit: down-scale only, slack spread evenly — same policy as
+        // _ichcRealizeStrip. Lines narrower than the panel center themselves.
+        const L = lines.length;
+        const sumCross = lines.reduce((a, l) => a + l.cross, 0);
+        const usedCross = sumCross + (L - 1) * gap;
+        const scale = usedCross > H ? (H - (L - 1) * gap) / sumCross : 1;
+        if (!(scale > 0)) { return plain; }
+        const pad = Math.max(0, H - (sumCross * scale + (L - 1) * gap)) / (L + 1);
+        const rects = [];
+        let y = pad;
+        for (const line of lines) {
+            const cross = line.cross * scale;
+            let width = (line.members.length - 1) * gap;
+            for (const m of line.members) { width += m.ext * cross; }
+            let x = Math.max(0, (W - width) / 2);
+            for (const m of line.members) {
+                rects.push({ index: m.index, x, y, w: m.ext * cross, h: cross });
+                x += m.ext * cross + gap;
+            }
+            y += cross + gap + pad;
+        }
+        return rects;
+    }
+
     function applyFeaturedCam() {
         const cams = document.getElementById('cams');
         const featured = (localStorage.getItem(FEATURED_KEY) || '').trim().toLowerCase();
@@ -11438,194 +12167,224 @@
             if (active) {
                 featuredCard = card;
                 found = true;
-            } else if (featured &&
-                !card.classList.contains('ichc-hidden-slot') &&
+            } else if (!card.classList.contains('ichc-hidden-slot') &&
                 !card.classList.contains('ichc-persist-hidden-slot') &&
                 !card.classList.contains('ichc-ghost-slot')) {
                 // Only VISIBLE cams count toward the layout math — hidden/ghost
-                // slots take no grid cell, so counting them would shrink everything.
+                // slots take no space, so counting them would shrink everything.
                 thumbCards.push(card);
             }
         });
 
-        // Once the focused video reports its real dimensions (or they change),
-        // re-run the layout so the frame tracks the feed's true aspect ratio.
-        if (found) {
-            [featuredCard, ...thumbCards].forEach(c => {
-                const v = c.querySelector('video');
-                if (v && !v._ichcFeatMeta) {
-                    v._ichcFeatMeta = true;
-                    v.addEventListener('loadedmetadata', () => requestCamRelayout(60));
-                    v.addEventListener('resize', () => requestCamRelayout(120));
-                }
-            });
+        // Once a video reports its real dimensions (or they change), re-run the
+        // layout so every frame tracks its feed's true aspect ratio.
+        [...(featuredCard ? [featuredCard] : []), ...thumbCards].forEach(c => {
+            const v = c.querySelector('video');
+            if (v && !v._ichcFeatMeta) {
+                v._ichcFeatMeta = true;
+                v.addEventListener('loadedmetadata', () => requestCamRelayout(60));
+                v.addEventListener('resize', () => requestCamRelayout(120));
+            }
+        });
+
+        // Freeform packing runs in BOTH modes. Focused: the selected cam is
+        // pinned top-left and _packFocusedLayout fills the L-region around it.
+        // Normal: every visible cam is justified into rows across the whole
+        // panel (same closed-form line math), which is what lets tall 9:16 and
+        // wide 16:9 feeds coexist without the uniform grid's row overflow.
+        // Word-cloud mode keeps the legacy grid: freeform needs the panel's
+        // full height, but the word cloud expects cams to shrink to content.
+        // Toggle the mode classes BEFORE measuring so the tighter freeform
+        // gap is what the packing math actually reads.
+        // Escape hatch for A/B testing a layout regression against the legacy
+        // grid without reinstalling: localStorage ichc_freeform = 'off'.
+        let _freeformPref = true;
+        try { _freeformPref = localStorage.getItem('ichc_freeform') !== 'off'; } catch (_) {}
+        const wantFreeform = !!cams && !_wordCloudMode && _freeformPref &&
+            (found || thumbCards.length > 0);
+        if (cams) {
+            cams.classList.toggle('ichc-has-featured', found);
+            if (wantFreeform) { cams.classList.add('ichc-cams-freeform'); }
         }
-
-        // Featured layout — ONE algorithm, computed from scratch each pass:
-        // a uniform c-column grid of fixed-height rows. The focused cam sits at the
-        // TOP-LEFT spanning k columns × r rows, where r is derived from the focused
-        // cam's OWN video aspect ratio — so the card frame hugs the video instead of
-        // being stretched to an arbitrary grid block. Thumbnails are exactly one
-        // cell each and auto-flow (dense) into the column(s) right of the focused
-        // cam first, then into full rows beneath it. We search all (c, k) pairs and
-        // keep the one that gives the focused cam the most area while every
-        // thumbnail still fits the container without shrinking below a floor.
         const n = thumbCards.length;
-        let layout = null; // {c, k, r, rowH, featAR}
+        let layout = null; // {focus|null, rects, padL, padT}
 
-        if (found && cams && n > 0) {
-            const containerH = Math.round(cams.getBoundingClientRect().height) || cams.clientHeight || 0;
-            const containerW = cams.clientWidth || 0;
-            if (containerH > 0 && containerW > 0) {
-                const gap = parseFloat(getComputedStyle(cams).gap) || 8;
+        if (wantFreeform) {
+            const cs = getComputedStyle(cams);
+            const padL = parseFloat(cs.paddingLeft) || 0;
+            const padT = parseFloat(cs.paddingTop) || 0;
+            const padR = parseFloat(cs.paddingRight) || 0;
+            const padB = parseFloat(cs.paddingBottom) || 0;
+            let containerW = (cams.clientWidth || 0) - padL - padR;
+            let containerH = (cams.clientHeight || 0) - padT - padB;
+            // Every card is position:absolute here, so #cams contributes NO
+            // intrinsic height — and #ichc-cams-panel is `flex: 1 1 auto` with
+            // `flex-basis: auto`, i.e. content-sized. A pass that measures the
+            // collapsed box must never be mistaken for "no cams fit": tearing
+            // the placement down and rebuilding it next pass makes every cam
+            // vanish at once. Fall back to the panel-derived height and the
+            // last good measurement instead. (The min-height pin set below is
+            // what stops the collapse happening in the first place.)
+            const lastGood = camLayoutState.freeformSize;
+            if (containerH <= 40 && camLayoutState.lastAvailableHeight > 40) {
+                containerH = camLayoutState.lastAvailableHeight - padT - padB;
+            }
+            if (containerH <= 40 && lastGood) { containerH = lastGood.h; }
+            if (containerW <= 40 && lastGood) { containerW = lastGood.w; }
+            if (containerW > 40 && containerH > 40) {
+                camLayoutState.freeformSize = { w: containerW, h: containerH };
+                // Zero-safe: `|| fallback` would turn an intentional 0px gap into
+                // the fallback, so test for NaN explicitly.
+                const gapRaw = parseFloat(cs.gap);
+                const gap = Number.isFinite(gapRaw) ? gapRaw : 2;
 
-                // Thumbnail cell ratio (h/w) from the global cam aspect, default 4:3.
+                // Default aspect (w/h) from the global cam aspect var, 4:3 fallback.
                 const aspRaw = getComputedStyle(document.documentElement)
                     .getPropertyValue('--ichc-cam-aspect');
                 const aspM = aspRaw.match(/([\d.]+)\s*\/\s*([\d.]+)/);
-                const cellRatio = aspM ? (Number(aspM[2]) / Number(aspM[1])) : 0.75;
+                const defAR = aspM ? (Number(aspM[1]) / Number(aspM[2])) : 4 / 3;
 
-                // Focused cam's real video aspect (w/h) so the frame fits the feed.
-                let featAR = aspM ? (Number(aspM[1]) / Number(aspM[2])) : 4 / 3;
-                const vid = featuredCard.querySelector('video');
-                if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
-                    featAR = vid.videoWidth / vid.videoHeight;
-                }
+                // Real video aspects where known so frames hug the feeds.
+                const videoAR = card => {
+                    const v = card.querySelector('video');
+                    return (v && v.videoWidth > 0 && v.videoHeight > 0)
+                        ? v.videoWidth / v.videoHeight : defAR;
+                };
 
-                let best = null;
-                const maxC = Math.min(8, Math.max(2, n + 1));
-                for (let c = 2; c <= maxC; c++) {
-                    const cellW = (containerW - (c - 1) * gap) / c;
-                    const natRowH = cellW * cellRatio;
-                    for (let k = 1; k < c; k++) {
-                        // Cap the focused cam at ~2/3 of the container width so the
-                        // thumbnails stay readable instead of being crushed.
-                        if (k / c > 0.7) { continue; }
-                        const featW = k * cellW + (k - 1) * gap;
-                        const featH = featW / featAR;
-                        // Rows the focused cam needs at its native aspect (ceil so the
-                        // card never overflows its block; any slack stays below it).
-                        const r = Math.max(1, Math.ceil((featH + gap) / (natRowH + gap) - 0.15));
-                        const sideCells = r * (c - k);
-                        const belowRows = Math.ceil(Math.max(0, n - sideCells) / c);
-                        const rows = Math.max(r, r + belowRows);
-                        // Divide the FULL container height across the rows so the grid
-                        // always fills the panel — thumbnails grow past their natural
-                        // 4:3 height (up to 1.75x) instead of leaving dead space below.
-                        let rowH = (containerH - (rows - 1) * gap) / rows;
-                        if (rowH < Math.max(64, natRowH * 0.4)) { continue; }
-                        rowH = Math.min(rowH, natRowH * 1.75);
-                        const blockH = r * rowH + (r - 1) * gap;
-                        // Weight by how close thumbnails stay to natural size, so a
-                        // bigger focused cam can't win by squashing everything else.
-                        const area = featW * Math.min(featH, blockH) * (Math.min(rowH, natRowH) / natRowH);
-                        if (!best || area > best.area) {
-                            best = { c, k, r, rowH: Math.floor(rowH), cellW, area };
-                        }
-                    }
+                if (found) {
+                    const packed = _packFocusedLayout(
+                        containerW, containerH, gap, videoAR(featuredCard),
+                        thumbCards.map(videoAR));
+                    if (packed) { layout = { ...packed, padL, padT }; }
+                } else {
+                    // Normal mode: justified rows over the whole panel, with
+                    // the user's per-cam size levels honored by
+                    // _packNormalLayout (mini = half width, grown = own line
+                    // at a real multiple of its plain height).
+                    const spans = _loadCamSpans();
+                    const items = thumbCards.map((card, index) => {
+                        const key = getCardKey(card);
+                        const level = key ? Math.max(0, Math.min(4, (key in spans) ? spans[key] : 1)) : 1;
+                        return { index, ar: videoAR(card), level };
+                    });
+                    const rects = _packNormalLayout(containerW, containerH, gap, items);
+                    if (rects) { layout = { focus: null, rects, padL, padT }; }
                 }
-                if (best) { layout = { ...best, featAR }; }
             }
         }
 
+        // A freeform pass that failed to measure or pack keeps whatever is
+        // already on screen. Only a real mode change (word cloud, last cam
+        // leaving) may drop back to the grid.
+        const keepFreeform = !!layout ||
+            (wantFreeform && !!cams?.classList.contains('ichc-cams-freeform'));
+
         if (cams) {
-            cams.style.removeProperty('grid-template-rows');
+            cams.classList.toggle('ichc-cams-freeform', keepFreeform);
             cams.style.removeProperty('align-content');
-            if (found && layout) {
-                cams.style.setProperty('grid-template-columns', `repeat(${layout.c}, minmax(0, 1fr))`, 'important');
-                cams.style.setProperty('grid-auto-rows', `${layout.rowH}px`, 'important');
+            if (layout) {
+                // Placed cards are position:absolute and out of flow, so this
+                // template only ever applies to cards the site has just added
+                // and that this pass has not placed yet. Keep it sane rather
+                // than removing it — see the .ichc-cams-freeform CSS comment.
+                cams.style.setProperty('grid-template-columns', `repeat(${columns}, minmax(0, 1fr))`, 'important');
+                cams.style.removeProperty('grid-template-rows');
+                cams.style.removeProperty('grid-auto-rows');
+            } else if (keepFreeform) {
+                // Holding the previous freeform placement — touch nothing.
             } else if (found) {
                 // Not measurable yet — simple 2-col grid until the next pass measures.
                 cams.style.setProperty('grid-template-columns', 'repeat(2, minmax(0, 1fr))', 'important');
+                cams.style.removeProperty('grid-template-rows');
                 cams.style.removeProperty('grid-auto-rows');
             } else {
-                // No featured cam: restore the doubled span grid that the normal
-                // per-card size levels (_applyCardSpans) depend on.
+                // Grid fallback (word-cloud mode, empty stage, unmeasurable):
+                // restore the doubled span grid that _applyCardSpans depends on.
+                cams.style.removeProperty('grid-template-rows');
                 cams.style.removeProperty('grid-auto-rows');
                 cams.style.setProperty('grid-template-columns', `repeat(${columns * 2}, minmax(0, 1fr))`, 'important');
             }
         }
 
+        // Map packed rects back to their cards (rect.index is the thumbCards index).
+        const rectByCard = new Map();
+        if (layout) {
+            layout.rects.forEach(r => { rectByCard.set(thumbCards[r.index], r); });
+        }
+        // Placement travels via custom properties + the stylesheet rule for
+        // [data-ichc-placed], NOT inline left/top/width/height.
+        //
+        // The site periodically rewrites those four properties inline on every
+        // cam card (its own tile layout — it writes `visibility: visible` in
+        // the same pass) and does so WITHOUT `!important`. Writing a property
+        // replaces its priority too, so that silently downgraded our
+        // `!important` values, and the base `#cams .rounded_square` rule —
+        // which declares `top/left/width/height: auto !important` — then won.
+        // Every card collapsed to a 2x2 border box at the container origin:
+        // all cams vanishing at once, on the site's refresh cadence. Confirmed
+        // live: inline `top: 345px; width: 150px` (no !important) computing to
+        // `T=0px W=2px`.
+        //
+        // A stylesheet `!important` beats a non-important inline declaration,
+        // and the site never touches custom properties, so this is immune.
+        const placeAbs = (card, x, y, w, h) => {
+            card.style.setProperty('--ichc-fx', `${Math.round(layout.padL + x)}px`);
+            card.style.setProperty('--ichc-fy', `${Math.round(layout.padT + y)}px`);
+            card.style.setProperty('--ichc-fw', `${Math.round(w)}px`);
+            card.style.setProperty('--ichc-fh', `${Math.round(h)}px`);
+            card.dataset.ichcPlaced = '1';
+            // Drop our own inline geometry so the site's writes cannot outrank
+            // the stylesheet rule that now owns placement.
+            ['position', 'left', 'top', 'width', 'height', 'margin',
+                'grid-column', 'grid-row', 'aspect-ratio', 'min-height', 'max-height',
+                'min-width', 'align-self', 'justify-self'].forEach(p => card.style.removeProperty(p));
+        };
+        const unplaceAbs = card => {
+            if (card.dataset.ichcPlaced) { delete card.dataset.ichcPlaced; }
+            ['--ichc-fx', '--ichc-fy', '--ichc-fw', '--ichc-fh']
+                .forEach(p => card.style.removeProperty(p));
+        };
+
         getCamCards().forEach(card => {
             const active = card === featuredCard;
-            if (active) {
-                if (layout) {
-                    // Top-left block, k columns × r rows; the card keeps the video's
-                    // own aspect ratio (frame hugs the feed) anchored to the top-left
-                    // of its block, clamped so it can never spill into the rows below.
-                    card.style.setProperty('grid-column', `1 / ${layout.k + 1}`, 'important');
-                    card.style.setProperty('grid-row', `1 / span ${layout.r}`, 'important');
-                    card.style.setProperty('aspect-ratio', String(layout.featAR), 'important');
-                    card.style.removeProperty('height');
-                    card.style.removeProperty('min-height');
-                    card.style.setProperty('max-height', '100%', 'important');
-                    card.style.setProperty('align-self', 'start', 'important');
-                    card.style.setProperty('justify-self', 'stretch', 'important');
-                } else {
-                    // Not measurable yet — full-width stacked until the next pass measures.
-                    card.style.setProperty('grid-column', '1 / -1', 'important');
-                    card.style.removeProperty('grid-row');
-                    card.style.setProperty('aspect-ratio', '16 / 9', 'important');
-                    card.style.removeProperty('height');
-                    card.style.setProperty('min-height', 'clamp(200px, 40vh, 480px)', 'important');
-                    card.style.setProperty('max-height', 'clamp(200px, 55vh, 600px)', 'important');
-                    card.style.setProperty('align-self', 'start', 'important');
-                    card.style.removeProperty('justify-self');
-                }
-                card.style.removeProperty('min-width');
-                card.style.removeProperty('width');
+            if (active && layout) {
+                placeAbs(card, layout.focus.x, layout.focus.y, layout.focus.w, layout.focus.h);
+            } else if (keepFreeform && !layout) {
+                // Failed pass — leave every card exactly where it was placed.
+            } else if (active) {
+                // Not measurable yet — full-width stacked until the next pass measures.
+                unplaceAbs(card);
+                ['position', 'left', 'top', 'margin', 'min-width', 'width', 'height'].forEach(p => card.style.removeProperty(p));
+                card.style.setProperty('grid-column', '1 / -1', 'important');
+                card.style.removeProperty('grid-row');
+                card.style.setProperty('aspect-ratio', '16 / 9', 'important');
+                card.style.setProperty('min-height', 'clamp(200px, 40vh, 480px)', 'important');
+                card.style.setProperty('max-height', 'clamp(200px, 55vh, 600px)', 'important');
+                card.style.setProperty('align-self', 'start', 'important');
+                card.style.removeProperty('justify-self');
+            } else if (layout) {
+                // Every visible card has a packed rect sized to its own video
+                // aspect ratio (times its span weight in normal mode), so the
+                // karma outline hugs the feed. Hidden/ghost slots have no rect
+                // and keep display:none from their own classes.
+                const r = rectByCard.get(card);
+                if (r) { placeAbs(card, r.x, r.y, r.w, r.h); } else { unplaceAbs(card); }
             } else if (featured) {
-                // Thumbnail: exactly one cell. When the video's real dimensions are
-                // known, the card keeps the VIDEO's aspect ratio centered in its cell
-                // so the karma outline hugs the feed instead of framing letterbox
-                // bars. Wider-than-cell feeds pin to full width, taller ones to full
-                // height. Unknown dims fall back to stretching to fill the cell.
+                // Grid fallback thumb: one cell, default aspect.
+                unplaceAbs(card);
+                ['position', 'left', 'top', 'margin', 'width', 'height'].forEach(p => card.style.removeProperty(p));
                 card.style.setProperty('grid-column', 'span 1', 'important');
                 card.style.removeProperty('grid-row');
                 card.style.removeProperty('max-height');
                 card.style.removeProperty('min-height');
-                if (layout) {
-                    const v = card.querySelector('video');
-                    const ar = (v && v.videoWidth > 0 && v.videoHeight > 0)
-                        ? v.videoWidth / v.videoHeight : 0;
-                    if (ar > 0) {
-                        const cellAR = layout.cellW / layout.rowH;
-                        card.style.setProperty('aspect-ratio', String(ar), 'important');
-                        if (ar >= cellAR) {
-                            card.style.setProperty('width', '100%', 'important');
-                            card.style.setProperty('height', 'auto', 'important');
-                            card.style.setProperty('justify-self', 'stretch', 'important');
-                            card.style.setProperty('align-self', 'center', 'important');
-                        } else {
-                            card.style.setProperty('height', '100%', 'important');
-                            card.style.setProperty('width', 'auto', 'important');
-                            card.style.setProperty('justify-self', 'center', 'important');
-                            card.style.setProperty('align-self', 'stretch', 'important');
-                        }
-                    } else {
-                        card.style.removeProperty('width');
-                        card.style.setProperty('aspect-ratio', 'auto', 'important');
-                        card.style.setProperty('height', 'auto', 'important');
-                        card.style.setProperty('align-self', 'stretch', 'important');
-                        card.style.setProperty('justify-self', 'stretch', 'important');
-                    }
-                } else {
-                    card.style.removeProperty('width');
-                    card.style.setProperty('aspect-ratio', '4 / 3', 'important');
-                    card.style.removeProperty('height');
-                    card.style.setProperty('align-self', 'start', 'important');
-                    card.style.removeProperty('justify-self');
-                }
-            } else {
-                card.style.removeProperty('grid-column');
-                card.style.removeProperty('grid-row');
-                card.style.removeProperty('aspect-ratio');
-                card.style.removeProperty('height');
-                card.style.removeProperty('width');
-                card.style.removeProperty('max-height');
-                card.style.removeProperty('align-self');
+                card.style.setProperty('aspect-ratio', '4 / 3', 'important');
+                card.style.setProperty('align-self', 'start', 'important');
                 card.style.removeProperty('justify-self');
-                card.style.removeProperty('min-height');
+            } else {
+                unplaceAbs(card);
+                ['position', 'left', 'top', 'margin', 'grid-column', 'grid-row',
+                    'aspect-ratio', 'height', 'width', 'max-height', 'min-height',
+                    'min-width', 'align-self', 'justify-self'].forEach(p => card.style.removeProperty(p));
             }
             const button = card.querySelector('.ichc-spotlight-btn');
             if (button) {
@@ -11634,8 +12393,6 @@
                 button.setAttribute('aria-label', active ? 'Unfocus cam' : 'Focus cam');
             }
         });
-
-        if (cams) { cams.classList.toggle('ichc-has-featured', found); }
 
         if (found) {
             _featuredWasFound = true;
@@ -11736,11 +12493,12 @@
             requestCamRelayout(70);
         }, 100);
         camLayoutState.syncObserver?.disconnect();
-        camLayoutState.syncObserver = new MutationObserver(() => {
-            // Always schedule syncSoon — never skip mutations outright.
-            // Timer cleanup is handled by prepareCamCard (ghost detection) and
-            // _reconcileBcastTimers (wholesale #cams replacement) — not here,
-            // because refreshCams() transiently removes cards that are still live.
+        camLayoutState.syncObserver = new MutationObserver(mutations => {
+            if (mutations.every(_isCamDecorationMutation)) { return; }
+            // Real site/card mutations always schedule syncSoon. Timer cleanup is
+            // handled by prepareCamCard (ghost detection) and _reconcileBcastTimers
+            // (wholesale #cams replacement), because refreshCams() transiently
+            // removes cards that are still live.
             syncSoon();
         });
         camLayoutState.syncObserver.observe(cams, {

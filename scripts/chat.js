@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     'use strict';
 
     // ─── Shared utilities (duplicated from ichc-theme) ───────────────────────────
@@ -258,6 +258,56 @@
         return `rgb(${r}, ${g}, ${b})`;
     }
 
+    // Counterpart of the above for light backgrounds.
+    //
+    // This replaced a flat "if it isn't already dark, use #1a1d23" rule, which threw the
+    // colour away entirely — every bright nick collapsed to the same near-black and the
+    // per-user colour looked broken in light mode.
+    //
+    // It targets a CONTRAST RATIO rather than a luminance threshold, which is the part
+    // worth keeping. A threshold cannot promise readability: mid-luminance colours sail
+    // under it untouched and still land near 2.5:1 on a cream row (#3ba55c green was the
+    // clearest offender). Scaling the channels toward black preserves the hue, and
+    // luminance falls monotonically as the factor shrinks, so a short binary search
+    // finds the lightest factor that still clears the target.
+    //
+    // Measured against the DARKEST chat row any light palette uses, not against white.
+    // For dark text, white is the easiest possible backdrop — clearing 4.5 there leaves
+    // roughly 3.8 on a cream row, i.e. the wrong way round. rgb(206,210,216) is the
+    // Light theme's composited row (its translucent row over #dde0e4), which is darker
+    // than Rosé Pine Dawn's, so passing here passes on every light theme.
+    const LIGHT_CONTRAST_TARGET = 4.5;
+    const LIGHT_REF_BG = [206, 210, 216];
+    function makeReadableOnLightChatColor(value) {
+        const channels = parseColorChannels(value);
+        if (!channels) { return value || ''; }
+
+        const [r0, g0, b0] = channels;
+        const chan = c => {
+            const s = c / 255;
+            return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+        };
+        const lum = (r, g, b) => 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b);
+        const bgL = lum(LIGHT_REF_BG[0], LIGHT_REF_BG[1], LIGHT_REF_BG[2]);
+        const contrast = (r, g, b) => {
+            const fgL = lum(r, g, b);
+            return (Math.max(fgL, bgL) + 0.05) / (Math.min(fgL, bgL) + 0.05);
+        };
+
+        if (contrast(r0, g0, b0) >= LIGHT_CONTRAST_TARGET) {
+            return `rgb(${Math.round(r0)}, ${Math.round(g0)}, ${Math.round(b0)})`;
+        }
+        // Luminance falls monotonically with the factor, so binary search finds the
+        // lightest scaling that still clears the target.
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 16; i++) {
+            const mid = (lo + hi) / 2;
+            if (contrast(r0 * mid, g0 * mid, b0 * mid) >= LIGHT_CONTRAST_TARGET) { lo = mid; }
+            else { hi = mid; }
+        }
+        return `rgb(${Math.round(r0 * lo)}, ${Math.round(g0 * lo)}, ${Math.round(b0 * lo)})`;
+    }
+
     // ── Per-user text colour registry ─────────────────────────────────────────
     // Each user picks their own text colour on the site, and their messages carry it
     // inline — which is the only place it is exposed, so it is harvested from chat as
@@ -407,7 +457,12 @@
     }
 
     function isLightTheme() {
-        return document.documentElement.classList.contains('ichc-light-theme');
+        // Polarity, not a specific palette: `ichc-theme-is-light` is set by
+        // applyTheme() in modernize.js for every light-background theme. The
+        // legacy class is still checked so this holds if that marker is ever
+        // missed on an early paint.
+        const cl = document.documentElement.classList;
+        return cl.contains('ichc-theme-is-light') || cl.contains('ichc-light-theme');
     }
 
     function applyChatTheme(scope = getChatLog()) {
@@ -427,9 +482,11 @@
             if (anchor.dataset.ichcChatNick !== '1') { recordSpoke(anchor.textContent); }
             let resolved;
             if (lightMode) {
-                // In light mode keep the nick color as-is if it's dark enough,
-                // otherwise darken it so it's readable on a light background.
-                resolved = color ? (isDarkChatColor(color) ? color : '#1a1d23') : '#1a1d23';
+                // Darken toward black while keeping the hue, rather than discarding the
+                // user's colour for a flat near-black. Falls back to the theme's own
+                // text colour so this reads correctly on every light palette, not just
+                // the original light theme.
+                resolved = color ? makeReadableOnLightChatColor(color) : 'var(--ichc-text-bright)';
             } else {
                 resolved = color ? makeReadableChatColor(color) : '#dbeafe';
             }
@@ -611,7 +668,7 @@
 
         // Full-log call (initial paint): run immediately.
         // Per-row call (new message): defer to next frame so a burst of messages
-        // only triggers one full rescan instead of one per message.
+        // only triggers one bounded tail regroup instead of rescanning every row.
         if (root === log) {
             reGroupChatRows(log);
         } else {
@@ -620,11 +677,18 @@
     }
 
     let _reGroupRAF = null;
+    let _reGroupPending = 0;
     function _scheduleReGroup() {
+        _reGroupPending++;
         if (_reGroupRAF !== null) { return; }
         _reGroupRAF = requestAnimationFrame(() => {
             _reGroupRAF = null;
-            reGroupChatRows(getChatLog());
+            // Two rows of context on each side cover the only group boundaries a
+            // newly-appended burst can change. Keep a six-row floor for DOM noise
+            // that schedules regrouping without adding a direct chat child.
+            const tailCount = Math.max(6, _reGroupPending + 2);
+            _reGroupPending = 0;
+            reGroupChatRows(getChatLog(), tailCount);
         });
     }
 
@@ -754,7 +818,7 @@
         bar.append(label, close);
     }
 
-    function reGroupChatRows(log) {
+    function reGroupChatRows(log, tailCount = 0) {
         if (!log) { return; }
         const allRows = [...log.children].filter(node =>
             node instanceof HTMLElement &&
@@ -762,33 +826,58 @@
             !node.dataset.ichcEventProcessed
         );
 
-        let lastNick = null;
+        // Initial paint/theme changes still process the whole log. Normal message
+        // arrival only changes grouping at the tail, so keep old rows untouched and
+        // avoid thousands of querySelector/class operations on every new message.
+        const start = tailCount > 0 ? Math.max(0, allRows.length - tailCount) : 0;
+        const rows = allRows.slice(start);
+
+        const isBreak = row =>
+            row.classList.contains('ichc-chat-event') ||
+            row.classList.contains('ichc-bcast-event') ||
+            row.classList.contains('ichc-event-collector');
+        const explicitNick = row => {
+            const nickEl = row.querySelector('a.userlink, a[data-ichc-chat-nick]');
+            return nickEl ? nickEl.textContent.trim().toLowerCase() : '';
+        };
+
+        // Seed inheritance for a tail-only pass. Native continuation rows can omit
+        // the nick anchor, so walk back only until the nearest explicit nick/break.
+        let priorNick = null;
+        if (start > 0) {
+            for (let i = start - 1; i >= 0; i--) {
+                if (isBreak(allRows[i])) { break; }
+                const nick = explicitNick(allRows[i]);
+                if (nick) { priorNick = nick; break; }
+            }
+        }
+
+        let lastNick = priorNick;
         const nickOf = new Map();
-        allRows.forEach(row => {
-            if (row.classList.contains('ichc-chat-event') || row.classList.contains('ichc-bcast-event') ||
-                row.classList.contains('ichc-event-collector')) {
+        rows.forEach(row => {
+            if (isBreak(row)) {
                 lastNick = null;
                 nickOf.set(row, null);
                 return;
             }
-            const nickEl = row.querySelector('a.userlink, a[data-ichc-chat-nick]');
-            if (nickEl) { lastNick = nickEl.textContent.trim().toLowerCase(); }
+            const nick = explicitNick(row);
+            if (nick) { lastNick = nick; }
             nickOf.set(row, lastNick);
         });
 
-        allRows.forEach(row => {
+        rows.forEach(row => {
             row.classList.remove('ichc-chat-group-first', 'ichc-chat-group-mid', 'ichc-chat-group-last');
         });
 
-        allRows.forEach((row, i) => {
+        rows.forEach((row, i) => {
             const nick = nickOf.get(row);
             if (!nick) {
                 _updateGroupNickWrap(row, false);
                 return;
             }
             _ensureReplyButton(row, nick);
-            const prevNick = i > 0 ? nickOf.get(allRows[i - 1]) : null;
-            const nextNick = i < allRows.length - 1 ? nickOf.get(allRows[i + 1]) : null;
+            const prevNick = i > 0 ? nickOf.get(rows[i - 1]) : priorNick;
+            const nextNick = i < rows.length - 1 ? nickOf.get(rows[i + 1]) : null;
             const sameAsPrev = prevNick === nick;
             const sameAsNext = nextNick === nick;
             if (sameAsPrev && sameAsNext) { row.classList.add('ichc-chat-group-mid'); }
@@ -1131,6 +1220,10 @@
     function _isRetainableRow(node) {
         if (!(node instanceof HTMLElement)) { return false; }
         if (!node.matches('table, div, p, ul, .line')) { return false; }
+        // modernize.js deliberately sheds old live rows to keep long sessions
+        // responsive.  A marker survives on the detached mutation-record node so
+        // this removal cannot be confused with a moderator silencing a user.
+        if (node.dataset.ichcAgePruned === '1') { return false; }
         // Skip our own injected helper nodes — only real chat rows are retained.
         if (node.classList.contains('ichc-event-collector') ||
             node.classList.contains('ichc-chat-inline-img') ||
@@ -1146,6 +1239,15 @@
             node.classList.contains('ichc-history-block') ||
             node.closest?.('.ichc-muted-body, .ichc-history-block')) { return false; }
         return true;
+    }
+
+    function _retainableRowCount(log, stopAfter = Infinity) {
+        if (!log) { return 0; }
+        let count = 0;
+        for (const node of log.children) {
+            if (_isRetainableRow(node) && ++count >= stopAfter) { break; }
+        }
+        return count;
     }
 
     function _restoreClearedChat(log, rows) {
@@ -1284,8 +1386,9 @@
             m.removedNodes.forEach(n => { if (_isRetainableRow(n)) { removed.push(n); } });
         });
         if (removed.length < CHAT_CLEAR_MIN_REMOVED) { return false; }
-        const remaining = [...log.children].filter(_isRetainableRow).length;
+        const remaining = _retainableRowCount(log, 3);
         if (remaining > 2) { return false; }
+        _logChatClear('observer', 'removed=' + removed.length + ' remaining=' + remaining);
 
         // Hold the salvaged rows and confirm the log stays empty before restoring —
         // a cam-refresh that empties then refills #txt should NOT trigger a restore.
@@ -1297,13 +1400,14 @@
             const rows = chatRetention.pendingRows;
             chatRetention.pendingRows = null;
             if (!liveLog || !rows) { return; }
-            const now = [...liveLog.children].filter(_isRetainableRow).length;
+            const now = _retainableRowCount(liveLog, 3);
             if (now > 2) { return; } // site refilled — genuine refresh, not a clear
             // Salvaged rows are the freshest copy — keep them as the cache and reveal
             // the restore button (manual restore; auto-restore proved unreliable).
             if (rows.length >= chatCache.count) {
-                chatCache.rows = rows.map(r => r.cloneNode(true));
-                chatCache.count = rows.length;
+                const recent = rows.slice(-CHAT_CACHE_MAX);
+                chatCache.rows = recent.map(r => r.cloneNode(true));
+                chatCache.count = recent.length;
             }
             _showChatRestoreBar();
         }, CHAT_CLEAR_CONFIRM_MS);
@@ -1356,17 +1460,26 @@
 
     const _sig = rec => (rec.t || 0) + '|' + (rec.n || '').toLowerCase() + '|' + (rec.m || '');
 
+    let _lastChatHistorySaveAt = 0;
     function _saveChatHistory() {
         if (!_chatRetentionEnabled()) { return; }
         const log = getChatLog();
         if (!log) { return; }
+        const now = Date.now();
+        // The in-memory clear cache is refreshed on the normal 1.5s debounce, but
+        // cloning/serialising hundreds of rows into localStorage that often creates
+        // avoidable main-thread stalls.  Cross-refresh history can safely lag by a
+        // few seconds while the live recovery cache remains current.
+        if (now - _lastChatHistorySaveAt < 10000) { return; }
+        _lastChatHistorySaveAt = now;
         try {
             const recs = [...log.children]
+                .filter(_isRetainableRow)
+                .slice(-CHAT_HISTORY_MAX)
                 .map(_rowToRecord)
-                .filter(Boolean)
-                .slice(-CHAT_HISTORY_MAX);
+                .filter(Boolean);
             if (!recs.length) { return; }   // never clobber a good history with nothing
-            localStorage.setItem(_historyKey(), JSON.stringify({ v: 1, at: Date.now(), recs }));
+            localStorage.setItem(_historyKey(), JSON.stringify({ v: 1, at: now, recs }));
         } catch (_) {}   // quota or private mode — history is a nicety, not load-bearing
     }
 
@@ -1433,13 +1546,40 @@
     const CHAT_CACHE_MAX = 800;   // was 400 — longer scroll back on restore
     const chatCache = { rows: [], count: 0, snapTimer: null, lossShown: false, lastContentAt: 0, lossCheckTimer: null };
 
+    // Forensics for "the chat cleared itself at random". The two detectors below catch
+    // a clear but say nothing about its ORIGIN, and the two origins want opposite fixes:
+    //
+    //   observer — rows were removed from the log we are watching. The site (or a mod)
+    //              cleared it in place.
+    //   swap     — the log element we were watching is gone or is no longer the live
+    //              one, i.e. the site replaced #txt wholesale and the observer never
+    //              saw a mutation. Only the 1s poll catches this.
+    //
+    // Logged unconditionally: this is a user-visible bug being chased across sessions,
+    // and asking someone to flip a debug flag before the thing they cannot predict
+    // happens again is not a workable request.
+    function _logChatClear(source, extra) {
+        try {
+            const log = getChatLog();
+            console.log(
+                '%c[ichc] chat cleared%c source=' + source +
+                ' cached=' + chatCache.count +
+                ' sinceContent=' + (chatCache.lastContentAt ? (Date.now() - chatCache.lastContentAt) + 'ms' : 'n/a') +
+                ' logConnected=' + !!(log && log.isConnected) +
+                (extra ? ' ' + extra : ''),
+                'color:#f87171;font-weight:bold', 'color:inherit');
+        } catch (_) {}
+    }
+
     function _snapshotChatCache() {
         const log = getChatLog();
         if (!log) { return; }
         const rows = [...log.children].filter(_isRetainableRow);
         if (rows.length < 3) { return; }   // nothing worth caching yet
-        let snap = rows.map(r => r.cloneNode(true));
-        if (snap.length > CHAT_CACHE_MAX) { snap = snap.slice(snap.length - CHAT_CACHE_MAX); }
+        // Bound before cloning. Previously a 5,000-row room cloned every row on
+        // every snapshot and threw most clones away afterward, so the recovery
+        // feature itself grew more expensive the longer the tab stayed open.
+        const snap = rows.slice(-CHAT_CACHE_MAX).map(r => r.cloneNode(true));
         chatCache.rows = snap;
         chatCache.count = snap.length;
         chatCache.lastContentAt = Date.now();
@@ -1458,7 +1598,9 @@
     function _checkChatLoss() {
         if (!_chatRetentionEnabled()) { return; }
         const log = getChatLog();
-        const live = log ? [...log.children].filter(_isRetainableRow).length : 0;
+        // Loss detection only distinguishes 0–2 rows from "healthy" (>2), so do
+        // not rescan the entire bounded history once the answer is already known.
+        const live = _retainableRowCount(log, 3);
         if (live > 2) {
             if (chatCache.lossShown) { _hideChatRestoreBar(); }   // real content returned
             return;
@@ -1468,6 +1610,10 @@
         if (chatCache.count >= CHAT_CLEAR_MIN_REMOVED &&
             Date.now() - chatCache.lastContentAt > 1200 &&
             !chatCache.lossShown) {
+            // The observer never fired for this one, so the log we were watching either
+            // vanished or was swapped for a fresh element — distinguish the two, since
+            // a swap points at the site rebuilding the chat column rather than a clear.
+            _logChatClear(log ? 'swap' : 'gone', 'live=' + live);
             _showChatRestoreBar();
         }
     }
@@ -1609,6 +1755,31 @@
     let _lineSeq = 0;
     const condensed = { joins: new Map(), leaves: new Map(), bar: null, raf: 0, expanded: false };
 
+    // How long a join/leave stays in the bar.
+    //
+    // The default ('view') is the original behaviour: an event lives only while the
+    // chat line it arrived next to is still on screen, so the bar describes the stretch
+    // of conversation you are looking at. That is deliberately short-lived, which is
+    // wrong when you step away and want to know who came and went — hence the timed
+    // options, which ignore scroll position entirely and keep everything from the last
+    // N minutes. The two rules are mutually exclusive on purpose: applying both would
+    // silently re-impose the short window and make "10m" look broken.
+    const CONDENSED_RETENTION_KEY = 'ichc_condensed_window';
+    const CONDENSED_RETENTIONS = [
+        { id: 'view', label: 'View',  ms: 0 },
+        { id: '2m',   label: '2m',    ms: 2 * 60 * 1000 },
+        { id: '5m',   label: '5m',    ms: 5 * 60 * 1000 },
+        { id: '10m',  label: '10m',   ms: 10 * 60 * 1000 },
+    ];
+    function _condensedRetention() {
+        let id = 'view';
+        try { id = localStorage.getItem(CONDENSED_RETENTION_KEY) || 'view'; } catch (_) {}
+        return CONDENSED_RETENTIONS.find(r => r.id === id) || CONDENSED_RETENTIONS[0];
+    }
+    function _setCondensedRetention(id) {
+        try { localStorage.setItem(CONDENSED_RETENTION_KEY, id); } catch (_) {}
+    }
+
     function _condensedOn() {
         try { return localStorage.getItem(CONDENSED_KEY) === '1'; } catch (_) { return false; }
     }
@@ -1621,6 +1792,22 @@
         if (!(row instanceof HTMLElement) || row.dataset.ichcLine) { return; }
         if (!_isRetainableRow(row)) { return; }
         row.dataset.ichcLine = String(++_lineSeq);
+    }
+
+    // Give genuinely new chat rows a small one-shot entrance cue. The marker is
+    // retained after the class is removed so cached/restored clones never replay the
+    // motion and make old history look live.
+    function _animateChatArrival(row, log) {
+        if (!(row instanceof HTMLElement) || !log) { return; }
+        let arrival = row;
+        if (arrival.parentElement !== log) {
+            arrival = arrival.matches('.line') ? arrival : arrival.closest('.line');
+        }
+        if (!arrival || !log.contains(arrival) || arrival.dataset.ichcInserted ||
+            arrival.dataset.ichcArrival || !_isRetainableRow(arrival)) { return; }
+        arrival.dataset.ichcArrival = '1';
+        arrival.classList.add('ichc-chat-arrival');
+        window.setTimeout(() => arrival.classList.remove('ichc-chat-arrival'), 280);
     }
 
     // Line number of the topmost row currently visible in the scroll viewport.
@@ -1654,15 +1841,48 @@
         l.className = 'ichc-condensed-line ichc-condensed-leaves';
         lines.append(j, l);
 
+        // Retention picker — only meaningful once expanded, so it lives inside the
+        // lines column and is revealed by the open state.
+        const win = document.createElement('div');
+        win.className = 'ichc-condensed-window';
+        const winLabel = document.createElement('span');
+        winLabel.className = 'ichc-condensed-window-label';
+        winLabel.textContent = 'Keep';
+        win.appendChild(winLabel);
+        CONDENSED_RETENTIONS.forEach(r => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'ichc-condensed-window-btn';
+            b.dataset.retention = r.id;
+            b.textContent = r.label;
+            b.title = r.ms
+                ? `Keep joins and leaves from the last ${r.label}, regardless of scrolling`
+                : 'Keep only events beside chat still on screen';
+            b.addEventListener('click', e => {
+                // Must not reach the bar's own handler, which would collapse the bar
+                // the moment a window was chosen.
+                e.preventDefault();
+                e.stopPropagation();
+                _setCondensedRetention(r.id);
+                _updateCondensed();
+            });
+            win.appendChild(b);
+        });
+
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = 'ichc-condensed-toggle';
         toggle.hidden = true;
 
-        bar.append(lines, toggle);
+        // `win` is a sibling of `lines`, not a child: when expanded, `lines` becomes a
+        // capped scroll box, and a picker inside it would scroll out of reach exactly
+        // when the list is long enough to need one. The bar wraps so it lands on its
+        // own row underneath.
+        bar.append(lines, toggle, win);
 
         // The whole bar is the hit target — it holds only plain text, so there is
-        // nothing else in it a click could be meant for.
+        // nothing else in it a click could be meant for. (The retention buttons stop
+        // propagation themselves.)
         bar.addEventListener('click', e => {
             e.preventDefault();
             e.stopPropagation();
@@ -1733,9 +1953,18 @@
         if (!log) { return; }
         if (!_condensedOn()) { _removeCondensedBar(); return; }
 
-        const floor = _firstVisibleLine(log);
+        // Timed retention ignores scroll position entirely; the default expires by it.
+        // Never both — see the note on CONDENSED_RETENTIONS.
+        const retention = _condensedRetention();
+        const floor = retention.ms ? 0 : _firstVisibleLine(log);
+        const ageCutoff = retention.ms ? Date.now() - retention.ms : 0;
         [condensed.joins, condensed.leaves].forEach(map => {
-            map.forEach((rec, nick) => { if ((rec?.seq ?? 0) < floor) { map.delete(nick); } });
+            map.forEach((rec, nick) => {
+                const drop = retention.ms
+                    ? (rec?.at ?? 0) < ageCutoff
+                    : (rec?.seq ?? 0) < floor;
+                if (drop) { map.delete(nick); }
+            });
             while (map.size > CONDENSED_MAX) { map.delete(map.keys().next().value); }
         });
 
@@ -1753,23 +1982,47 @@
         const jl = bar.querySelector('.ichc-condensed-joins');
         const ll = bar.querySelector('.ichc-condensed-leaves');
 
-        // Paint collapsed first so overflow can be measured against the clamped width,
-        // then apply the expanded class. While expanded the lines wrap, so scrollWidth
-        // equals clientWidth and the check would report "nothing hidden" — hence the
-        // toggle also stays visible whenever it is open, to offer the way back.
-        bar.classList.remove('ichc-condensed-open');
-        _renderCondensedLine(jl, condensed.joins, 'joined');
-        _renderCondensedLine(ll, condensed.leaves, 'left');
-        const clipped = [jl, ll].some(el => !el.hidden && el.scrollWidth > el.clientWidth + 1);
+        // Overflow can only be measured against the CLAMPED width, so the collapsed
+        // state has to be painted first — but only when actually collapsed.
+        //
+        // This used to strip `ichc-condensed-open` unconditionally, measure, then put it
+        // back. Reading scrollWidth forces a style flush between those two lines, so
+        // while expanded the class genuinely left and re-entered the DOM on every update
+        // — including the 10s repaint and every scroll frame. That restarted the reveal
+        // animation continuously: the retention buttons flickered and could not be
+        // clicked, because each pointerdown landed on an element mid-animation that was
+        // about to be re-laid-out. While expanded the toggle stays visible regardless,
+        // so the measurement is not needed at all and is now skipped.
+        let clipped;
+        if (condensed.expanded) {
+            _renderCondensedLine(jl, condensed.joins, 'joined');
+            _renderCondensedLine(ll, condensed.leaves, 'left');
+            clipped = true;
+        } else {
+            bar.classList.remove('ichc-condensed-open');
+            _renderCondensedLine(jl, condensed.joins, 'joined');
+            _renderCondensedLine(ll, condensed.leaves, 'left');
+            clipped = [jl, ll].some(el => !el.hidden && el.scrollWidth > el.clientWidth + 1);
+        }
 
         bar.classList.toggle('ichc-condensed-open', condensed.expanded);
         const toggle = bar.querySelector('.ichc-condensed-toggle');
         if (toggle) {
             toggle.hidden = !(clipped || condensed.expanded);
-            toggle.textContent = condensed.expanded ? '\u25be' : '\u25b8';
+            // Single glyph, rotated by CSS, so the open/close change is animated rather
+            // than swapped \u2014 matches how the cog menu's expandable rows behave.
+            toggle.textContent = '\u25b8';
             toggle.title = condensed.expanded ? 'Collapse' : 'Show everyone';
             bar.classList.toggle('ichc-condensed-clickable', !toggle.hidden);
         }
+        bar.querySelectorAll('.ichc-condensed-window-btn').forEach(b => {
+            b.setAttribute('aria-current', String(b.dataset.retention === retention.id));
+        });
+        // A timed window is a sticky, non-obvious mode \u2014 surface it on the collapsed bar
+        // too, so "why is this still listing people who left ages ago" is answerable
+        // without expanding.
+        bar.classList.toggle('ichc-condensed-timed', !!retention.ms);
+        bar.dataset.retention = retention.id;
     }
 
     function _scheduleCondensed(fromScroll) {
@@ -2631,6 +2884,7 @@
                                     }
                                     applyChatTheme(node);
                                     _markMentions(node);
+                                    _animateChatArrival(node, log);
                                     _stampLine(node);   // line number for condensed expiry
                                     sawNewRows = true;
                                 }

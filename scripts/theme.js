@@ -95,9 +95,10 @@
             const label = btn.querySelector('span:not(.ichc-btn-icon-lg)');
             if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
         }
-        if (!isLive) {
-            window.setTimeout(() => document.dispatchEvent(new CustomEvent('ichc-trigger-reload')), 1500);
-        }
+        // Going off live must not refresh the inbound cam list. A global refresh
+        // tears down and renegotiates every viewer connection, which makes the
+        // remaining cams stutter and can feed protocol list events back into more
+        // refresh activity. Manual and per-feed refresh controls handle recovery.
     }
 
     function watchBroadcasterPanel() {

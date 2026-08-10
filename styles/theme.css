@@ -1,3 +1,232 @@
+    /* ══ Theme palettes ═══════════════════════════════════════════════════════
+       Every chrome colour in this file resolves through the tokens below, so a
+       theme is a palette block rather than a pile of overrides. Two rules keep
+       that true:
+
+       1. The ramp is ordered by luminance and named by ROLE, not by lightness.
+          `--ichc-bg` is always the page behind everything and `--ichc-text` is
+          always body copy, so a light palette simply puts light values in the
+          surface slots and dark values in the text slots. Do not add a colour
+          literal to a chrome rule — pick the nearest slot.
+       2. `--ichc-tint-rgb` carries the polarity of every translucent overlay.
+          Roughly 167 rules use `rgba(var(--ichc-tint-rgb), a)` for hover fills
+          and hairline borders; flipping it to `0,0,0` is what stops those from
+          bleaching a light theme. It is the one token you must not forget.
+
+       Semantic colours (error red, warning amber, online green) are deliberately
+       NOT tokenised — they mean the same thing in every theme.
+
+       To add a theme: copy a block, change the values, add the class to
+       THEMES in modernize.js. Light-polarity themes also need the
+       `ichc-theme-is-light` class, which is what JS reads to pick the
+       readable-on-light variant of user nick colours.
+       ────────────────────────────────────────────────────────────────────── */
+
+    /* Dark — the default, and the palette every other block is measured against */
+    :root {
+        --ichc-bg:            #111214;
+        --ichc-sec-cam:       #6cbf8a;
+        --ichc-sec-active:    #7289da;
+        --ichc-bg-rgb:        17,18,20;
+        --ichc-chat-row:      rgba(26,28,31,0.82);
+        --ichc-chat-row-hover: rgba(34,36,40,0.92);
+        --ichc-surface:       #18191c;
+        --ichc-surface-2:     #1e2024;
+        --ichc-surface-3:     #25272b;
+        --ichc-surface-4:     #2d2f34;
+        --ichc-border:        #36383d;
+        --ichc-text-faint:    #4e5058;
+        --ichc-text-muted:    #80848e;
+        --ichc-text-dim:      #9ca3af;
+        --ichc-text-3:        #b5bac1;
+        --ichc-text-2:        #c9cdd2;
+        --ichc-text:          #dbdee1;
+        --ichc-text-bright:   #f2f3f5;
+        --ichc-text-strong:   #ffffff;
+        --ichc-surface-rgb:   24,25,28;
+        --ichc-tint-rgb:      255,255,255;
+        --ichc-accent:        #5865f2;
+        --ichc-accent-soft:   #7289da;
+        --ichc-accent-hover:  #4752c4;
+        /* Not a colour — a shape, so it is defined once here rather than per palette.
+           Painted via mask + currentColor so it inherits each section's own hue. */
+        --ichc-search-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M7 1a6 6 0 104.2 10.3l3.2 3.2 1.4-1.4-3.2-3.2A6 6 0 007 1zm0 2a4 4 0 110 8 4 4 0 010-8z" fill="black"/></svg>');
+    }
+
+    /* Light. The legacy `ichc-light-theme` override rules further down predate
+       these tokens and still win where they apply; the values here are chosen to
+       agree with them, so the two cannot disagree visually. Those overrides are
+       now largely redundant and can be pruned a few at a time. */
+    html.ichc-light-theme {
+        --ichc-bg:            #c8ccd2;
+        --ichc-sec-cam:       #1f7a4d;
+        --ichc-sec-active:    #3742a8;
+        --ichc-bg-rgb:        200,204,210;
+        --ichc-chat-row:      rgba(180,185,194,0.35);
+        --ichc-chat-row-hover: rgba(160,166,176,0.48);
+        --ichc-surface:       #d4d7dc;
+        --ichc-surface-2:     #dde0e4;
+        --ichc-surface-3:     #c4c8ce;
+        --ichc-surface-4:     #b8bbbe;
+        --ichc-border:        #a8adb6;
+        --ichc-text-faint:    #9a9fa8;
+        --ichc-text-muted:    #595c6c;
+        --ichc-text-dim:      #52565f;
+        --ichc-text-3:        #4e5058;
+        --ichc-text-2:        #3f4249;
+        --ichc-text:          #313338;
+        --ichc-text-bright:   #1b1d21;
+        --ichc-text-strong:   #060607;
+        --ichc-surface-rgb:   212,215,220;
+        --ichc-tint-rgb:      0,0,0;
+        --ichc-accent:        #5865f2;
+        --ichc-accent-soft:   #4752c4;
+        --ichc-accent-hover:  #3c46a8;
+    }
+
+    /* Catppuccin Mocha — cool violet dark */
+    html.ichc-theme-mocha {
+        --ichc-bg:            #11111b;
+        --ichc-sec-cam:       #a6e3a1;
+        --ichc-sec-active:    #89b4fa;
+        --ichc-bg-rgb:        17,17,27;
+        --ichc-chat-row:      rgba(24,24,37,0.82);
+        --ichc-chat-row-hover: rgba(49,50,68,0.92);
+        --ichc-surface:       #1e1e2e;
+        --ichc-surface-2:     #252537;
+        --ichc-surface-3:     #313244;
+        --ichc-surface-4:     #45475a;
+        --ichc-border:        #585b70;
+        --ichc-text-faint:    #6c7086;
+        --ichc-text-muted:    #9399b2;
+        --ichc-text-dim:      #a6adc8;
+        --ichc-text-3:        #b8c0da;
+        --ichc-text-2:        #bac2de;
+        --ichc-text:          #cdd6f4;
+        --ichc-text-bright:   #e4e9f7;
+        --ichc-text-strong:   #ffffff;
+        --ichc-surface-rgb:   30,30,46;
+        --ichc-tint-rgb:      255,255,255;
+        --ichc-accent:        #cba6f7;
+        --ichc-accent-soft:   #b4befe;
+        --ichc-accent-hover:  #a684e8;
+    }
+
+    /* Tokyo Night — deep blue dark */
+    html.ichc-theme-tokyo {
+        --ichc-bg:            #16161e;
+        --ichc-sec-cam:       #9ece6a;
+        --ichc-sec-active:    #7aa2f7;
+        --ichc-bg-rgb:        22,22,30;
+        --ichc-chat-row:      rgba(22,22,30,0.82);
+        --ichc-chat-row-hover: rgba(36,40,59,0.92);
+        --ichc-surface:       #1a1b26;
+        --ichc-surface-2:     #1f2335;
+        --ichc-surface-3:     #24283b;
+        --ichc-surface-4:     #2f334d;
+        --ichc-border:        #3b4261;
+        --ichc-text-faint:    #545c7e;
+        --ichc-text-muted:    #7f839e;
+        --ichc-text-dim:      #8d97c4;
+        --ichc-text-3:        #9aa5ce;
+        --ichc-text-2:        #a9b1d6;
+        --ichc-text:          #c0caf5;
+        --ichc-text-bright:   #dfe3f5;
+        --ichc-text-strong:   #ffffff;
+        --ichc-surface-rgb:   26,27,38;
+        --ichc-tint-rgb:      255,255,255;
+        --ichc-accent:        #7aa2f7;
+        --ichc-accent-soft:   #7dcfff;
+        --ichc-accent-hover:  #5a7fd6;
+    }
+
+    /* Everforest — warm sage dark */
+    html.ichc-theme-everforest {
+        --ichc-bg:            #232a2e;
+        --ichc-sec-cam:       #a7c080;
+        --ichc-sec-active:    #7fbbb3;
+        --ichc-bg-rgb:        35,42,46;
+        --ichc-chat-row:      rgba(35,42,46,0.82);
+        --ichc-chat-row-hover: rgba(61,72,77,0.92);
+        --ichc-surface:       #2d353b;
+        --ichc-surface-2:     #343f44;
+        --ichc-surface-3:     #3d484d;
+        --ichc-surface-4:     #475258;
+        --ichc-border:        #4f585e;
+        --ichc-text-faint:    #7a8478;
+        --ichc-text-muted:    #949f97;
+        --ichc-text-dim:      #9da9a0;
+        --ichc-text-3:        #aab5a7;
+        --ichc-text-2:        #b8bfae;
+        --ichc-text:          #d3c6aa;
+        --ichc-text-bright:   #e8e0cc;
+        --ichc-text-strong:   #fdf6e3;
+        --ichc-surface-rgb:   45,53,59;
+        --ichc-tint-rgb:      255,255,255;
+        --ichc-accent:        #a7c080;
+        --ichc-accent-soft:   #83c092;
+        --ichc-accent-hover:  #8da96a;
+    }
+
+    /* Paper — warm parchment, the middle ground between the light themes and the dark
+       ones. Deliberately NOT near-white: the base sits around 84% lightness where Light
+       and Dawn sit near 98%, so it reads as toned paper rather than a bright screen,
+       and the surface ramp climbs to a lighter card instead of down to a darker one. */
+    html.ichc-theme-paper {
+        --ichc-bg:            #ddd6c6;
+        --ichc-sec-cam:       #245437;
+        --ichc-sec-active:    #304e64;
+        --ichc-bg-rgb:        221,214,198;
+        --ichc-chat-row:      rgba(205,197,178,0.42);
+        --ichc-chat-row-hover: rgba(190,181,160,0.58);
+        --ichc-surface:       #e8e1d2;
+        --ichc-surface-2:     #efe9dc;
+        --ichc-surface-3:     #d3cbb8;
+        --ichc-surface-4:     #c2b9a3;
+        --ichc-border:        #b0a68d;
+        --ichc-text-faint:    #9a917c;
+        --ichc-text-muted:    #514a3d;
+        --ichc-text-dim:      #5c5445;
+        --ichc-text-3:        #514a3c;
+        --ichc-text-2:        #464033;
+        --ichc-text:          #3b3529;
+        --ichc-text-bright:   #2a251c;
+        --ichc-text-strong:   #1a1712;
+        --ichc-surface-rgb:   232,225,210;
+        --ichc-tint-rgb:      0,0,0;
+        --ichc-accent:        #2f6d7a;
+        --ichc-accent-soft:   #8a5a2b;
+        --ichc-accent-hover:  #24555f;
+    }
+
+    /* Rosé Pine Dawn — soft warm light */
+    html.ichc-theme-dawn {
+        --ichc-bg:            #faf4ed;
+        --ichc-sec-cam:       #2a6f4f;
+        --ichc-sec-active:    #286983;
+        --ichc-bg-rgb:        250,244,237;
+        --ichc-chat-row:      rgba(240,232,224,0.55);
+        --ichc-chat-row-hover: rgba(223,218,217,0.72);
+        --ichc-surface:       #fffaf3;
+        --ichc-surface-2:     #f4ede8;
+        --ichc-surface-3:     #f2e9e1;
+        --ichc-surface-4:     #dfdad9;
+        --ichc-border:        #cecacd;
+        --ichc-text-faint:    #a9a2b3;
+        --ichc-text-muted:    #746f8e;
+        --ichc-text-dim:      #736f8d;
+        --ichc-text-3:        #6e6a86;
+        --ichc-text-2:        #625d80;
+        --ichc-text:          #575279;
+        --ichc-text-bright:   #3c3a52;
+        --ichc-text-strong:   #26233a;
+        --ichc-surface-rgb:   255,250,243;
+        --ichc-tint-rgb:      0,0,0;
+        --ichc-accent:        #907aa9;
+        --ichc-accent-soft:   #56949f;
+        --ichc-accent-hover:  #7a6591;
+    }
+
     /* ── Bundled chat font: Hanken Grotesk (variable, wght 400-700) ── */
     @font-face {
         font-family: "Hanken Grotesk";
@@ -18,7 +247,7 @@
         position: fixed !important;
         inset: 0 !important;
         z-index: 9999998 !important;
-        background: #111214 !important;
+        background: var(--ichc-bg) !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
@@ -34,7 +263,7 @@
         pointer-events: none !important;
     }
     #ichc-loading-icon {
-        color: #5865f2 !important;
+        color: var(--ichc-accent) !important;
         animation: ichc-load-pulse 1.8s ease-in-out infinite !important;
         line-height: 1 !important;
     }
@@ -51,12 +280,12 @@
         font-weight: 700 !important;
         letter-spacing: 0.08em !important;
         text-transform: lowercase !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
     }
     #ichc-loading-bar {
         width: 220px !important;
         height: 4px !important;
-        background: rgba(255,255,255,0.10) !important;
+        background: rgba(var(--ichc-tint-rgb),0.10) !important;
         border-radius: 4px !important;
         overflow: hidden !important;
     }
@@ -86,7 +315,7 @@
     }
     #ichc-loading-sub {
         font-size: 10px !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         letter-spacing: 0.05em !important;
     }
     html.ichc-light-theme #ichc-loading-overlay { background: #f2f3f5 !important; }
@@ -108,13 +337,13 @@
     }
     body {
         font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
-        background: #111214 !important;
+        background: var(--ichc-bg) !important;
         background-image: none !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         margin: 0 !important;
         padding: 0 !important;
     }
-    a { color: #7289da !important; text-decoration: none !important; }
+    a { color: var(--ichc-accent-soft) !important; text-decoration: none !important; }
     a:hover { text-decoration: underline !important; }
 
     /* ── Kill white backgrounds on wrapper divs ── */
@@ -125,34 +354,34 @@
 
     /* ── Site header ── */
     [id$="panelHeader"], .page_header, .gray_back.page_header {
-        background: #18191c !important;
-        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+        background: var(--ichc-surface) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
         width: 100% !important;
     }
     #ichc-logo { height: 34px !important; }
     .page_header_userlinks,
-    .page_header_userlinks span { color: #80848e !important; font-size: 12px !important; }
-    .page_header_userlinks b { color: #dbdee1 !important; }
-    .page_header_userlinks a { color: #7289da !important; }
+    .page_header_userlinks span { color: var(--ichc-text-muted) !important; font-size: 12px !important; }
+    .page_header_userlinks b { color: var(--ichc-text) !important; }
+    .page_header_userlinks a { color: var(--ichc-accent-soft) !important; }
     #msg_link, #post_link {
-        background: #25272b !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface-3) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 4px !important;
         padding: 2px 8px !important;
     }
 
     /* ── In-room topic/header ── */
     #header {
-        background: #18191c !important;
-        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+        background: var(--ichc-surface) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
     }
-    #topic { color: #80848e !important; font-size: 12px !important; }
-    #topic b { color: #dbdee1 !important; }
+    #topic { color: var(--ichc-text-muted) !important; font-size: 12px !important; }
+    #topic b { color: var(--ichc-text) !important; }
 
     /* ── Cam control / Leave buttons ── */
     #camControl a, #camControl div a {
         background: #238636 !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
         border: 1px solid #2ea043 !important;
         border-radius: 6px !important;
         padding: 4px 12px !important;
@@ -179,20 +408,20 @@
         box-shadow: none !important;
     }
     .rounded_square:not(:empty) {
-        border: 1px solid rgba(255,255,255,0.06) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
         border-radius: 8px !important;
         overflow: hidden !important;
         position: relative !important;
-        background: #111214 !important;
+        background: var(--ichc-bg) !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
     }
-    .videocontainer { background: #111214 !important; }
+    .videocontainer { background: var(--ichc-bg) !important; }
     /* Name label and cam controls stay above both the profile-bg (z:1) and videocontainer (z:2) */
     .name-on-cam {
         position: relative !important;
         z-index: 3 !important;
         background: rgba(0,0,0,0.7) !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         padding: 2px 5px !important;
         font-size: 11px !important;
         font-weight: 500 !important;
@@ -201,28 +430,28 @@
         position: relative !important;
         z-index: 3 !important;
         background: rgba(17,18,20,0.9) !important;
-        color: #dbdee1 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        color: var(--ichc-text) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 4px !important;
         font-size: 10px !important;
         padding: 2px 6px !important;
         cursor: pointer !important;
     }
-    .cam-button:hover { background: #25272b !important; }
+    .cam-button:hover { background: var(--ichc-surface-3) !important; }
     .cam-report { color: #f85149 !important; }
     #camVisibility, #camGlobalMute, #camRefresh {
-        background: #25272b !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface-3) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 6px !important;
         padding: 3px 5px !important;
     }
     #camVisibility:hover, #camGlobalMute:hover, #camRefresh:hover {
-        background: #2d2f34 !important;
+        background: var(--ichc-surface-4) !important;
     }
 
     /* ── Chat container: flex column, fills its parent height ── */
     #chat_container {
-        background: #18191c !important;
+        background: var(--ichc-surface) !important;
         border: none !important;
         border-radius: 8px !important;
         display: flex !important;
@@ -238,8 +467,8 @@
         min-height: 0 !important;
         width: 100% !important;
         align-self: stretch !important;
-        background: #18191c !important;
-        color: #dbdee1 !important;
+        background: var(--ichc-surface) !important;
+        color: var(--ichc-text) !important;
         border: none !important;
         padding: 4px 6px 4px 0 !important;
         font-size: 12px !important;
@@ -296,18 +525,31 @@
         margin: 0 0 2px !important;
         padding: 3px 2px 3px 4px !important;
         border-radius: 4px !important;
-        border: 1px solid rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.04) !important;
         position: relative !important;
-        background: rgba(26,28,31,0.82) !important;
+        background: var(--ichc-chat-row) !important;
         box-shadow: none !important;
+    }
+    #txt > table.ichc-chat-arrival,
+    #txt > div.ichc-chat-arrival,
+    #txt > p.ichc-chat-arrival,
+    #txt > ul.ichc-chat-arrival,
+    #txt .line.ichc-chat-arrival {
+        transform-origin: center bottom !important;
+        animation: ichc-chat-arrival 0.2s cubic-bezier(0.2, 0.78, 0.2, 1) both !important;
+        will-change: transform, opacity !important;
+    }
+    @keyframes ichc-chat-arrival {
+        from { opacity: 0.68; transform: translateY(4px) scale(0.995); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
     }
     #txt .line:hover,
     #txt > table:hover,
     #txt > div:hover,
     #txt > p:hover,
     #txt > ul:hover {
-        border-color: rgba(255,255,255,0.07) !important;
-        background: rgba(34,36,40,0.92) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.07) !important;
+        background: var(--ichc-chat-row-hover) !important;
     }
     #txt > table.ichc-chat-event,
     #txt > div.ichc-chat-event,
@@ -320,7 +562,7 @@
         background: transparent !important;
         border: 0 !important;
         box-shadow: none !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 11px !important;
         line-height: 1.25 !important;
         opacity: 0.92 !important;
@@ -363,7 +605,7 @@
         -webkit-appearance: none !important;
         appearance: none !important;
         background: rgba(88,101,242,0.92) !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
         border: none !important;
         border-radius: 6px !important;
         padding: 5px 10px !important;
@@ -372,13 +614,13 @@
         transition: background 0.13s !important;
         text-align: center !important;
     }
-    .ichc-chat-restore-btn:hover { background: #5865f2 !important; }
+    .ichc-chat-restore-btn:hover { background: var(--ichc-accent) !important; }
     .ichc-chat-restore-dismiss {
         -webkit-appearance: none !important;
         appearance: none !important;
         background: transparent !important;
         border: none !important;
-        color: #b5bac1 !important;
+        color: var(--ichc-text-3) !important;
         cursor: pointer !important;
         font-size: 13px !important;
         line-height: 1 !important;
@@ -386,7 +628,7 @@
         border-radius: 5px !important;
         flex-shrink: 0 !important;
     }
-    .ichc-chat-restore-dismiss:hover { background: rgba(255,255,255,0.08) !important; color: #dbdee1 !important; }
+    .ichc-chat-restore-dismiss:hover { background: rgba(var(--ichc-tint-rgb),0.08) !important; color: var(--ichc-text) !important; }
     /* Hide timestamps inside join/leave system messages */
     #txt .ichc-chat-event .ichc-ts,
     #txt .ichc-chat-event small { display: none !important; }
@@ -426,7 +668,7 @@
         border: 0 !important;
         box-shadow: none !important;
         border-radius: 0 !important;
-        color: #c8ccd2 !important;
+        color: var(--ichc-text-2) !important;
         opacity: 1 !important;
     }
     #txt > table.ichc-bcast-live,
@@ -450,7 +692,7 @@
     #txt > p.ichc-bcast-stop,
     #txt > ul.ichc-bcast-stop,
     #txt .line.ichc-bcast-stop {
-        color: #72767d !important;
+        color: var(--ichc-text-muted) !important;
         background: rgba(100,104,110,0.08) !important;
     }
     #txt .ichc-bcast-stop td,
@@ -459,7 +701,7 @@
     #txt .ichc-bcast-stop div,
     #txt .ichc-bcast-stop p,
     #txt .ichc-bcast-stop li {
-        color: #72767d !important;
+        color: var(--ichc-text-muted) !important;
     }
     /* ── "Cammed down for" golden achievement row ── */
     /* filter is not !important-locked on these rows, so the animation can drive it */
@@ -515,7 +757,7 @@
     }
     #txt .ichc-slot-offer-msg {
         font-size: 12px !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         margin-bottom: 8px !important;
         line-height: 1.4 !important;
     }
@@ -527,25 +769,25 @@
     #txt .ichc-slot-offer-btn {
         padding: 5px 12px !important;
         border-radius: 6px !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-        background: rgba(255,255,255,0.06) !important;
-        color: #c9cdd2 !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.1) !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text-2) !important;
         font-size: 12px !important;
         font-weight: 600 !important;
         cursor: pointer !important;
     }
     #txt .ichc-slot-offer-btn:hover {
-        background: rgba(255,255,255,0.10) !important;
-        color: #fff !important;
+        background: rgba(var(--ichc-tint-rgb),0.10) !important;
+        color: var(--ichc-text-strong) !important;
     }
     #txt .ichc-slot-offer-btn-primary {
         background: rgba(88,101,242,0.25) !important;
         border-color: rgba(88,101,242,0.45) !important;
-        color: #c9cdd2 !important;
+        color: var(--ichc-text-2) !important;
     }
     #txt .ichc-slot-offer-btn-primary:hover {
         background: rgba(88,101,242,0.45) !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
     }
 
     /* ── Collapsed join/leave event collector rows — centered, wrappable ── */
@@ -572,10 +814,10 @@
         z-index: 6 !important;
         margin: 0 0 3px !important;
         padding: 3px 6px !important;
-        background: rgba(24,25,28,0.92) !important;
+        background: rgba(var(--ichc-surface-rgb),0.92) !important;
         -webkit-backdrop-filter: blur(6px) saturate(140%) !important;
         backdrop-filter: blur(6px) saturate(140%) !important;
-        border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
         font-size: 10px !important;
         line-height: 1.45 !important;
     }
@@ -585,9 +827,16 @@
         display: flex !important;
         align-items: flex-start !important;
         gap: 6px !important;
+        /* wraps so the retention picker gets its own row under the lines */
+        flex-wrap: wrap !important;
     }
+    /* flex-basis 0, not auto. The bar is flex-wrap: wrap so the retention picker can
+       take its own row, and a wrap container wraps BEFORE it shrinks — with an auto
+       basis this column's text content sized it wider than the row and pushed the
+       chevron onto a line of its own. A zero basis lets it grow into whatever is left
+       beside the chevron instead. */
     #txt .ichc-condensed-lines {
-        flex: 1 1 auto !important;
+        flex: 1 1 0 !important;
         min-width: 0 !important;
     }
     #txt .ichc-condensed-bar.ichc-condensed-clickable { cursor: pointer !important; }
@@ -599,14 +848,113 @@
     }
     #txt .ichc-condensed-line[hidden] { display: none !important; }
     /* Expanded: let the names wrap, and cap the height so a huge burst cannot push the
-       conversation off screen — the bar scrolls on its own instead. */
+       conversation off screen — the bar scrolls on its own instead.
+
+       The cap used to be 8.5em with `scrollbar-width: none`, which is why names went
+       missing: past ~8 lines the rest was scrollable but there was no scrollbar and no
+       other cue, so it simply looked truncated. The cap is now viewport-relative and
+       the scrollbar is visible, so overflow is both rarer and obvious when it happens. */
     #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-lines {
-        max-height: 8.5em !important;
+        max-height: min(46vh, 22em) !important;
         overflow-y: auto !important;
-        scrollbar-width: none !important;
+        scrollbar-width: thin !important;
+        scrollbar-color: rgba(var(--ichc-tint-rgb),0.28) transparent !important;
+        padding-right: 2px !important;
     }
     #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-lines::-webkit-scrollbar {
-        width: 0 !important;
+        width: 6px !important;
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-lines::-webkit-scrollbar-thumb {
+        background: rgba(var(--ichc-tint-rgb),0.28) !important;
+        border-radius: 3px !important;
+    }
+
+    /* Expand animation. The lines fade+rise into place and the chevron rotates rather
+       than being swapped for a different glyph, matching the cog menu's expandable
+       rows. Height is deliberately NOT animated: the bar is position: sticky at the top
+       of the scroll box, so animating its height would drag the whole conversation up
+       and down under the reader for the duration. */
+    @keyframes ichc-condensed-reveal {
+        from { opacity: 0; transform: translateY(-3px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-line {
+        animation: ichc-condensed-reveal 0.18s ease-out both !important;
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-leaves {
+        animation-delay: 0.04s !important;
+    }
+    #txt .ichc-condensed-toggle {
+        transition: background 0.14s ease, color 0.14s ease, transform 0.18s ease !important;
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-toggle {
+        transform: rotate(90deg) !important;
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-clickable:hover .ichc-condensed-toggle {
+        background: rgba(var(--ichc-tint-rgb),0.14) !important;
+        color: var(--ichc-text) !important;
+    }
+
+    /* ── Retention picker (how long joins/leaves are kept) ──
+       Only shown while expanded; it is a setting, not a readout. */
+    #txt .ichc-condensed-window {
+        flex: 0 0 100% !important;
+        display: none !important;
+        align-items: center !important;
+        gap: 3px !important;
+        margin-top: 3px !important;
+        padding-top: 3px !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
+        animation: ichc-condensed-reveal 0.2s ease-out both !important;
+        animation-delay: 0.06s !important;
+    }
+    #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-window {
+        display: flex !important;
+    }
+    #txt .ichc-condensed-window-label {
+        font-size: 9px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.08em !important;
+        opacity: 0.55 !important;
+        margin-right: 2px !important;
+    }
+    #txt .ichc-condensed-window-btn {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        padding: 1px 6px !important;
+        border: 0 !important;
+        border-radius: 3px !important;
+        background: rgba(var(--ichc-tint-rgb),0.07) !important;
+        color: var(--ichc-text-muted) !important;
+        font: inherit !important;
+        font-size: 9.5px !important;
+        line-height: 1.5 !important;
+        cursor: pointer !important;
+        transition: background 0.14s ease, color 0.14s ease, transform 0.14s ease !important;
+    }
+    #txt .ichc-condensed-window-btn:hover {
+        background: rgba(var(--ichc-tint-rgb),0.14) !important;
+        color: var(--ichc-text) !important;
+        transform: translateY(-1px) !important;
+    }
+    #txt .ichc-condensed-window-btn[aria-current="true"] {
+        background: var(--ichc-accent) !important;
+        color: var(--ichc-bg) !important;
+        font-weight: 700 !important;
+    }
+    /* Collapsed bar still has to admit it is in a timed mode, or a list that outlives
+       the visible chat looks like a bug. A dot rather than text — the collapsed line is
+       already ellipsis-clamped and cannot afford characters. */
+    #txt .ichc-condensed-bar.ichc-condensed-timed .ichc-condensed-joins::before {
+        content: '' !important;
+        display: inline-block !important;
+        width: 4px !important;
+        height: 4px !important;
+        margin-right: 4px !important;
+        vertical-align: 1px !important;
+        border-radius: 50% !important;
+        background: var(--ichc-accent) !important;
+        opacity: 0.8 !important;
     }
     #txt .ichc-condensed-bar.ichc-condensed-open .ichc-condensed-line {
         white-space: normal !important;
@@ -624,10 +972,10 @@
         align-items: center !important;
         justify-content: center !important;
         padding: 0 !important;
-        background: rgba(255,255,255,0.07) !important;
+        background: rgba(var(--ichc-tint-rgb),0.07) !important;
         border: 0 !important;
         border-radius: 3px !important;
-        color: #9aa0aa !important;
+        color: var(--ichc-text-dim) !important;
         font-size: 9px !important;
         line-height: 1 !important;
         cursor: pointer !important;
@@ -635,8 +983,8 @@
     }
     #txt .ichc-condensed-toggle[hidden] { display: none !important; }
     #txt .ichc-condensed-bar:hover .ichc-condensed-toggle {
-        background: rgba(255,255,255,0.15) !important;
-        color: #dbdee1 !important;
+        background: rgba(var(--ichc-tint-rgb),0.15) !important;
+        color: var(--ichc-text) !important;
     }
     #txt .ichc-condensed-joins  { color: rgba(110,170,240,0.92) !important; }
     #txt .ichc-condensed-leaves { color: rgba(200,130,155,0.90) !important; }
@@ -657,8 +1005,13 @@
         background: rgba(232,234,238,0.92) !important;
         border-bottom-color: rgba(0,0,0,0.10) !important;
     }
-    html.ichc-light-theme #txt .ichc-condensed-joins  { color: #1e5fa8 !important; }
-    html.ichc-light-theme #txt .ichc-condensed-leaves { color: #9c3760 !important; }
+    /* The dark defaults above are pale blue/rose, which wash out on any light surface.
+       Keyed to the polarity marker so every light-background theme picks them up, not
+       just the original light theme. */
+    html.ichc-light-theme #txt .ichc-condensed-joins,
+    html.ichc-theme-is-light #txt .ichc-condensed-joins  { color: #1e5fa8 !important; }
+    html.ichc-light-theme #txt .ichc-condensed-leaves,
+    html.ichc-theme-is-light #txt .ichc-condensed-leaves { color: #9c3760 !important; }
 
     /* "+N more" / "show less" — inherits the group's colour so join and leave keep
        their own tint, and stays inline so it reads as part of the sentence. */
@@ -668,7 +1021,7 @@
         display: inline !important;
         margin-left: 4px !important;
         padding: 0 3px !important;
-        background: rgba(255,255,255,0.06) !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
         border: 0 !important;
         border-radius: 3px !important;
         color: inherit !important;
@@ -679,7 +1032,7 @@
         transition: background 0.12s, opacity 0.12s !important;
     }
     #txt .ichc-event-more:hover {
-        background: rgba(255,255,255,0.14) !important;
+        background: rgba(var(--ichc-tint-rgb),0.14) !important;
         opacity: 1 !important;
     }
 
@@ -755,11 +1108,21 @@
         box-shadow: 0 0 10px rgba(255,214,60,0.6) !important;
         pointer-events: none !important;
     }
+    @media (prefers-reduced-motion: reduce) {
+        #txt > table.ichc-chat-arrival,
+        #txt > div.ichc-chat-arrival,
+        #txt > p.ichc-chat-arrival,
+        #txt > ul.ichc-chat-arrival,
+        #txt .line.ichc-chat-arrival {
+            animation: none !important;
+            transform: none !important;
+        }
+    }
 
     /* Chat timestamps: right-aligned, dimmed — like PM */
     #txt td.ichc-ts {
         font-size: 10px !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         white-space: nowrap !important;
         pointer-events: none !important;
         text-align: right !important;
@@ -776,7 +1139,7 @@
     #txt .ichc-ts:not(td) {
         float: right !important;
         font-size: 10px !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         margin-left: 8px !important;
         white-space: nowrap !important;
         pointer-events: none !important;
@@ -1149,9 +1512,9 @@
         height: 22px !important;
         padding: 0 !important;
         border-radius: 4px !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
-        background: rgba(40,42,54,0.85) !important;
-        color: #cbd5e1 !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
+        background: rgba(var(--ichc-surface-rgb),0.90) !important;
+        color: var(--ichc-text-2) !important;
         font-size: 13px !important;
         line-height: 1 !important;
         cursor: pointer !important;
@@ -1168,7 +1531,7 @@
     #txt .ichc-reply-btn:hover {
         background: rgba(59,130,246,0.85) !important;
         border-color: rgba(96,165,250,0.7) !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
     }
     html.ichc-light-theme #txt .ichc-reply-btn {
         background: rgba(255,255,255,0.92) !important;
@@ -1186,7 +1549,7 @@
         border-left: 3px solid rgba(96,165,250,0.8) !important;
         background: rgba(59,130,246,0.12) !important;
         font-size: 12px !important;
-        color: #cbd5e1 !important;
+        color: var(--ichc-text-2) !important;
     }
     #ichc-reply-bar .ichc-reply-bar-label {
         flex: 1 1 auto !important;
@@ -1211,7 +1574,7 @@
         cursor: pointer !important;
     }
     #ichc-reply-bar .ichc-reply-bar-close:hover {
-        background: rgba(255,255,255,0.12) !important;
+        background: rgba(var(--ichc-tint-rgb),0.12) !important;
     }
     html.ichc-light-theme #ichc-reply-bar {
         background: rgba(59,130,246,0.1) !important;
@@ -1224,9 +1587,9 @@
         margin: 2px 2px 2px 0 !important;
         padding: 1px 5px !important;
         border-radius: 4px !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        background: rgba(255,255,255,0.04) !important;
-        color: #80848e !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        background: rgba(var(--ichc-tint-rgb),0.04) !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 11px !important;
         font-family: monospace !important;
         font-weight: 700 !important;
@@ -1236,7 +1599,7 @@
     #txt .ichc-emote-disabled-label:hover {
         background: rgba(88,101,242,0.15) !important;
         border-color: rgba(88,101,242,0.35) !important;
-        color: #c9cdd2 !important;
+        color: var(--ichc-text-2) !important;
     }
 
     /* Inline image embeds posted in chat */
@@ -1276,15 +1639,15 @@
         margin: 5px 0 2px !important;
         padding: 7px !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        background: rgba(17,18,20,0.72) !important;
-        color: #d4dde7 !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        background: rgba(var(--ichc-bg-rgb),0.72) !important;
+        color: var(--ichc-text) !important;
         text-decoration: none !important;
         overflow: hidden !important;
     }
     #txt .ichc-og-card:hover {
-        background: rgba(34,36,40,0.86) !important;
-        border-color: rgba(255,255,255,0.13) !important;
+        background: var(--ichc-chat-row-hover) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.13) !important;
         text-decoration: none !important;
     }
     #txt .ichc-og-image {
@@ -1292,7 +1655,7 @@
         height: 74px !important;
         border-radius: 6px !important;
         object-fit: cover !important;
-        background: rgba(255,255,255,0.04) !important;
+        background: rgba(var(--ichc-tint-rgb),0.04) !important;
     }
     #txt .ichc-og-body {
         display: flex !important;
@@ -1302,7 +1665,7 @@
         align-self: center !important;
     }
     #txt .ichc-og-site {
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 10px !important;
         line-height: 1.2 !important;
         overflow: hidden !important;
@@ -1310,7 +1673,7 @@
         white-space: nowrap !important;
     }
     #txt .ichc-og-title {
-        color: #e4e9ef !important;
+        color: var(--ichc-text-bright) !important;
         font-size: 12px !important;
         font-weight: 700 !important;
         line-height: 1.25 !important;
@@ -1321,7 +1684,7 @@
         -webkit-box-orient: vertical !important;
     }
     #txt .ichc-og-desc {
-        color: #a8b0ba !important;
+        color: var(--ichc-text-3) !important;
         font-size: 11px !important;
         line-height: 1.25 !important;
         overflow: hidden !important;
@@ -1333,16 +1696,16 @@
     #txt .ichc-og-card:not(:has(.ichc-og-image)) {
         grid-template-columns: minmax(0, 1fr) !important;
     }
-    #txt a { color: #7289da !important; }
+    #txt a { color: var(--ichc-accent-soft) !important; }
     #txt a.userlink,
     #txt a.userlink:visited {
-        color: var(--ichc-chat-name-color, #c9cdd2) !important;
+        color: var(--ichc-chat-name-color, var(--ichc-text-2)) !important;
         font-weight: 700 !important;
         text-decoration: none !important;
     }
     #txt a[data-ichc-chat-nick="1"],
     #txt a[data-ichc-chat-nick="1"]:visited {
-        color: var(--ichc-chat-name-color, #c9cdd2) !important;
+        color: var(--ichc-chat-name-color, var(--ichc-text-2)) !important;
         font-weight: 700 !important;
         text-decoration: none !important;
     }
@@ -1356,16 +1719,16 @@
         margin: 0 0.18em !important;
         padding: 0.1em 0.32em !important;
         border-radius: 999px !important;
-        background: rgba(17,18,20,0.88) !important;
-        border: 1px solid rgba(255,255,255,0.06) !important;
-        color: #dbdee1 !important;
+        background: rgba(var(--ichc-bg-rgb),0.88) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text) !important;
         font-size: 0.95em !important;
         line-height: 1 !important;
     }
     #txt .ichc-icon-glyph[data-icon="telephone"] {
-        color: #f8fbff !important;
-        background: rgba(17,18,20,0.96) !important;
-        border-color: rgba(255,255,255,0.08) !important;
+        color: var(--ichc-text-strong) !important;
+        background: rgba(var(--ichc-bg-rgb),0.96) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.08) !important;
     }
     #txt font,
     #txt span,
@@ -1373,13 +1736,13 @@
     #txt td,
     #txt p,
     #txt li {
-        color: #d4dde7 !important;
+        color: var(--ichc-text) !important;
     }
     #txt table[bgcolor],
     #txt table[style*="ff0000"],
     #txt table[style*="FF0000"] {
-        background: rgba(26,28,31,0.88) !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: rgba(var(--ichc-surface-rgb),0.88) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 6px !important;
         width: 100% !important;
     }
@@ -1393,18 +1756,18 @@
     #txt img[src*="telephone"] {
         filter: brightness(1.8) saturate(0) !important;
         background: rgba(17,18,20,0.9) !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 999px !important;
         padding: 2px !important;
     }
-    #txt h3, #txt h4 { color: #dbdee1 !important; margin: 4px 0 !important; }
+    #txt h3, #txt h4 { color: var(--ichc-text) !important; margin: 4px 0 !important; }
 
     /* ── Message input row (flex-shrink:0 so it doesn't compress) ── */
     #txtMsg {
         flex-shrink: 0 !important;
-        background: #25272b !important;
-        color: #dbdee1 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface-3) !important;
+        color: var(--ichc-text) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 6px !important;
         padding: 7px 10px !important;
         font-family: inherit !important;
@@ -1414,21 +1777,21 @@
         transition: none !important;
     }
     #txtMsg:focus {
-        border-color: var(--ichc-input-border, #5865f2) !important;
+        border-color: var(--ichc-input-border, var(--ichc-accent)) !important;
         outline: none !important;
         box-shadow: 0 0 0 3px var(--ichc-input-glow, rgba(88,101,242,0.18)) !important;
     }
     #btn.chat_send_btn {
         flex-shrink: 0 !important;
-        background: #5865f2 !important;
-        border: 1px solid #5865f2 !important;
+        background: var(--ichc-accent) !important;
+        border: 1px solid var(--ichc-accent) !important;
         border-radius: 6px !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
         font-weight: 600 !important;
         cursor: pointer !important;
         padding: 6px 14px !important;
     }
-    #btn.chat_send_btn:hover { background: #4752c4 !important; }
+    #btn.chat_send_btn:hover { background: var(--ichc-accent-hover) !important; }
     .room_command_bar,
     .chat_button { display: none !important; }
     /* ID-level overrides beat any site CSS that uses ID + !important on these */
@@ -1438,7 +1801,7 @@
 
     /* ── User list ── */
     #activeUserList { display: none !important; }
-    .ichc-ul-count { color: #80848e !important; font-size: 10px !important; margin-right: 4px !important; }
+    .ichc-ul-count { color: var(--ichc-text-muted) !important; font-size: 10px !important; margin-right: 4px !important; }
     .ichc-ul-sep   { color: rgba(255,255,255,0.08) !important; margin: 0 3px !important; }
 
     .chat_error_message { color: #f85149 !important; font-size: 11px !important; }
@@ -1465,9 +1828,9 @@
         padding: 10px 12px !important;
         margin: 0 12px 4px !important;
         border-radius: 14px !important;
-        border: 1px solid rgba(255,255,255,0.07) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
         background: rgba(26,28,31,0.96) !important;
-        color: #c8ccd2 !important;
+        color: var(--ichc-text-2) !important;
         box-shadow: none !important;
         font-size: 12px !important;
         line-height: 1.35 !important;
@@ -1485,9 +1848,9 @@
         margin-left: auto !important;
         padding: 7px 12px !important;
         border-radius: 999px !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
         background: rgba(40,42,48,0.8) !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         font-size: 11px !important;
         font-weight: 700 !important;
         white-space: nowrap !important;
@@ -1495,15 +1858,15 @@
     }
     #lurkMessageDiv a:hover {
         background: rgba(55,58,65,0.9) !important;
-        border-color: rgba(255,255,255,0.22) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.22) !important;
     }
 
     /* ── Footer ── */
     [id$="panelFooter"], .chat_footer, .footer_table { background: transparent !important; }
-    .footer_links a { color: #80848e !important; font-size: 11px !important; }
-    .footer_links a:hover { color: #7289da !important; }
-    .room_footer_links { color: #7289da !important; font-size: 11px !important; }
-    .gray_back[style*="rgba(0,0,0"] { background: #18191c !important; }
+    .footer_links a { color: var(--ichc-text-muted) !important; font-size: 11px !important; }
+    .footer_links a:hover { color: var(--ichc-accent-soft) !important; }
+    .room_footer_links { color: var(--ichc-accent-soft) !important; font-size: 11px !important; }
+    .gray_back[style*="rgba(0,0,0"] { background: var(--ichc-surface) !important; }
 
     /* ── Dialogs ── */
     .ui-dialog.ichc-has-profile-bg {
@@ -1520,8 +1883,8 @@
         max-width: 320px !important;
         width: 320px !important;
         max-height: calc(100vh - 40px) !important;
-        background: #1e2024 !important;
-        border: 1px solid rgba(255,255,255,0.10) !important;
+        background: var(--ichc-surface-2) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
         border-radius: 12px !important;
         box-shadow: 0 12px 36px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.35) !important;
         z-index: 2147483646 !important;
@@ -1531,10 +1894,10 @@
         font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
     }
     .ui-dialog-titlebar {
-        background: #25272b !important;
-        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+        background: var(--ichc-surface-3) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
         border-radius: 0 !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 10px !important;
         font-weight: 700 !important;
         text-transform: uppercase !important;
@@ -1579,10 +1942,10 @@
     }
     /* Hide jQuery UI's sprite span; show our SVG X */
     .ui-dialog-titlebar-close .ui-icon { display: none !important; }
-    .ui-dialog-titlebar-close:hover { background: rgba(185,28,28,0.65) !important; border-color: rgba(220,38,38,0.6) !important; color: #fff !important; }
+    .ui-dialog-titlebar-close:hover { background: rgba(185,28,28,0.65) !important; border-color: rgba(220,38,38,0.6) !important; color: var(--ichc-text-strong) !important; }
     .ui-dialog-content {
-        background: #1e2024 !important;
-        color: #b5bac1 !important;
+        background: var(--ichc-surface-2) !important;
+        color: var(--ichc-text-3) !important;
         padding: 14px 14px 16px !important;
         font-size: 12px !important;
         line-height: 1.5 !important;
@@ -1596,9 +1959,9 @@
         margin: 0 0 6px !important;
         padding: 9px 12px !important;
         border-radius: 8px !important;
-        background: #4752c4 !important;
-        border: 1px solid #5865f2 !important;
-        color: #fff !important;
+        background: var(--ichc-accent-hover) !important;
+        border: 1px solid var(--ichc-accent) !important;
+        color: var(--ichc-text-strong) !important;
         font-size: 13px !important;
         font-weight: 600 !important;
         text-align: center !important;
@@ -1607,24 +1970,24 @@
         transition: background 0.15s ease, border-color 0.15s ease !important;
     }
     .ui-dialog-content a:hover {
-        background: #5865f2 !important;
+        background: var(--ichc-accent) !important;
         border-color: #7983f5 !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
     }
     /* Small descriptive text inside dialog */
     .ui-dialog-content p,
     .ui-dialog-content small,
     .ui-dialog-content span {
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         font-size: 10px !important;
         text-align: center !important;
         display: block !important;
         margin: -4px 0 8px !important;
     }
     .ui-widget-content, .ui-widget-header {
-        background: #1e2024 !important;
-        border-color: rgba(255,255,255,0.08) !important;
-        color: #b5bac1 !important;
+        background: var(--ichc-surface-2) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.08) !important;
+        color: var(--ichc-text-3) !important;
     }
     /* Dim the backdrop instead of hiding it */
     .ui-widget-overlay {
@@ -1634,15 +1997,15 @@
 
     /* ── Color picker ── */
     #colorDiv {
-        background: #18191c !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 8px !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
     }
     #colorTxt {
-        background: #25272b !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        color: #dbdee1 !important;
+        background: var(--ichc-surface-3) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        color: var(--ichc-text) !important;
         border-radius: 4px !important;
         padding: 3px 6px !important;
     }
@@ -1650,21 +2013,21 @@
     /* ── Generic buttons ── */
     input[type="button"],
     button:not(.cam-button):not(#btn):not(.ichc-cam-resume-btn) {
-        background: #25272b !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        color: #dbdee1 !important;
+        background: var(--ichc-surface-3) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        color: var(--ichc-text) !important;
         border-radius: 4px !important;
         font-family: inherit !important;
         cursor: pointer !important;
     }
     input[type="button"]:hover,
-    button:not(.cam-button):not(#btn):not(.ichc-cam-resume-btn):hover { background: #2d2f34 !important; }
+    button:not(.cam-button):not(#btn):not(.ichc-cam-resume-btn):hover { background: var(--ichc-surface-4) !important; }
 
     /* ── Scrollbars ── */
     ::-webkit-scrollbar { width: 5px !important; height: 5px !important; }
     ::-webkit-scrollbar-track { background: transparent !important; }
-    ::-webkit-scrollbar-thumb { background: #2d2f34 !important; border-radius: 3px !important; }
-    ::-webkit-scrollbar-thumb:hover { background: #36383d !important; }
+    ::-webkit-scrollbar-thumb { background: var(--ichc-surface-4) !important; border-radius: 3px !important; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--ichc-border) !important; }
 
     /* ── Modern room layout overrides ── */
     :root {
@@ -1681,7 +2044,7 @@
     }
     body {
         font-family: "Hanken Grotesk", "Trebuchet MS", "Segoe UI", sans-serif !important;
-        background: #111214 !important;
+        background: var(--ichc-bg) !important;
         background-attachment: fixed !important;
     }
     [id$="panelFooter"], .chat_footer, .footer_table,
@@ -1716,9 +2079,9 @@
         overflow: visible !important;
         padding: 0 0 0 8px !important;
         border-radius: 0 !important;
-        background: #18191c !important;
+        background: var(--ichc-surface) !important;
         border: 0 !important;
-        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
         flex-shrink: 0 !important;
     }
@@ -1747,8 +2110,8 @@
         flex-shrink: 0 !important;
         padding: 2px 7px 2px 5px !important;
         border-radius: 7px !important;
-        border: 1px solid var(--ichc-room-accent, rgba(255,255,255,0.08)) !important;
-        background: rgba(255,255,255,0.04) !important;
+        border: 1px solid var(--ichc-room-accent, rgba(var(--ichc-tint-rgb),0.08)) !important;
+        background: rgba(var(--ichc-tint-rgb),0.04) !important;
         font-size: 12px !important;
         font-weight: 600 !important;
         white-space: nowrap !important;
@@ -1760,7 +2123,7 @@
         font-weight: 400 !important;
     }
     #ichc-header-room .ichc-room-name-text {
-        color: #c9cdd2 !important;
+        color: var(--ichc-text-2) !important;
     }
     #ichc-header-leave {
         display: flex !important;
@@ -1783,7 +2146,7 @@
         min-width: 0 !important;
         font-size: clamp(12px, calc(var(--ichc-topbar-height) * 0.38), 16px) !important;
         line-height: var(--ichc-topbar-height) !important;
-        color: #b5bac1 !important;
+        color: var(--ichc-text-3) !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
@@ -1792,10 +2155,10 @@
     #topic b {
         display: inline !important;
         font-size: inherit !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
     }
     #topic a {
-        color: #7289da !important;
+        color: var(--ichc-accent-soft) !important;
     }
     #ichc-header-actions {
         display: flex !important;
@@ -1819,7 +2182,7 @@
     }
     #ichc-userinfo-greeting {
         font-size: 11px !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-weight: 400 !important;
         text-align: center !important;
         line-height: 1.2 !important;
@@ -1836,7 +2199,7 @@
         display: block !important;
         font-size: 15px !important;
         font-weight: 700 !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         line-height: 1.2 !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -1849,7 +2212,7 @@
     }
     #ichc-userinfo-karma {
         font-size: 11px !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-weight: 400 !important;
         line-height: 1.1 !important;
         overflow: hidden !important;
@@ -1882,8 +2245,8 @@
     }
     .ichc-karma-delta-up   { color: #3ba55d !important; }
     .ichc-karma-delta-down { color: #ed4245 !important; }
-    #ichc-header-userinfo b { color: #dbdee1 !important; font-weight: 600 !important; }
-    #ichc-header-userinfo a { color: #7289da !important; }
+    #ichc-header-userinfo b { color: var(--ichc-text) !important; font-weight: 600 !important; }
+    #ichc-header-userinfo a { color: var(--ichc-accent-soft) !important; }
     #ichc-primary-actions {
         display: flex !important;
         align-items: center !important;
@@ -1995,6 +2358,9 @@
         gap: 6px; border: 1.5px solid; box-sizing: border-box; border-radius: 0;
         font: 800 12px/1 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 1.5px;
     }
+    /* Deliberately hue-tinted, not neutral chrome — the green/red cast is what
+       separates go from stop at a glance, so these stay literal rather than
+       resolving to a theme surface token. */
     .ichc-face.go, .ichc-face.go2 { color:#7fe6a4; background:#0d1712; border-color:rgba(53,211,106,.55); }
     .ichc-face.go2 { font-size:11px; letter-spacing:1px; }
     .ichc-face.go2 svg { width:13px; height:13px; }
@@ -2234,8 +2600,8 @@
         min-height: var(--ichc-footer-height) !important;
         border-radius: 0 !important;
         border: 0 !important;
-        border-top: 1px solid rgba(255,255,255,0.05) !important;
-        background: #18191c !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.05) !important;
+        background: var(--ichc-surface) !important;
         overflow: visible !important;
         position: relative !important;
     }
@@ -2247,7 +2613,7 @@
     }
     #ichc-footer-copy {
         font-size: 10px !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         white-space: nowrap !important;
         text-align: center !important;
         padding: 0 8px !important;
@@ -2261,12 +2627,12 @@
     }
     #ichc-footer-links {
         font-size: 10px !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         white-space: nowrap !important;
     }
     #ichc-footer-links a,
     #ichc-footer-copy a {
-        color: #5865f2 !important;
+        color: var(--ichc-accent) !important;
         text-decoration: none !important;
     }
     #ichc-footer-links a:hover,
@@ -2275,9 +2641,9 @@
     /* ── Word cloud toggle button ── */
     .ichc-wc-toggle-btn {
         background: transparent !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 4px !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 13px !important;
         line-height: 1 !important;
         padding: 2px 6px !important;
@@ -2286,8 +2652,8 @@
         transition: background 0.12s, color 0.12s !important;
         flex-shrink: 0 !important;
     }
-    .ichc-wc-toggle-btn:hover { background: rgba(255,255,255,0.06) !important; color: #dbdee1 !important; }
-    .ichc-wc-toggle-btn.ichc-wc-active { background: rgba(88,101,242,0.18) !important; border-color: rgba(88,101,242,0.4) !important; color: #c9cdd2 !important; }
+    .ichc-wc-toggle-btn:hover { background: rgba(var(--ichc-tint-rgb),0.06) !important; color: var(--ichc-text) !important; }
+    .ichc-wc-toggle-btn.ichc-wc-active { background: rgba(88,101,242,0.18) !important; border-color: rgba(88,101,242,0.4) !important; color: var(--ichc-text-2) !important; }
 
     /* ── Word cloud panel ── */
     /* Flex item that fills only the remaining space after #cams — no min-height so it
@@ -2299,21 +2665,21 @@
         box-sizing: border-box !important;
         overflow-y: auto !important;
         scrollbar-width: thin !important;
-        scrollbar-color: #2d2f34 transparent !important;
+        scrollbar-color: var(--ichc-surface-4) transparent !important;
         padding: 10px 12px !important;
         flex-wrap: wrap !important;
         align-content: flex-start !important;
         gap: 5px 7px !important;
         background: rgba(14,15,17,0.92) !important;
-        border-top: 1px solid rgba(255,255,255,0.05) !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.05) !important;
     }
     #ichc-wordcloud.ichc-wc-visible { display: flex !important; }
     .ichc-wc-nick {
         display: inline-block !important;
         padding: 2px 6px !important;
         border-radius: 10px !important;
-        background: rgba(255,255,255,0.06) !important;
-        color: #c9cdd2 !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text-2) !important;
         cursor: pointer !important;
         white-space: nowrap !important;
         transition: background 0.12s !important;
@@ -2321,10 +2687,10 @@
         font-weight: 500 !important;
         user-select: none !important;
     }
-    .ichc-wc-nick:hover { background: rgba(88,101,242,0.28) !important; color: #fff !important; }
+    .ichc-wc-nick:hover { background: rgba(88,101,242,0.28) !important; color: var(--ichc-text-strong) !important; }
     .ichc-wc-nick.ichc-wc-mod { color: #fbbf24 !important; }
     .ichc-wc-nick.ichc-wc-idle { opacity: 0.40 !important; }
-    .ichc-wc-empty { color: #4e5058 !important; font-size: 12px !important; font-style: italic !important; }
+    .ichc-wc-empty { color: var(--ichc-text-faint) !important; font-size: 12px !important; font-style: italic !important; }
 
     /* Footer is always 28px; keep this for override if needed */
     #ichc-footer-bar:has(.ichc-submenu-open) {
@@ -2339,7 +2705,7 @@
         grid-template-rows: calc(100vh - var(--ichc-input-height)) var(--ichc-input-height) !important;
         gap: 0 !important;
         column-gap: 0 !important;
-        background: #18191c !important;
+        background: var(--ichc-surface) !important;
         align-items: start !important;
         position: relative !important;
         top: 0 !important;
@@ -2378,9 +2744,9 @@
         display: none !important;
     }
     #ichc-chat-shell.ichc-ul-collapsed .ichc-ul-header {
-        background: #18191c !important;
-        border-left: 1px solid rgba(255,255,255,0.10) !important;
-        border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface) !important;
+        border-left: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
     }
     /* Never show the search row or separator in collapsed state */
     #ichc-chat-shell.ichc-ul-collapsed .ichc-ul-search-row,
@@ -2388,9 +2754,9 @@
         display: none !important;
     }
     #ichc-chat-shell.ichc-ul-collapsed #ichc-pm-avatars {
-        background: #18191c !important;
-        border-left: 1px solid rgba(255,255,255,0.10) !important;
-        border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+        background: var(--ichc-surface) !important;
+        border-left: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
         border-radius: 0 !important;
     }
     /* Sidebar stats bar — hidden when expanded, shown when collapsed */
@@ -2403,10 +2769,10 @@
         padding: 5px 6px !important;
         width: 100% !important;
         box-sizing: border-box !important;
-        background: #18191c !important;
-        border-left: 1px solid rgba(255,255,255,0.10) !important;
-        border-bottom: 1px solid rgba(255,255,255,0.10) !important;
-        border-top: 1px solid rgba(255,255,255,0.05) !important;
+        background: var(--ichc-surface) !important;
+        border-left: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.05) !important;
         border-radius: 0 0 0 8px !important;
         flex-shrink: 0 !important;
     }
@@ -2417,7 +2783,7 @@
         gap: 3px !important;
         font-size: 10px !important;
         font-weight: 600 !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         white-space: nowrap !important;
         line-height: 1 !important;
     }
@@ -2427,7 +2793,7 @@
         flex-shrink: 0 !important;
     }
     .ichc-sidebar-stat-value {
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
     }
     /* When userlist is collapsed, input spans all columns */
     #ichc-chat-shell.ichc-ul-collapsed #ichc-input-row {
@@ -2449,7 +2815,7 @@
         padding: 4px 8px !important;
         background: transparent !important;
         border: 0 !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         font-size: 10px !important;
         font-weight: 600 !important;
         cursor: pointer !important;
@@ -2468,7 +2834,7 @@
         color: #9aa8e0 !important;
     }
     .ichc-room-submenu-btn svg {
-        color: #7289da !important;
+        color: var(--ichc-accent-soft) !important;
         flex-shrink: 0 !important;
         width: 16px !important;
         height: 16px !important;
@@ -2486,8 +2852,8 @@
         min-width: 200px !important;
         max-height: 0 !important;
         overflow: hidden !important;
-        background: #1e2024 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface-2) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 10px !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.42) !important;
         display: flex !important;
@@ -2511,36 +2877,36 @@
         flex-wrap: wrap !important;
         gap: 2px !important;
         padding: 6px 4px 2px !important;
-        border-top: 1px solid rgba(255,255,255,0.06) !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
         margin-top: 2px !important;
     }
     .ichc-room-site-links a {
         padding: 4px 8px !important;
         border-radius: 4px !important;
         font-size: 11px !important;
-        color: #606470 !important;
+        color: var(--ichc-text-faint) !important;
         white-space: nowrap !important;
         transition: background 0.1s, color 0.1s !important;
         display: inline-block !important;
     }
     .ichc-room-site-links a:hover {
-        background: rgba(255,255,255,0.06) !important;
-        color: #b5bac1 !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text-3) !important;
     }
     #ichc-room-links .room_footer_links,
     #ichc-room-links a {
         display: block !important;
         padding: 7px 10px !important;
         border-radius: 6px !important;
-        color: #96a0b0 !important;
+        color: var(--ichc-text-dim) !important;
         font-size: 12px !important;
         white-space: nowrap !important;
         transition: background 0.1s, color 0.1s !important;
     }
     #ichc-room-links .room_footer_links:hover,
     #ichc-room-links a:hover {
-        background: rgba(255,255,255,0.06) !important;
-        color: #dbdee1 !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text) !important;
     }
     #ichc-cams-panel {
         min-width: 0 !important;
@@ -2603,8 +2969,8 @@
         padding: 6px 10px !important;
         border-radius: 999px !important;
         background: rgba(26,28,31,0.92) !important;
-        border: 1px solid rgba(255,255,255,0.06) !important;
-        color: #b5bac1 !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text-3) !important;
         font: 700 11px/1 "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
         white-space: nowrap !important;
         overflow: hidden !important;
@@ -2612,7 +2978,7 @@
         max-width: 220px !important;
     }
     .ichc-hidden-cam-chip.ichc-hidden-cam-chip-muted {
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-weight: 600 !important;
     }
     #ichc-hidden-cams-head-actions {
@@ -2626,7 +2992,7 @@
     }
     .ichc-hidden-cam-section {
         padding: 6px 10px 2px !important;
-        color: #36383d !important;
+        color: var(--ichc-border) !important;
         font: 700 10px/1 "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
         letter-spacing: 0.07em !important;
         text-transform: uppercase !important;
@@ -2636,10 +3002,10 @@
     #ichc-hidden-cams-export,
     #ichc-hidden-cams-import-label {
         appearance: none !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 8px !important;
-        background: #18191c !important;
-        color: #dbdee1 !important;
+        background: var(--ichc-surface) !important;
+        color: var(--ichc-text) !important;
         padding: 7px 12px !important;
         font: 700 11px/1 "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
         cursor: pointer !important;
@@ -2659,14 +3025,14 @@
     #ichc-hidden-cams-refresh:hover,
     #ichc-hidden-cams-export:hover,
     #ichc-hidden-cams-import-label:hover {
-        background: #25272b !important;
-        border-color: rgba(255,255,255,0.12) !important;
+        background: var(--ichc-surface-3) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.12) !important;
     }
     #ichc-hidden-cams-search-btn {
         appearance: none !important;
         background: transparent !important;
         border: none !important;
-        color: #36383d !important;
+        color: var(--ichc-border) !important;
         cursor: pointer !important;
         padding: 3px !important;
         display: flex !important;
@@ -2676,16 +3042,16 @@
         flex-shrink: 0 !important;
     }
     #ichc-hidden-cams-search-btn:hover {
-        color: #b5bac1 !important;
-        background: rgba(255,255,255,0.06) !important;
+        color: var(--ichc-text-3) !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
     }
     #ichc-hidden-cams.ichc-hidden-search-open #ichc-hidden-cams-search-btn {
-        color: #7289da !important;
+        color: var(--ichc-accent-soft) !important;
     }
     #ichc-hidden-cams-search-row {
         display: none !important;
         padding: 6px 10px !important;
-        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
     }
     #ichc-hidden-cams.ichc-hidden-search-open #ichc-hidden-cams-search-row {
         display: block !important;
@@ -2693,16 +3059,16 @@
     #ichc-hidden-cams-search-input {
         width: 100% !important;
         box-sizing: border-box !important;
-        background: #111214 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-bg) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 8px !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         font: 500 12px/1 "Trebuchet MS", "Aptos", "Segoe UI", sans-serif !important;
         padding: 7px 10px !important;
         outline: none !important;
     }
     #ichc-hidden-cams-search-input:focus {
-        border-color: rgba(255,255,255,0.16) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.16) !important;
     }
     #ichc-hidden-cams-search-input::-webkit-search-cancel-button {
         filter: invert(0.6) !important;
@@ -2724,8 +3090,8 @@
         display: none !important;
         overflow: hidden !important;
         border-radius: 12px !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        background: #18191c !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        background: var(--ichc-surface) !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.42) !important;
     }
     #ichc-hidden-cams.is-open #ichc-hidden-cams-popover {
@@ -2738,10 +3104,10 @@
         justify-content: space-between !important;
         gap: 10px !important;
         padding: 12px 14px !important;
-        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
     }
     #ichc-hidden-cams-popover-head strong {
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         font-size: 12px !important;
         letter-spacing: 0.04em !important;
         text-transform: uppercase !important;
@@ -2761,11 +3127,11 @@
         padding: 8px 10px !important;
         border-radius: 8px !important;
         background: rgba(26,28,31,0.84) !important;
-        border: 1px solid rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.04) !important;
     }
     .ichc-hidden-cam-name {
         min-width: 0 !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         font-size: 12px !important;
         font-weight: 700 !important;
         white-space: normal !important;
@@ -2774,7 +3140,7 @@
     .ichc-hidden-cam-meta {
         display: block !important;
         margin-top: 3px !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 10px !important;
         font-weight: 500 !important;
     }
@@ -2821,7 +3187,7 @@
     }
     .ichc-hidden-cams-empty {
         padding: 16px !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 12px !important;
         text-align: center !important;
     }
@@ -2830,7 +3196,7 @@
     }
     .ichc-toolbar-group { display: flex !important; align-items: center !important; gap: 10px !important; flex-wrap: wrap !important; }
     .ichc-toolbar-title, .ichc-range span {
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 11px !important;
         font-weight: 700 !important;
         letter-spacing: 0.06em !important;
@@ -2838,20 +3204,20 @@
     }
     .ichc-toolbtn, .ichc-overlay-btn {
         appearance: none !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 8px !important;
-        background: #18191c !important;
-        color: #dbdee1 !important;
+        background: var(--ichc-surface) !important;
+        color: var(--ichc-text) !important;
         font-family: inherit !important;
         font-size: 12px !important;
         font-weight: 700 !important;
         cursor: pointer !important;
     }
     .ichc-toolbtn { padding: 7px 12px !important; }
-    .ichc-toolbtn-subtle { color: #80848e !important; }
+    .ichc-toolbtn-subtle { color: var(--ichc-text-muted) !important; }
     .ichc-range { display: grid !important; gap: 6px !important; min-width: 150px !important; }
-    .ichc-range strong { color: #dbdee1 !important; }
-    .ichc-toolbar-note { margin-left: auto !important; color: #80848e !important; font-size: 12px !important; }
+    .ichc-range strong { color: var(--ichc-text) !important; }
+    .ichc-toolbar-note { margin-left: auto !important; color: var(--ichc-text-muted) !important; font-size: 12px !important; }
 
     #rtc-broadcaster.ichc-panel-closed { display: none !important; }
 
@@ -2878,8 +3244,8 @@
         max-width: 94vw !important;
         box-sizing: border-box !important;
         display: block !important;
-        background: #1b1d21 !important;
-        border: 1px solid rgba(255,255,255,0.09) !important;
+        background: var(--ichc-surface-2) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.09) !important;
         border-radius: 14px !important;
         box-shadow: 0 24px 60px rgba(0,0,0,0.7), 0 2px 10px rgba(0,0,0,0.45) !important;
         padding: 0 !important;
@@ -2895,9 +3261,9 @@
         content: "Go live" !important;
         display: block !important;
         padding: 13px 16px 12px !important;
-        background: #212429 !important;
-        border-bottom: 1px solid rgba(255,255,255,0.07) !important;
-        color: #b9bec6 !important;
+        background: var(--ichc-surface-3) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
+        color: var(--ichc-text-3) !important;
         font-size: 11px !important;
         font-weight: 700 !important;
         letter-spacing: 0.08em !important;
@@ -2954,7 +3320,7 @@
         display: block !important;
         object-fit: cover !important;
         background: #000 !important;
-        border: 1px solid rgba(255,255,255,0.07) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
         border-radius: 10px !important;
     }
     #rtc-broadcaster #publish-settings {
@@ -2987,7 +3353,7 @@
     #rtc-broadcaster label {
         display: block !important;
         margin: 0 0 5px !important;
-        color: #7f858e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 9.5px !important;
         font-weight: 700 !important;
         text-transform: uppercase !important;
@@ -3008,27 +3374,27 @@
         height: 34px !important;
         box-sizing: border-box !important;
         padding: 0 26px 0 10px !important;
-        background-color: #24272c !important;
-        background-image: linear-gradient(45deg, transparent 50%, #8d939c 50%),
-            linear-gradient(135deg, #8d939c 50%, transparent 50%) !important;
+        background-color: var(--ichc-surface-3) !important;
+        background-image: linear-gradient(45deg, transparent 50%, var(--ichc-text-muted) 50%),
+            linear-gradient(135deg, var(--ichc-text-muted) 50%, transparent 50%) !important;
         background-position: calc(100% - 14px) 15px, calc(100% - 9px) 15px !important;
         background-size: 5px 5px, 5px 5px !important;
         background-repeat: no-repeat !important;
-        border: 1px solid rgba(255,255,255,0.09) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.09) !important;
         border-radius: 8px !important;
-        color: #e3e6ea !important;
+        color: var(--ichc-text) !important;
         font: 500 12px/1 inherit !important;
         text-overflow: ellipsis !important;
         cursor: pointer !important;
         transition: border-color 0.13s, background-color 0.13s !important;
     }
-    #rtc-broadcaster select:hover { background-color: #2a2e34 !important; }
+    #rtc-broadcaster select:hover { background-color: var(--ichc-surface-4) !important; }
     #rtc-broadcaster select:focus {
         outline: none !important;
-        border-color: #5865f2 !important;
+        border-color: var(--ichc-accent) !important;
         box-shadow: 0 0 0 3px rgba(88,101,242,0.20) !important;
     }
-    #rtc-broadcaster select option { background: #24272c !important; color: #e3e6ea !important; }
+    #rtc-broadcaster select option { background: var(--ichc-surface-3) !important; color: var(--ichc-text) !important; }
 
     /* Camera / mic toggles. #mute-toggle carries an inline
        background-image: linear-gradient(white 100%, lime) — that is why it rendered as
@@ -3044,16 +3410,16 @@
         align-items: center !important;
         justify-content: center !important;
         flex: 0 0 auto !important;
-        background-color: #24272c !important;
+        background-color: var(--ichc-surface-3) !important;
         background-image: none !important;
-        border: 1px solid rgba(255,255,255,0.09) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.09) !important;
         border-radius: 8px !important;
         cursor: pointer !important;
         transition: background-color 0.13s, border-color 0.13s !important;
     }
     #rtc-broadcaster .control-button:hover {
-        background-color: #2f3339 !important;
-        border-color: rgba(255,255,255,0.2) !important;
+        background-color: var(--ichc-surface-4) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.2) !important;
     }
     /* The site swaps which <img> is shown to signal state, so only normalise them.
        brightness(0) invert(1) forces any source colour to a clean white glyph. */
@@ -3079,10 +3445,10 @@
         display: block !important;
         width: 100% !important;
         padding: 11px 12px !important;
-        background: #5865f2 !important;
+        background: var(--ichc-accent) !important;
         border: 0 !important;
         border-radius: 10px !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
         font: 700 14px/1.2 inherit !important;
         letter-spacing: 0.01em !important;
         cursor: pointer !important;
@@ -3099,7 +3465,7 @@
         display: block !important;
         margin-top: 8px !important;
         padding: 5px !important;
-        color: #7f858e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 11px !important;
         font-weight: 600 !important;
         text-align: center !important;
@@ -3145,7 +3511,7 @@
         justify-content: center !important;
         cursor: pointer !important;
         font-size: 12px !important;
-        color: #8b9198 !important;
+        color: var(--ichc-text-muted) !important;
         background: transparent !important;
         border: 1px solid transparent !important;
         border-radius: 7px !important;
@@ -3155,7 +3521,7 @@
     }
     /* If a duplicate is ever injected again, show only the first */
     #ichc-broadcaster-close ~ #ichc-broadcaster-close { display: none !important; }
-    #ichc-broadcaster-close:hover { color: #fff !important; background: rgba(255,255,255,.1) !important; }
+    #ichc-broadcaster-close:hover { color: var(--ichc-text-strong) !important; background: rgba(var(--ichc-tint-rgb),.1) !important; }
 
     #cams {
         width: 100% !important;
@@ -3172,13 +3538,55 @@
         justify-items: stretch !important;
         overflow: hidden !important;
     }
-    /* Featured cam active: stack from top so thumbnails below the featured card
-       aren't clipped by the centered overflow that happens with align-content:center.
-       overflow-y:auto lets the thumbnail row scroll rather than being clipped. */
+    /* Focused mode keeps the normal mixed grid, with a slightly tighter gutter so
+       the selected feed gains room without forcing every other cam into a rail. */
     #cams.ichc-has-featured {
         align-content: start !important;
-        overflow-y: auto !important;
+        /* Focused mode is about the feeds, not the chrome — hairline gutters.
+           The packing engine reads this computed value for its math. */
+        gap: 2px !important;
+        overflow-y: hidden !important;
         overflow-x: hidden !important;
+    }
+    /* Freeform mode (focused AND normal): cards are absolutely positioned by
+       the packing engine in modernize.js — focused pins the selected cam
+       top-left with the rest justified around it; normal justifies every cam
+       into rows. The engine reads this gap.
+       Absolute placement only needs `position: relative` here — the grid is
+       deliberately LEFT IN PLACE as the fallback for cards that are not
+       placed yet (the site rebuilds cam cards periodically, and fresh cards
+       arrive with no inline geometry). Under `display: block` those cards
+       laid out as full-width stacked blocks and `overflow: hidden` clipped
+       every one past the first, so every cam vanished for ~1s until the next
+       relayout. Keeping the grid makes an unplaced card render as an ordinary
+       cell instead; placed cards are position:absolute and out of flow, so
+       the template never applies to them. */
+    #cams.ichc-cams-freeform {
+        position: relative !important;
+        gap: 2px !important;
+    }
+    /* Freeform placement. The packer writes --ichc-fx/fy/fw/fh and marks the
+       card [data-ichc-placed]; this rule applies them.
+       It MUST live in the stylesheet rather than as inline styles: the site
+       rewrites left/top/width/height inline on every cam card periodically
+       (its own tile layout, alongside `visibility: visible`) and does so
+       WITHOUT !important. That replaced our inline !important values, the base
+       `#cams .rounded_square { top/left/width/height: auto !important }` rule
+       then won, and every card collapsed to a 2x2 border box at the origin —
+       all cams vanishing at once on the site's refresh cadence.
+       A stylesheet !important outranks a non-important inline declaration, and
+       the site never writes custom properties, so placement is now immune to
+       being clobbered. Cards WITHOUT the marker keep normal grid flow, which
+       is what makes a not-yet-placed card render as an ordinary cell. */
+    #cams.ichc-cams-freeform > .rounded_square[data-ichc-placed] {
+        position: absolute !important;
+        left: var(--ichc-fx) !important;
+        top: var(--ichc-fy) !important;
+        width: var(--ichc-fw) !important;
+        height: var(--ichc-fh) !important;
+        max-width: none !important;
+        max-height: none !important;
+        margin: 0 !important;
     }
     /* Word cloud visible: cams revert to natural size so WC fills the remaining space */
     #ichc-cams-panel:has(#ichc-wordcloud.ichc-wc-visible) #cams {
@@ -3206,9 +3614,9 @@
         display: block !important;
         padding: 28px 24px !important;
         border-radius: 12px !important;
-        border: 1px dashed rgba(255,255,255,0.10) !important;
+        border: 1px dashed rgba(var(--ichc-tint-rgb),0.10) !important;
         background: rgba(26,28,31,0.55) !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 14px !important;
         letter-spacing: 0.02em !important;
         text-align: center !important;
@@ -3240,7 +3648,7 @@
         border-radius: 0 !important;
         border: none !important;
         border-top: 1px solid rgba(251,146,60,0.18) !important;
-        background: linear-gradient(160deg,#1a1c20 0%,#1e2028 100%) !important;
+        background: linear-gradient(160deg,var(--ichc-surface) 0%,var(--ichc-surface-2) 100%) !important;
         width: 100% !important;
         box-sizing: border-box !important;
         text-align: center !important;
@@ -3255,11 +3663,11 @@
     .ichc-cam-resume-title {
         font-size: 16px !important;
         font-weight: 700 !important;
-        color: #e3e5e8 !important;
+        color: var(--ichc-text) !important;
         letter-spacing: 0.01em !important;
     }
     .ichc-cam-resume-msg {
-        color: #6b7280 !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 12px !important;
         line-height: 1.5 !important;
         max-width: 220px !important;
@@ -3275,7 +3683,7 @@
         border-radius: 8px !important;
         border: 1px solid rgba(251,146,60,0.45) !important;
         background: #ea580c !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
         font-size: 13px !important;
         font-weight: 600 !important;
         cursor: pointer !important;
@@ -3301,7 +3709,7 @@
         padding: 0 !important;
         border: none !important;
         background: transparent !important;
-        color: #b9bdc7 !important;
+        color: var(--ichc-text-3) !important;
         font-size: 12px !important;
         font-weight: 500 !important;
         cursor: pointer !important;
@@ -3312,7 +3720,7 @@
         width: 32px !important;
         height: 18px !important;
         border-radius: 999px !important;
-        background: #3a3d44 !important;
+        background: var(--ichc-border) !important;
         transition: background 0.15s !important;
     }
     .ichc-cam-resume-toggle-knob {
@@ -3322,7 +3730,7 @@
         width: 14px !important;
         height: 14px !important;
         border-radius: 50% !important;
-        background: #fff !important;
+        background: var(--ichc-text-strong) !important;
         transition: transform 0.15s !important;
     }
     .ichc-cam-resume-toggle.ichc-on .ichc-cam-resume-toggle-track {
@@ -3331,7 +3739,7 @@
     .ichc-cam-resume-toggle.ichc-on .ichc-cam-resume-toggle-knob {
         transform: translateX(14px) !important;
     }
-    .ichc-cam-resume-toggle:hover { color: #e6e8ee !important; }
+    .ichc-cam-resume-toggle:hover { color: var(--ichc-text) !important; }
     .ichc-cam-resume-countdown {
         margin-top: 8px !important;
         min-height: 14px !important;
@@ -3355,7 +3763,7 @@
     #cams .rounded_square.ichc-ghost-slot { display: none !important; }
     /* Disabled placeholder card — shimmer skeleton instead of raw opacity */
     #cams .rounded_square.ichc-placeholder-slot {
-        background: #16181c !important;
+        background: var(--ichc-surface) !important;
         overflow: hidden !important;
         min-height: 90px !important;
     }
@@ -3372,7 +3780,7 @@
         justify-content: center !important;
         gap: 7px !important;
         pointer-events: none !important;
-        background: linear-gradient(135deg,#14161a 0%,#1c1f24 50%,#14161a 100%) !important;
+        background: linear-gradient(135deg,var(--ichc-surface) 0%,var(--ichc-surface-2) 50%,var(--ichc-surface) 100%) !important;
         background-size: 200% 200% !important;
         animation: ichc-shimmer 2.8s ease-in-out infinite !important;
         z-index: 1 !important;
@@ -3381,7 +3789,7 @@
         font-size: 26px !important;
         opacity: 0.22 !important;
         line-height: 1 !important;
-        color: #b0b4bc !important;
+        color: var(--ichc-text-3) !important;
     }
     .ichc-disabled-overlay-label {
         font-size: 10px !important;
@@ -3435,8 +3843,8 @@
         isolation: isolate !important;
         aspect-ratio: var(--ichc-card-aspect, var(--ichc-cam-aspect, 4 / 3)) !important;
         border-radius: 0 !important;
-        border: 1px solid rgba(255,255,255,0.07) !important;
-        background: linear-gradient(180deg, #18191c, #111214) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
+        background: linear-gradient(180deg, var(--ichc-surface), var(--ichc-bg)) !important;
         box-shadow: 0 4px 16px rgba(0,0,0,0.32) !important;
         transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
     }
@@ -3445,7 +3853,7 @@
         transition: border-color 0.18s ease, box-shadow 0.18s ease, aspect-ratio 0.28s ease !important;
     }
     #cams .rounded_square:hover {
-        border-color: rgba(255,255,255,0.14) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.14) !important;
         box-shadow: 0 6px 20px rgba(0,0,0,0.36) !important;
     }
     #cams .rounded_square.ichc-featured {
@@ -3458,7 +3866,7 @@
         align-items: center !important;
         justify-content: center !important;
         overflow: hidden !important;
-        background: #111214 !important;
+        background: var(--ichc-bg) !important;
         pointer-events: none !important;
         position: absolute !important;
         inset: 0 !important;
@@ -3483,6 +3891,21 @@
     #cams.ichc-has-featured .videocontainer {
         transition: none !important;
     }
+    /* Freeform placement SNAPS — never transition left/top/width/height here.
+       A cam card has no in-flow children (videocontainer, name and tools are
+       all absolutely positioned), so its shrink-to-fit size is ~2px. A card
+       being placed for the first time therefore animated from a 2x2 dot up to
+       its packed box, and because a repack touches every card at once, every
+       cam went invisible together for the length of the animation. That is
+       the "all cams disappear for ~1s every 5-10s" bug: Firefox interpolated
+       it where Chromium snapped, which is why it only showed in Gecko.
+       Diagnosed from a live probe: inline geometry read
+       `left:153px width:150px` while the rendered box was `2x2 @ 0,0`.
+       If motion is ever wanted here it must be opacity/transform on a
+       stable-size box, never the geometry the packer owns. */
+    #cams.ichc-cams-freeform .rounded_square {
+        transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
+    }
     .name-on-cam {
         position: absolute !important;
         top: 12px !important;
@@ -3495,7 +3918,7 @@
         font-weight: 700 !important;
         background: transparent !important;
         backdrop-filter: none !important;
-        color: #f8fbff !important;
+        color: var(--ichc-text-strong) !important;
         text-shadow:
             0 0 2px rgba(1, 6, 12, 0.98),
             0 1px 0 rgba(1, 6, 12, 0.98),
@@ -3551,7 +3974,7 @@
         justify-content: center !important;
         margin-left: auto !important;
         padding-left: 4px !important;
-        color: #7289da !important;
+        color: var(--ichc-accent-soft) !important;
         opacity: 0.55 !important;
         flex-shrink: 0 !important;
         font-size: 11px !important;
@@ -3587,8 +4010,8 @@
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        background: rgba(17,18,20,0.88) !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: rgba(var(--ichc-bg-rgb),0.88) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
         border-radius: 6px !important;
         box-shadow: none !important;
         font-size: 0 !important;
@@ -3617,9 +4040,9 @@
     }
     .ichc-overlay-btn:hover {
         transform: scale(1.08) !important;
-        color: #fff !important;
-        background: rgba(17,18,20,0.88) !important;
-        border-color: rgba(255, 255, 255, 0.28) !important;
+        color: var(--ichc-text-strong) !important;
+        background: rgba(var(--ichc-bg-rgb),0.88) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.28) !important;
     }
     .ichc-overlay-btn.ichc-spotlight-active {
         border-color: rgba(245,158,11,0.34) !important;
@@ -3668,9 +4091,9 @@
         text-transform: none !important;
         white-space: nowrap !important;
         color: rgba(255,255,255,0.65) !important;
-        background: rgba(17,18,20,0.72) !important;
+        background: rgba(var(--ichc-bg-rgb),0.72) !important;
         backdrop-filter: blur(6px) !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
         pointer-events: none !important;
         opacity: 0 !important;
         border-radius: 6px !important;
@@ -3683,9 +4106,9 @@
     }
     .ichc-cam-toggle-btn:hover {
         transform: scale(1.08) !important;
-        color: #fff !important;
-        background: rgba(17,18,20,0.88) !important;
-        border-color: rgba(255, 255, 255, 0.28) !important;
+        color: var(--ichc-text-strong) !important;
+        background: rgba(var(--ichc-bg-rgb),0.88) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.28) !important;
     }
     .ichc-cam-toggle-btn[data-ichc-action="disable"],
     .ichc-cam-toggle-btn[data-ichc-action="stop"] {
@@ -3730,9 +4153,9 @@
         font-size: 13px !important;
         line-height: 1 !important;
         color: rgba(255,255,255,0.55) !important;
-        background: rgba(17,18,20,0.72) !important;
+        background: rgba(var(--ichc-bg-rgb),0.72) !important;
         backdrop-filter: blur(6px) !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
         border-radius: 6px !important;
         pointer-events: none !important;
         opacity: 0 !important;
@@ -3794,7 +4217,7 @@
         border-radius: 12px 0 0 0 !important;
         border: none !important;
         padding: 0 !important;
-        background: #18191c !important;
+        background: var(--ichc-surface) !important;
         box-shadow: none !important;
     }
     /* Input row spans all columns */
@@ -3806,15 +4229,15 @@
         min-height: var(--ichc-input-height) !important;
         box-sizing: border-box !important;
         border-radius: 0 !important;
-        background: #18191c !important;
+        background: var(--ichc-surface) !important;
         border: 0 !important;
-        border-top: 1px solid rgba(255,255,255,0.06) !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
         box-shadow: none !important;
         position: relative !important;
         z-index: 5 !important;
     }
     #txt {
-        background: #18191c !important;
+        background: var(--ichc-surface) !important;
         padding: 4px 6px 4px 0 !important;
         font-size: 13px !important;
         position: relative !important;
@@ -3837,8 +4260,8 @@
         margin-bottom: 2px !important;
         border-radius: 10px !important;
         padding: 10px 16px !important;
-        color: #fff !important;
-        background: #5865f2 !important;
+        color: var(--ichc-text-strong) !important;
+        background: var(--ichc-accent) !important;
         position: relative !important;
         z-index: 5 !important;
     }
@@ -3859,7 +4282,7 @@
         font-size: 11px !important;
         line-height: 1.2 !important;
         text-align: left !important;
-        background: #18191c !important;
+        background: var(--ichc-surface) !important;
         border: none !important;
         border-radius: 0 12px 0 0 !important;
         box-shadow: none !important;
@@ -3974,7 +4397,7 @@
     }
     #ichc-pm-avatars #ichc-pm-toggle-btn:hover {
         background: rgba(114,137,218,0.22) !important;
-        color: #7289da !important;
+        color: var(--ichc-accent-soft) !important;
     }
     #ichc-pm-avatars #ichc-pm-toggle-btn.ichc-pm-toggle-alert {
         background: rgba(239,68,68,0.22) !important;
@@ -3998,7 +4421,7 @@
         appearance: none !important;
         background: none !important;
         border: none !important;
-        border-left: 1px solid rgba(255,255,255,0.07) !important;
+        border-left: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
         outline: none !important;
         box-shadow: none !important;
         position: absolute !important;
@@ -4020,7 +4443,7 @@
     #ichc-ul-collapse-btn:hover {
         background: rgba(114,137,218,0.10) !important;
         border-color: rgba(114,137,218,0.25) !important;
-        color: #7289da !important;
+        color: var(--ichc-accent-soft) !important;
     }
     #ichc-ul-collapse-btn svg {
         width: 12px !important;
@@ -4043,7 +4466,7 @@
         bottom: -23px !important;
         height: 26px !important;
         width: 26px !important;
-        border-top: 1px solid rgba(255,255,255,0.07) !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
         border-radius: 0 !important;
         pointer-events: auto !important;
         z-index: 25 !important;
@@ -4237,7 +4660,7 @@
         padding: 0 !important;
         margin: 0 !important;
         cursor: pointer !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -4254,7 +4677,7 @@
     }
     #ichc-userlist .ichc-ul-search-btn:hover {
         opacity: 1 !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         background: none !important;
         border: none !important;
         outline: none !important;
@@ -4278,62 +4701,141 @@
         width: 100% !important;
         height: 18px !important;
         box-sizing: border-box !important;
-        background: rgba(255,255,255,0.03) !important;
-        border: 1px solid rgba(255,255,255,0.06) !important;
+        background: rgba(var(--ichc-tint-rgb),0.03) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
         border-radius: 4px !important;
         padding: 0 7px !important;
         font-size: 11px !important;
         line-height: 16px !important;
         font-family: inherit !important;
-        color: #b5bac1 !important;
+        color: var(--ichc-text-3) !important;
         outline: none !important;
-        caret-color: #7289da !important;
+        caret-color: var(--ichc-accent-soft) !important;
         transition: background 0.15s, border-color 0.15s, box-shadow 0.15s !important;
     }
-    #ichc-userlist .ichc-ul-search-input::placeholder { color: #36383d !important; }
+    #ichc-userlist .ichc-ul-search-input::placeholder { color: var(--ichc-border) !important; }
     #ichc-userlist .ichc-ul-search-input:focus {
         height: 18px !important;
         padding: 0 7px !important;
-        background: rgba(255,255,255,0.055) !important;
+        background: rgba(var(--ichc-tint-rgb),0.055) !important;
         border-color: rgba(125,80,205,0.45) !important;
         box-shadow: 0 0 0 2px rgba(125,80,205,0.12), 0 0 8px rgba(65,145,215,0.12) !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
     }
     /* ── Section headers (§1: ON CAM / ACTIVE / IDLE) ── */
     #ichc-userlist .ichc-ul-section {
         display: flex !important;
         align-items: center !important;
         gap: 7px !important;
-        min-height: 16px !important;
-        font: 800 9px/1 -apple-system, "Inter", "Segoe UI", sans-serif !important;
-        letter-spacing: 0.12em !important;
+        min-height: 18px !important;
+        /* 9px uppercase at 0.12em was legible only if you went looking for it. 11px
+           carries the same compact feel with the tracking eased off slightly, since
+           wide letter-spacing costs more readability as the type grows. */
+        font: 800 12.5px/1 -apple-system, "Inter", "Segoe UI", sans-serif !important;
+        letter-spacing: 0.09em !important;
         text-transform: uppercase !important;
         margin: 7px 5px 3px !important;
-        /* uppercase caps render low in the line box; bottom padding lifts the
-           flex-centered content so the label reads vertically centered */
-        padding: 0 0 3px !important;
-        pointer-events: none !important;
+        padding: 0 2px !important;
+        /* Interactive now: the header IS the search affordance (the dedicated search
+           button was removed), so it can no longer be pointer-events: none. */
+        cursor: pointer !important;
         user-select: none !important;
+        border-radius: 4px !important;
+        transition: background 0.14s ease, color 0.14s ease !important;
     }
+    #ichc-userlist .ichc-ul-section:hover {
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+    }
+    #ichc-userlist .ichc-ul-section:focus-visible {
+        outline: 1px solid var(--ichc-accent) !important;
+        outline-offset: 1px !important;
+    }
+    /* Magnifier appears on hover so the header reads as clickable without carrying a
+       permanent icon — the sections are chrome first and a control second. */
+    #ichc-userlist .ichc-ul-section .ichc-ul-section-label::after {
+        content: '' !important;
+        display: inline-block !important;
+        width: 9px !important;
+        height: 9px !important;
+        margin-left: 5px !important;
+        flex: 0 0 auto !important;
+        opacity: 0 !important;
+        transition: opacity 0.14s ease !important;
+        background: currentColor !important;
+        -webkit-mask: var(--ichc-search-mask) center / contain no-repeat !important;
+        mask: var(--ichc-search-mask) center / contain no-repeat !important;
+    }
+    #ichc-userlist .ichc-ul-section:hover .ichc-ul-section-label::after { opacity: 0.75 !important; }
     #ichc-userlist .ichc-ul-section:first-child { margin-top: 4px !important; }
     /* trailing rule fills the row to the right of the label */
     #ichc-userlist .ichc-ul-section::after {
         content: '' !important;
         flex: 1 !important;
         height: 1px !important;
-        background: rgba(255,255,255,0.05) !important;
+        background: rgba(var(--ichc-tint-rgb),0.05) !important;
     }
-    #ichc-userlist .ichc-ul-section.cam    { color: #6cbf8a !important; }
-    #ichc-userlist .ichc-ul-section.active { color: #878d99 !important; }
-    #ichc-userlist .ichc-ul-section.idle   { color: #5a5d66 !important; }
-    /* subtle per-section tally sitting just after the label */
+    #ichc-userlist .ichc-ul-section.cam    { color: var(--ichc-sec-cam) !important; }
+    #ichc-userlist .ichc-ul-section.active { color: var(--ichc-sec-active) !important; }
+    #ichc-userlist .ichc-ul-section.idle   { color: var(--ichc-text-faint) !important; }
+    /* Per-section tally just after the label. It was 8.5px at 0.45 opacity, which on
+       the muted/faint section colours left the digits close to unreadable — the count
+       is information, not decoration, so it now scales with the label and keeps enough
+       opacity to stay legible against the dimmest section colour (IDLE). */
+    /* The figure is the point of the header, so it now outweighs its own label: bigger
+       than the 11px uppercase text beside it, full opacity, and sitting in a chip so it
+       reads as a readout rather than trailing punctuation. */
     #ichc-userlist .ichc-ul-section-count {
-        font-weight: 600 !important;
-        font-size: 8.5px !important;
-        letter-spacing: 0.04em !important;
-        opacity: 0.45 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 1px !important;
+        padding: 1px 5px !important;
+        border-radius: 4px !important;
+        background: rgba(var(--ichc-tint-rgb),0.07) !important;
+        font-weight: 800 !important;
+        font-size: 13px !important;
+        letter-spacing: 0 !important;
+        opacity: 1 !important;
         font-variant-numeric: tabular-nums !important;
     }
+    /* The section rule then has to stop competing with it. */
+    #ichc-userlist .ichc-ul-section-label {
+        /* inline-flex, not inline: the ::after magnifier below is an inline-block, and
+           as an inline it extended this element's LINE BOX ~9px downward. The box then
+           centred correctly under align-items:center while the glyphs sat at the top of
+           it — the label read ~7px high against the count chip. As flex items the text
+           and the icon centre against each other and the box hugs them. */
+        display: inline-flex !important;
+        align-items: center !important;
+        line-height: 1 !important;
+        /* Optical nudge, not a layout fix. The label is uppercase, so it has no
+           descenders (measured actualBoundingBoxDescent = 0) and its ink sits high
+           inside the glyph box — geometrically centred, it reads 1.25px above the
+           count chip. 0.1em is that distance at the current size and scales with it.
+           transform, so it does not feed back into the flex centring the way padding
+           would. */
+        transform: translateY(0.1em) !important;
+        opacity: 0.86 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.09em !important;
+    }
+    #ichc-userlist .ichc-ul-sec-n { display: inline-flex !important; }
+    /* ACTIVE carries "active / total"; the total is deliberately quieter so the
+       section's own figure still reads first. */
+    #ichc-userlist .ichc-ul-sec-sep {
+        margin: 0 1px !important;
+        opacity: 0.5 !important;
+        font-weight: 500 !important;
+    }
+    #ichc-userlist .ichc-ul-sec-total { opacity: 0.72 !important; }
+    /* The flip cards default to a --ichc-surface-3 tile, which suited the large header
+       counter but reads as a row of little chips at 10px on a section rule. Inside a
+       section count they go transparent and the centre seam is dropped — the fold
+       animation alone carries the effect at this size. */
+    #ichc-userlist .ichc-ul-section-count .ichc-fh > span {
+        background: transparent !important;
+    }
+    #ichc-userlist .ichc-ul-section-count .ichc-fh::after { display: none !important; }
+    #ichc-userlist .ichc-ul-section-count .ichc-fh-ghost { padding: 0 0.5px !important; }
 
     /* ── Row: 2-col grid (name | right-aligned meta); 3-col when avatars on ── */
     #ichc-userlist .ichc-ul-user {
@@ -4357,7 +4859,7 @@
         /* No top or bottom border at all. Fading them was not enough — they still read
            as lines bracketing the name — and removing them also reclaims 2px of height
            per row, which matters in a list this dense. Row separation does not need
-           them: the row background is darker than the panel (#1a1b1f on #212328) and
+           them: the row background is darker than the panel (var(--ichc-surface) on var(--ichc-surface-2)) and
            the 3px gap below does the rest.
 
            Left/right keep a karma-scaled bevel. They are the outer edges of a
@@ -4373,7 +4875,7 @@
         border-right: 1px solid
             rgba(0,0,0, calc(0.11 + (var(--ichc-kt-i, 0.42) - 0.42) * 0.26)) !important;
         cursor: pointer !important;
-        color: #c8ccd2 !important;
+        color: var(--ichc-text-2) !important;
         font-size: 12px !important;
         line-height: 1.05 !important;
         font-weight: 500 !important;
@@ -4441,7 +4943,7 @@
         background: rgba(0,0,0,0.08) !important;
     }
     #ichc-userlist .ichc-ul-user:focus-visible {
-        outline: 2px solid rgba(255,255,255,0.24) !important;
+        outline: 2px solid rgba(var(--ichc-tint-rgb),0.24) !important;
         outline-offset: 1px !important;
     }
     /* ── Profile avatars ── */
@@ -4451,7 +4953,7 @@
         width: 24px !important;
         height: 24px !important;
         border-radius: 50% !important;
-        background: var(--ichc-av-bg, #5865f2) !important;
+        background: var(--ichc-av-bg, var(--ichc-accent)) !important;
         flex-shrink: 0 !important;
         position: relative !important;
         display: inline-flex !important;
@@ -4545,7 +5047,7 @@
         padding: 0 !important;
         margin: 0 !important;
         cursor: pointer !important;
-        color: #787d87 !important;
+        color: var(--ichc-text-muted) !important;
         display: inline-flex !important;
         align-items: center !important;
         flex-shrink: 0 !important;
@@ -4559,7 +5061,7 @@
        broadcaster's row to duplicate it. Only the eye-slash below remains. */
     /* eye-slash: cam currently hidden — always visible, so it can be re-enabled */
     #ichc-userlist .ichc-ul-eye.on { opacity: 0.9 !important; }
-    #ichc-userlist .ichc-ul-eye:hover { color: #d4d8df !important; opacity: 1 !important; }
+    #ichc-userlist .ichc-ul-eye:hover { color: var(--ichc-text) !important; opacity: 1 !important; }
 
     /* (sidebar avatars removed — no sidebar strip) */
     .ichc-ul-sidebar-avatar-img {
@@ -4589,7 +5091,7 @@
         height: 11px !important;
         font-size: 9px !important;
         font-weight: 700 !important;
-        color: #8a8f98 !important;
+        color: var(--ichc-text-muted) !important;
         white-space: nowrap !important;
         letter-spacing: 0.01em !important;
         opacity: 0 !important;
@@ -4632,7 +5134,7 @@
     #ichc-userlist .ichc-ul-karma {
         font: 700 11px/1 -apple-system, "Inter", "Segoe UI", sans-serif !important;
         font-variant-numeric: tabular-nums !important;
-        color: #8e949c !important;
+        color: var(--ichc-text-dim) !important;
         white-space: nowrap !important;
         letter-spacing: 0.01em !important;
         text-shadow: 0 1px 3px rgba(0,0,0,0.9) !important;
@@ -4658,17 +5160,17 @@
     /* Presence is carried by name brightness + section grouping (§2) — no left dot. */
     /* Active (default) */
     #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) .ichc-ul-user-name {
-        color: var(--ichc-ul-name-color, #cfd3da) !important;
+        color: var(--ichc-ul-name-color, var(--ichc-text-2)) !important;
         font-weight: 600 !important;
     }
     /* Cammed: brightest */
     #ichc-userlist .ichc-ul-user.cammed .ichc-ul-user-name {
-        color: var(--ichc-ul-name-color, #f4f6f8) !important;
+        color: var(--ichc-ul-name-color, var(--ichc-text-bright)) !important;
         font-weight: 600 !important;
     }
     /* Hidden cammed: dimmed name, still in ON CAM */
     #ichc-userlist .ichc-ul-user.cammed.ichc-ul-hidden-live .ichc-ul-user-name {
-        color: #9298a4 !important;
+        color: var(--ichc-text-dim) !important;
         font-weight: 500 !important;
     }
     /* Name colour = the user's own chosen text colour when we have it.
@@ -4678,7 +5180,7 @@
        have not spoken yet keep the old behaviour. Every one of these needs the var,
        because the role rules below would otherwise win on specificity. */
     #ichc-userlist .ichc-ul-user .ichc-ul-user-name {
-        color: var(--ichc-ul-name-color, #c8ccd2) !important;
+        color: var(--ichc-ul-name-color, var(--ichc-text-2)) !important;
     }
     /* Mod: keep blurple tint on the name (role, not presence) */
     #ichc-userlist .ichc-ul-user.mod .ichc-ul-user-name {
@@ -4686,7 +5188,7 @@
     }
     /* Idle: muted, de-emphasized */
     #ichc-userlist .ichc-ul-user.idle .ichc-ul-user-name {
-        color: var(--ichc-ul-name-color, #777c85) !important;
+        color: var(--ichc-ul-name-color, var(--ichc-text-muted)) !important;
         font-weight: 500 !important;
     }
     /* Bar alpha by section (§4) */
@@ -4748,7 +5250,7 @@
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        background: #28292e !important;
+        background: var(--ichc-surface-3) !important;
         color: inherit !important;
         font-size: inherit !important;
         font-weight: inherit !important;
@@ -4785,12 +5287,12 @@
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         flex-shrink: 0 !important;
         vertical-align: middle !important;
         line-height: 1 !important;
     }
-    .ichc-ul-metric-cam .ichc-ul-metric-icon { color: #4e5058 !important; }
+    .ichc-ul-metric-cam .ichc-ul-metric-icon { color: var(--ichc-text-faint) !important; }
     .ichc-ul-metric-icon svg {
         width: 14px !important;
         height: 14px !important;
@@ -4803,12 +5305,12 @@
         top: calc(100% + 3px) !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        background: rgba(24,25,28,0.97) !important;
-        border: 1px solid rgba(255,255,255,0.09) !important;
+        background: rgba(var(--ichc-surface-rgb),0.97) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.09) !important;
         border-radius: 4px !important;
         padding: 2px 7px !important;
         font-size: 10px !important;
-        color: #b5bac1 !important;
+        color: var(--ichc-text-3) !important;
         white-space: nowrap !important;
         pointer-events: none !important;
         z-index: 200 !important;
@@ -4816,7 +5318,7 @@
         transition: opacity 0.15s !important;
     }
     .ichc-ul-metric:hover .ichc-ul-count-meta { opacity: 1 !important; }
-    .ichc-ul-count-sep { color: #4e5058 !important; }
+    .ichc-ul-count-sep { color: var(--ichc-text-faint) !important; }
     .ichc-ul-sep {
         display: none !important;
     }
@@ -4891,7 +5393,7 @@
         outline: none !important;
         box-shadow: none !important;
         cursor: pointer !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         border-radius: 6px !important;
         flex-shrink: 0 !important;
         padding: 0 !important;
@@ -4901,12 +5403,12 @@
     }
     #ichc-input-row .ichc-ul-more-btn:hover {
         opacity: 1 !important;
-        color: #dbdee1 !important;
-        background: rgba(255,255,255,0.06) !important;
+        color: var(--ichc-text) !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
     }
     #ichc-input-row .ichc-ul-more-btn.ichc-menu-open {
         opacity: 1 !important;
-        color: #7289da !important;
+        color: var(--ichc-accent-soft) !important;
     }
     /* ── Hidden chat buttons ── */
     .ichc-cmd-hidden { display: none !important; }
@@ -4923,9 +5425,9 @@
         width: 34px !important;
         height: 34px !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        background: #1e1f22 !important;
-        color: #b5bac1 !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        background: var(--ichc-surface-2) !important;
+        color: var(--ichc-text-3) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -4934,9 +5436,9 @@
         transition: background 0.15s, border-color 0.15s !important;
     }
     #ichc-cog-btn:hover {
-        background: #25272b !important;
-        border-color: rgba(255,255,255,0.14) !important;
-        color: #dbdee1 !important;
+        background: var(--ichc-surface-3) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.14) !important;
+        color: var(--ichc-text) !important;
     }
     #ichc-cog-btn:hover svg {
         animation: ichc-rotate-spin 0.5s ease-in-out !important;
@@ -4947,9 +5449,9 @@
         width: 24px !important;
         height: 24px !important;
         border-radius: 6px !important;
-        border: 1px solid rgba(255,255,255,0.07) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
         background: transparent !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -4960,8 +5462,8 @@
         transition: background 0.12s, color 0.12s !important;
     }
     #ichc-theme-toggle-btn.ichc-footer-icon-btn:hover {
-        background: rgba(255,255,255,0.06) !important;
-        color: #dbdee1 !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text) !important;
     }
 
     /* ── Sidebar buttons: PM animations ── */
@@ -4977,8 +5479,8 @@
         position: fixed !important;
         /* bottom/right set dynamically by portalMenu() in JS */
         min-width: 180px !important;
-        background: #18191c !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 8px !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
         padding: 4px !important;
@@ -4994,7 +5496,7 @@
         gap: 9px !important;
         padding: 8px 10px !important;
         border-radius: 6px !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         text-decoration: none !important;
         font-size: 12px !important;
         font-weight: 500 !important;
@@ -5002,20 +5504,97 @@
         transition: background 0.12s !important;
     }
     .ichc-cog-item:hover {
-        background: rgba(255,255,255,0.06) !important;
-        color: #fff !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text-strong) !important;
     }
     .ichc-cog-item-icon {
         flex-shrink: 0 !important;
         width: 16px !important;
-        color: #7289da !important;
+        color: var(--ichc-accent-soft) !important;
     }
+
+    /* ── Theme picker (expands inside the cog menu) ────────────────────────────
+       Entirely token-driven, so it repaints correctly the instant a palette is
+       applied — except the swatch chips, which carry inline colours because they
+       have to show themes that are not active. */
+    .ichc-cog-item-expandable::after {
+        content: '' !important;
+        margin-left: auto !important;
+        width: 5px !important;
+        height: 5px !important;
+        border-right: 1.5px solid currentColor !important;
+        border-bottom: 1.5px solid currentColor !important;
+        transform: rotate(45deg) translate(-1px, -1px) !important;
+        opacity: 0.55 !important;
+        transition: transform 0.15s ease !important;
+    }
+    .ichc-cog-item-expandable[aria-expanded="true"]::after {
+        transform: rotate(-135deg) translate(-1px, -1px) !important;
+    }
+    .ichc-theme-list {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 1px !important;
+        margin: 1px 0 3px 10px !important;
+        padding-left: 8px !important;
+        border-left: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
+    }
+    .ichc-theme-list[hidden] { display: none !important; }
+    .ichc-theme-row {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        width: 100% !important;
+        padding: 6px 8px !important;
+        border: 0 !important;
+        border-radius: 5px !important;
+        background: transparent !important;
+        color: var(--ichc-text-muted) !important;
+        font: inherit !important;
+        font-size: 12px !important;
+        text-align: left !important;
+        cursor: pointer !important;
+        transition: background 0.12s, color 0.12s !important;
+    }
+    .ichc-theme-row:hover {
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text) !important;
+    }
+    .ichc-theme-row[aria-current="true"] {
+        background: rgba(var(--ichc-tint-rgb),0.08) !important;
+        color: var(--ichc-text-strong) !important;
+        font-weight: 600 !important;
+    }
+    /* Tick on the active row. Uses the accent so the marker reads as "selected"
+       rather than as another swatch colour. */
+    .ichc-theme-row[aria-current="true"]::after {
+        content: '' !important;
+        margin-left: auto !important;
+        width: 4px !important;
+        height: 8px !important;
+        border-right: 2px solid var(--ichc-accent) !important;
+        border-bottom: 2px solid var(--ichc-accent) !important;
+        transform: rotate(45deg) !important;
+    }
+    .ichc-theme-swatch {
+        display: inline-flex !important;
+        flex-shrink: 0 !important;
+        border-radius: 4px !important;
+        overflow: hidden !important;
+        box-shadow: 0 0 0 1px rgba(var(--ichc-tint-rgb),0.16) !important;
+    }
+    .ichc-theme-swatch i {
+        display: block !important;
+        width: 8px !important;
+        height: 14px !important;
+    }
+    .ichc-theme-name { white-space: nowrap !important; }
     .ichc-color-swatch {
         display: inline-block !important;
         width: 13px !important;
         height: 13px !important;
         border-radius: 50% !important;
-        border: 1px solid rgba(255,255,255,0.22) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.22) !important;
         background: #dbeafe !important;
         flex-shrink: 0 !important;
         margin-left: auto !important;
@@ -5036,7 +5615,7 @@
         padding: 0 !important;
         margin: 0 !important;
         cursor: pointer !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -5044,7 +5623,7 @@
         flex-shrink: 0 !important;
         transition: color 0.12s !important;
     }
-    #ichc-reload-cams-btn:hover { color: #dbdee1 !important; }
+    #ichc-reload-cams-btn:hover { color: var(--ichc-text) !important; }
     #ichc-reload-cams-btn svg { width: 1em !important; height: 1em !important; flex-shrink: 0 !important; }
     #ichc-reload-cams-btn:active svg { animation: ichc-rotate-spin 0.6s linear !important; }
     #ichc-reload-cams-btn.ichc-spinning svg { animation: ichc-rotate-spin 0.7s linear infinite !important; }
@@ -5062,7 +5641,7 @@
         padding: 0 !important;
         margin: 0 !important;
         cursor: pointer !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -5070,7 +5649,7 @@
         flex-shrink: 0 !important;
         transition: color 0.12s !important;
     }
-    #ichc-cam-test-btn:hover { color: #dbdee1 !important; }
+    #ichc-cam-test-btn:hover { color: var(--ichc-text) !important; }
     #ichc-cam-test-btn svg { width: 1em !important; height: 1em !important; }
 
     /* ── Live cam-stats toggle — shares the bare cam-diagnostics button look ── */
@@ -5086,7 +5665,7 @@
         padding: 0 !important;
         margin: 0 !important;
         cursor: pointer !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -5094,7 +5673,7 @@
         flex-shrink: 0 !important;
         transition: color 0.12s !important;
     }
-    #ichc-cam-stats-btn:hover { color: #dbdee1 !important; }
+    #ichc-cam-stats-btn:hover { color: var(--ichc-text) !important; }
     #ichc-cam-stats-btn svg { width: 1em !important; height: 1em !important; }
     #ichc-cam-stats-btn.ichc-active { color: #4ec8d7 !important; }
     #ichc-cam-stats-btn.ichc-active:hover { color: #6fdcea !important; }
@@ -5102,26 +5681,58 @@
     /* Per-cam metrics overlay drawn while the toggle is on */
     #cams .ichc-cam-stats-overlay {
         position: absolute !important;
-        top: 8px !important;
-        right: 8px !important;
+        top: 6px !important;
+        right: 6px !important;
         z-index: 13 !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 1px !important;
-        padding: 4px 6px !important;
-        border-radius: 6px !important;
-        background: rgba(8,10,14,0.74) !important;
-        backdrop-filter: blur(3px) !important;
-        -webkit-backdrop-filter: blur(3px) !important;
-        font: 600 10px/1.3 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace !important;
+        gap: 0 !important;
+        padding: 2px 5px !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
+        border-radius: 5px !important;
+        background: rgba(var(--ichc-bg-rgb),0.44) !important;
+        backdrop-filter: blur(5px) saturate(115%) !important;
+        -webkit-backdrop-filter: blur(5px) saturate(115%) !important;
+        font: 600 9px/1.25 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace !important;
         font-variant-numeric: tabular-nums !important;
         color: #cde9ef !important;
-        letter-spacing: 0.01em !important;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.85) !important;
+        letter-spacing: 0 !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.7) !important;
         text-align: right !important;
         pointer-events: none !important;
-        max-width: calc(100% - 16px) !important;
+        max-width: calc(100% - 12px) !important;
         white-space: nowrap !important;
+        transition: opacity 0.15s ease, background 0.15s ease !important;
+    }
+    #cams .ichc-cam-stats-overlay span {
+        display: none !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    #cams .ichc-cam-stats-overlay span:first-child,
+    #cams .ichc-cam-stats-overlay span:nth-child(2) {
+        display: block !important;
+    }
+    /* Video + audio stay visible on every tile. Network/server detail remains in
+       the console diagnostics instead of growing the on-video panel. */
+    #cams .ichc-cam-stats-overlay span:nth-child(n+3) {
+        display: none !important;
+    }
+    #cams.ichc-has-featured .rounded_square:not(.ichc-featured) .ichc-cam-stats-overlay {
+        top: auto !important;
+        bottom: 6px !important;
+    }
+    #cams.ichc-has-featured .rounded_square:not(.ichc-featured):hover .ichc-cam-stats-overlay,
+    #cams.ichc-has-featured .rounded_square:not(.ichc-featured):focus-within .ichc-cam-stats-overlay {
+        opacity: 0 !important;
+    }
+    html.ichc-theme-is-light #cams .ichc-cam-stats-overlay {
+        background: rgba(255,255,255,0.54) !important;
+        color: var(--ichc-text) !important;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.7) !important;
+    }
+    html.ichc-theme-is-light #cams .ichc-cam-stats-overlay span:first-child {
+        color: var(--ichc-accent-hover) !important;
     }
     #cams .ichc-cam-stats-overlay span:first-child {
         color: #8fe3ef !important;
@@ -5183,9 +5794,9 @@
         border-radius: 8px !important;
         font: 600 11px/1.35 -apple-system, "Inter", "Segoe UI", sans-serif !important;
         white-space: pre-line !important;
-        color: #f2f3f5 !important;
-        background: rgba(24,25,28,0.96) !important;
-        border: 1px solid rgba(255,255,255,0.10) !important;
+        color: var(--ichc-text-bright) !important;
+        background: rgba(var(--ichc-surface-rgb),0.96) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
         box-shadow: 0 6px 20px rgba(0,0,0,0.45) !important;
         opacity: 0 !important;
         transform: translateY(6px) !important;
@@ -5224,9 +5835,9 @@
         flex-direction: column !important;
         gap: 12px !important;
         padding: 14px !important;
-        background: #111214 !important;
-        color: #e5e7eb !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: var(--ichc-bg) !important;
+        color: var(--ichc-text) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
         border-radius: 8px !important;
         box-shadow: 0 18px 44px rgba(0,0,0,0.45) !important;
         font: 12px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
@@ -5241,11 +5852,11 @@
     .ichc-camdiag-title {
         font-size: 14px !important;
         font-weight: 700 !important;
-        color: #f4f4f5 !important;
+        color: var(--ichc-text-bright) !important;
     }
     .ichc-camdiag-subtitle {
         margin-top: 2px !important;
-        color: #9ca3af !important;
+        color: var(--ichc-text-dim) !important;
     }
     .ichc-camdiag-actions {
         flex-wrap: wrap !important;
@@ -5259,9 +5870,9 @@
     .ichc-camdiag-preview-stop,
     .ichc-camdiag-stats {
         border-radius: 6px !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
-        background: #1b1d21 !important;
-        color: #e5e7eb !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
+        background: var(--ichc-surface-2) !important;
+        color: var(--ichc-text) !important;
         cursor: pointer !important;
         min-height: 30px !important;
         padding: 5px 10px !important;
@@ -5295,7 +5906,7 @@
         color: #8fe3ef !important;
     }
     .ichc-camdiag-clear {
-        color: #9ca3af !important;
+        color: var(--ichc-text-dim) !important;
         margin-left: auto !important;
     }
     .ichc-camdiag-preview {
@@ -5303,7 +5914,7 @@
         display: flex !important;
         justify-content: center !important;
         background: #000 !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.1) !important;
         border-radius: 6px !important;
         overflow: hidden !important;
     }
@@ -5333,7 +5944,7 @@
         gap: 6px !important;
     }
     .ichc-camdiag-section-title {
-        color: #cbd5e1 !important;
+        color: var(--ichc-text-2) !important;
         font-weight: 700 !important;
     }
     .ichc-camdiag-row,
@@ -5345,8 +5956,8 @@
         align-items: start !important;
         padding: 7px 8px !important;
         border-radius: 6px !important;
-        background: rgba(255,255,255,0.04) !important;
-        border: 1px solid rgba(255,255,255,0.06) !important;
+        background: rgba(var(--ichc-tint-rgb),0.04) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
     }
     .ichc-camdiag-event {
         grid-template-columns: 74px 54px minmax(0, 1fr) !important;
@@ -5356,7 +5967,7 @@
     }
     .ichc-camdiag-empty {
         display: block !important;
-        color: #9ca3af !important;
+        color: var(--ichc-text-dim) !important;
     }
     .ichc-camdiag-status {
         text-transform: uppercase !important;
@@ -5369,12 +5980,12 @@
     .ichc-camdiag-warn .ichc-camdiag-status { color: #fbbf24 !important; }
     .ichc-camdiag-info .ichc-camdiag-status { color: #93c5fd !important; }
     .ichc-camdiag-label {
-        color: #f4f4f5 !important;
+        color: var(--ichc-text-bright) !important;
         font-weight: 650 !important;
     }
     .ichc-camdiag-detail,
     .ichc-camdiag-event span {
-        color: #a1a1aa !important;
+        color: var(--ichc-text-dim) !important;
         min-width: 0 !important;
         overflow-wrap: anywhere !important;
     }
@@ -5385,26 +5996,28 @@
         background: transparent !important;
         padding: 0 !important;
     }
-    .ichc-camdiag-event b { color: #cbd5e1 !important; }
-    .ichc-camdiag-ev-failed b { color: #f87171 !important; }
+    .ichc-camdiag-event b { color: var(--ichc-text-2) !important; }
+    .ichc-camdiag-ev-failed b,
+    .ichc-camdiag-ev-stalled b { color: #f87171 !important; }
     .ichc-camdiag-ev-disconnected b { color: #fbbf24 !important; }
     .ichc-camdiag-ev-connected b,
-    .ichc-camdiag-ev-completed b { color: #7ee787 !important; }
+    .ichc-camdiag-ev-completed b,
+    .ichc-camdiag-ev-recovered b { color: #7ee787 !important; }
 
     /* ── User list hidden cam entries ── */
     #ichc-userlist .ichc-ul-hidden-live {
         background: rgba(22,23,26,0.45) !important;
-        border-color: rgba(255,255,255,0.03) !important;
-        border-left-color: rgba(255,255,255,0.08) !important;
-        color: #6b7280 !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.03) !important;
+        border-left-color: rgba(var(--ichc-tint-rgb),0.08) !important;
+        color: var(--ichc-text-muted) !important;
     }
     #ichc-userlist .ichc-ul-hidden-live:hover {
         background: rgba(30,32,36,0.55) !important;
-        border-color: rgba(255,255,255,0.06) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.06) !important;
     }
     #ichc-userlist .ichc-ul-hidden-live .ichc-ul-user-name {
         font-size: 11px !important;
-        color: #6b7280 !important;
+        color: var(--ichc-text-muted) !important;
         text-align: left !important;
         justify-content: flex-start !important;
         align-self: center !important;
@@ -5438,7 +6051,7 @@
     /* ── Offline hidden section ── */
     .ichc-ul-offline-hidden {
         margin-top: 4px !important;
-        border-top: 1px solid rgba(255,255,255,0.04) !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.04) !important;
     }
     .ichc-ul-offline-hidden-toggle {
         width: 100% !important;
@@ -5448,7 +6061,7 @@
         padding: 6px 8px !important;
         background: transparent !important;
         border: 0 !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 11px !important;
         font-weight: 600 !important;
         text-transform: uppercase !important;
@@ -5456,14 +6069,14 @@
         cursor: pointer !important;
         border-radius: 6px !important;
     }
-    .ichc-ul-offline-hidden-toggle:hover { background: rgba(255,255,255,0.04) !important; color: #dbdee1 !important; }
+    .ichc-ul-offline-hidden-toggle:hover { background: rgba(var(--ichc-tint-rgb),0.04) !important; color: var(--ichc-text) !important; }
     .ichc-ul-offline-hidden-toggle .ichc-ul-offline-count {
         margin-left: auto !important;
-        background: rgba(255,255,255,0.06) !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
         border-radius: 999px !important;
         padding: 1px 6px !important;
         font-size: 10px !important;
-        color: #96a0b0 !important;
+        color: var(--ichc-text-dim) !important;
     }
     .ichc-ul-offline-hidden-toggle svg:last-child {
         transition: transform 0.18s !important;
@@ -5485,11 +6098,11 @@
         border-radius: 6px !important;
         opacity: 0.62 !important;
     }
-    .ichc-ul-offline-hidden-row:hover { background: rgba(255,255,255,0.03) !important; opacity: 1 !important; }
+    .ichc-ul-offline-hidden-row:hover { background: rgba(var(--ichc-tint-rgb),0.03) !important; opacity: 1 !important; }
     .ichc-ul-offline-hidden-name {
         flex: 1 !important;
         font-size: 12px !important;
-        color: #6b7079 !important;
+        color: var(--ichc-text-muted) !important;
         text-decoration: line-through !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -5502,7 +6115,7 @@
         border-radius: 4px !important;
         border: 0 !important;
         background: transparent !important;
-        color: #36383d !important;
+        color: var(--ichc-border) !important;
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -5517,8 +6130,8 @@
     .ichc-ul-more-menu {
         position: fixed !important;
         min-width: 160px !important;
-        background: #18191c !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 8px !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.45) !important;
         padding: 4px !important;
@@ -5535,7 +6148,7 @@
         border-radius: 6px !important;
         background: transparent !important;
         border: 0 !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         font-size: 12px !important;
         font-weight: 500 !important;
         cursor: pointer !important;
@@ -5543,7 +6156,7 @@
         transition: background 0.1s !important;
         width: 100% !important;
     }
-    .ichc-ul-more-item:hover { background: rgba(255,255,255,0.06) !important; color: #fff !important; }
+    .ichc-ul-more-item:hover { background: rgba(var(--ichc-tint-rgb),0.06) !important; color: var(--ichc-text-strong) !important; }
     /* On/off state indicator pill for toggleable view items */
     .ichc-ul-more-toggle {
         margin-left: auto !important;
@@ -5551,7 +6164,7 @@
         width: 26px !important;
         height: 14px !important;
         border-radius: 8px !important;
-        background: rgba(255,255,255,0.14) !important;
+        background: rgba(var(--ichc-tint-rgb),0.14) !important;
         position: relative !important;
         transition: background 0.15s !important;
     }
@@ -5563,7 +6176,7 @@
         width: 10px !important;
         height: 10px !important;
         border-radius: 50% !important;
-        background: #9aa0a6 !important;
+        background: var(--ichc-text-dim) !important;
         transition: left 0.15s, background 0.15s !important;
     }
     .ichc-ul-more-item.ichc-on .ichc-ul-more-toggle {
@@ -5571,20 +6184,20 @@
     }
     .ichc-ul-more-item.ichc-on .ichc-ul-more-toggle::after {
         left: 14px !important;
-        background: #fff !important;
+        background: var(--ichc-text-strong) !important;
     }
     /* Sort items — checkmark visibility */
     .ichc-ul-sort-item .ichc-ul-sort-check {
         width: 14px !important;
         margin-right: 6px !important;
         font-size: 11px !important;
-        color: #5865f2 !important;
+        color: var(--ichc-accent) !important;
         flex-shrink: 0 !important;
         visibility: hidden !important;
     }
     .ichc-ul-sort-item.ichc-ul-sort-active .ichc-ul-sort-check { visibility: visible !important; }
     .ichc-ul-sort-item.ichc-ul-sort-active {
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
         background: rgba(88,101,242,0.14) !important;
     }
     .ichc-ul-sort-item.ichc-ul-sort-active:hover { background: rgba(88,101,242,0.24) !important; }
@@ -5595,14 +6208,14 @@
         font-weight: 700 !important;
         letter-spacing: 0.06em !important;
         text-transform: uppercase !important;
-        color: #4e5058 !important;
+        color: var(--ichc-text-faint) !important;
         pointer-events: none !important;
         user-select: none !important;
     }
     /* Divider between sections */
     .ichc-ul-more-divider {
         height: 1px !important;
-        background: rgba(255,255,255,0.06) !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
         margin: 4px 0 !important;
     }
 
@@ -5612,8 +6225,8 @@
         z-index: 2147483100 !important;
         min-width: 220px !important;
         max-width: 290px !important;
-        background: #1e1f22 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface-2) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 10px !important;
         box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.3) !important;
         overflow: hidden !important;
@@ -5627,27 +6240,27 @@
         justify-content: center !important;
         height: 14px !important;
         cursor: grab !important;
-        background: rgba(255,255,255,0.03) !important;
-        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        background: rgba(var(--ichc-tint-rgb),0.03) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.05) !important;
         border-radius: 10px 10px 0 0 !important;
         flex-shrink: 0 !important;
     }
-    .ichc-ud-grab:hover { background: rgba(255,255,255,0.06) !important; }
-    .ichc-ud-grab-active { cursor: grabbing !important; background: rgba(255,255,255,0.08) !important; }
+    .ichc-ud-grab:hover { background: rgba(var(--ichc-tint-rgb),0.06) !important; }
+    .ichc-ud-grab-active { cursor: grabbing !important; background: rgba(var(--ichc-tint-rgb),0.08) !important; }
     .ichc-ud-grab-pip {
         display: block !important;
         width: 28px !important;
         height: 3px !important;
         border-radius: 2px !important;
-        background: rgba(255,255,255,0.2) !important;
+        background: rgba(var(--ichc-tint-rgb),0.2) !important;
     }
-    .ichc-ud-grab:hover .ichc-ud-grab-pip { background: rgba(255,255,255,0.38) !important; }
+    .ichc-ud-grab:hover .ichc-ud-grab-pip { background: rgba(var(--ichc-tint-rgb),0.38) !important; }
     .ichc-ud-header {
         display: flex !important;
         align-items: center !important;
         gap: 10px !important;
         padding: 10px 14px 10px 14px !important;
-        background: #18191c !important;
+        background: var(--ichc-surface) !important;
         position: relative !important;
         overflow: hidden !important;
     }
@@ -5661,11 +6274,11 @@
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        background: rgba(255,255,255,0.07) !important;
+        background: rgba(var(--ichc-tint-rgb),0.07) !important;
         border: none !important;
         border-radius: 50% !important;
         cursor: pointer !important;
-        color: #9da3ae !important;
+        color: var(--ichc-text-dim) !important;
         padding: 0 !important;
         line-height: 1 !important;
         transition: background 0.12s, color 0.12s !important;
@@ -5695,7 +6308,7 @@
         width: 46px !important;
         height: 46px !important;
         border-radius: 50% !important;
-        background: var(--av-bg, #5865f2) !important;
+        background: var(--av-bg, var(--ichc-accent)) !important;
         flex-shrink: 0 !important;
         display: flex !important;
         align-items: center !important;
@@ -5710,7 +6323,7 @@
     .ichc-ud-avatar-letter {
         font-size: 20px !important;
         font-weight: 700 !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
         line-height: 1 !important;
         text-shadow: none !important;
     }
@@ -5721,7 +6334,7 @@
     .ichc-ud-name {
         font-size: 14px !important;
         font-weight: 700 !important;
-        color: #e0e1e5 !important;
+        color: var(--ichc-text) !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -5750,13 +6363,13 @@
     .ichc-ud-badge-year { background: rgba(251,191,36,0.12) !important; color: #fbbf24 !important; }
     .ichc-ud-karma {
         font-size: 11px !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         margin-top: 3px !important;
         text-shadow: none !important;
     }
     .ichc-ud-divider {
         height: 1px !important;
-        background: rgba(255,255,255,0.06) !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
         margin: 0 !important;
     }
     .ichc-ud-btn {
@@ -5768,7 +6381,7 @@
         background: transparent !important;
         border: none !important;
         border-radius: 0 !important;
-        color: #c8ccd2 !important;
+        color: var(--ichc-text-2) !important;
         font-size: 13px !important;
         font-weight: 500 !important;
         cursor: pointer !important;
@@ -5776,7 +6389,7 @@
         transition: background 0.1s !important;
         text-shadow: none !important;
     }
-    .ichc-ud-btn:hover { background: rgba(255,255,255,0.06) !important; }
+    .ichc-ud-btn:hover { background: rgba(var(--ichc-tint-rgb),0.06) !important; }
     .ichc-ud-btn:last-child { border-radius: 0 0 10px 10px !important; }
     #ichc-user-dropdown > :last-child { border-radius: 0 0 10px 10px !important; }
     .ichc-ud-btn-icon {
@@ -5784,7 +6397,7 @@
         flex-shrink: 0 !important;
         display: inline-flex !important;
         align-items: center !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
     }
     .ichc-ud-btn-warn { color: #fbbf24 !important; }
     .ichc-ud-btn-warn .ichc-ud-btn-icon { color: #fbbf24 !important; }
@@ -5799,9 +6412,9 @@
     .ichc-ud-bio {
         padding: 7px 14px 6px !important;
         font-size: 11px !important;
-        color: #9da3ae !important;
+        color: var(--ichc-text-dim) !important;
         line-height: 1.5 !important;
-        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.05) !important;
         font-style: italic !important;
         text-shadow: none !important;
         max-height: 80px !important;
@@ -5813,7 +6426,7 @@
         flex-wrap: wrap !important;
         gap: 4px !important;
         padding: 6px 10px !important;
-        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.05) !important;
         background: rgba(0,0,0,0.15) !important;
     }
     .ichc-ud-trophy-img {
@@ -5847,9 +6460,9 @@
         width: 28px !important;
         height: 28px !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        background: #18191c !important;
-        color: #b5bac1 !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        background: var(--ichc-surface) !important;
+        color: var(--ichc-text-3) !important;
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -5860,8 +6473,8 @@
         position: relative !important;
     }
     #ichc-nav-hamburger-btn:hover {
-        background: #25272b !important;
-        border-color: rgba(255,255,255,0.14) !important;
+        background: var(--ichc-surface-3) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.14) !important;
     }
     /* Matched to .ichc-ul-more-menu / .ichc-room-submenu so every popup in the
        extension shares one look: 8px radius (was 10), 0.45 shadow alpha (was 0.5),
@@ -5871,8 +6484,8 @@
         top: calc(100% + 6px) !important;
         left: 0 !important;
         min-width: 160px !important;
-        background: #18191c !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 8px !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.45) !important;
         padding: 4px !important;
@@ -5888,7 +6501,7 @@
         gap: 8px !important;
         padding: 7px 10px !important;
         border-radius: 6px !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         text-decoration: none !important;
         font-size: 12px !important;
         font-weight: 500 !important;
@@ -5900,8 +6513,8 @@
         text-align: left !important;
     }
     .ichc-nav-item:hover {
-        background: rgba(255,255,255,0.06) !important;
-        color: #fff !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text-strong) !important;
         text-decoration: none !important;
     }
 
@@ -5919,8 +6532,8 @@
         padding: 3px 8px !important;
         width: 100% !important;
         box-sizing: border-box !important;
-        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-        background: #111214 !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.05) !important;
+        background: var(--ichc-bg) !important;
         flex-shrink: 0 !important;
         order: -1 !important;
         position: relative !important;
@@ -5929,6 +6542,25 @@
     }
     /* Pop-out toggle is hidden inside the strip — background click handles open, avatar click handles nav */
     #ichc-pm-avatars #ichc-pm-toggle-btn { display: none !important; }
+
+    /* With no conversations the strip has no visible children (the pop-out toggle is
+       display:none and the collapse tab is absolutely positioned), so min-height +
+       background painted a bare 34px slab of --ichc-bg across the top of the userlist.
+       Collapse it to nothing instead.
+
+       It must stay in the DOM and keep position: relative — #ichc-ul-collapse-btn is
+       absolutely positioned against this element, so `display: none` here would take
+       the userlist collapse control with it. At zero height the tab's bottom: -23px
+       simply parks it just under the header, which is where it already floats.
+
+       Not applied while the userlist is collapsed: there the strip is the visible
+       handle surface, and the more specific `.ichc-ul-collapsed` rule below keeps it. */
+    #ichc-pm-avatars:not(:has(.ichc-pm-avatar-item)) {
+        min-height: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border-bottom: none !important;
+    }
     .ichc-pm-avatar-item {
         position: relative !important;
         width: 30px !important;
@@ -5942,15 +6574,15 @@
         height: 100% !important;
         border-radius: 50% !important;
         overflow: hidden !important;
-        border: 2px solid rgba(255,255,255,0.10) !important;
-        background: var(--av-bg, #5865f2) !important;
+        border: 2px solid rgba(var(--ichc-tint-rgb),0.10) !important;
+        background: var(--av-bg, var(--ichc-accent)) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         transition: border-color 0.15s !important;
     }
     .ichc-pm-avatar-item:hover .ichc-pm-avatar-inner {
-        border-color: rgba(255,255,255,0.32) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.32) !important;
     }
     .ichc-pm-avatar-letter {
         font-size: 12px !important;
@@ -5977,7 +6609,7 @@
         padding: 0 3px !important;
         border-radius: 8px !important;
         background: #ff1111 !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
         font-size: 10px !important;
         font-weight: 800 !important;
         line-height: 16px !important;
@@ -5985,7 +6617,7 @@
         pointer-events: none !important;
         display: none !important;
         z-index: 3 !important;
-        border: 1.5px solid #1e2024 !important;
+        border: 1.5px solid var(--ichc-surface-2) !important;
         box-sizing: border-box !important;
         box-shadow: 0 0 5px 1px rgba(255,0,0,0.55) !important;
     }
@@ -6014,8 +6646,8 @@
         border-bottom-color: rgba(0,0,0,0.08) !important;
     }
     html.ichc-light-theme #ichc-chat-shell.ichc-ul-collapsed #ichc-pm-avatars {
-        background: #e3e5e8 !important;
-        border-color: rgba(0,0,0,0.10) !important;
+        background: var(--ichc-surface) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.10) !important;
     }
     html.ichc-light-theme #ichc-sidebar-stats {
         background: #e3e5e8 !important;
@@ -6034,7 +6666,7 @@
         width: 9px !important;
         height: 9px !important;
         border-radius: 50% !important;
-        border: 2px solid #111214 !important;
+        border: 2px solid var(--ichc-bg) !important;
         box-sizing: border-box !important;
         display: none !important;
     }
@@ -6067,7 +6699,7 @@
         display: block !important;
         font-size: 11px !important;
         font-weight: 600 !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -6083,8 +6715,8 @@
         width: 14px !important;
         height: 14px !important;
         border-radius: 50% !important;
-        background: #2f3136 !important;
-        border: 1px solid rgba(255,255,255,0.18) !important;
+        background: var(--ichc-surface-4) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.18) !important;
         color: rgba(255,255,255,0.65) !important;
         font-size: 10px !important;
         line-height: 1 !important;
@@ -6103,7 +6735,7 @@
     .ichc-pm-avatar-close:hover {
         background: #ed4245 !important;
         border-color: #ed4245 !important;
-        color: #fff !important;
+        color: var(--ichc-text-strong) !important;
     }
 
     /* More-btn glows when there are unread PMs */
@@ -6113,7 +6745,13 @@
         border-radius: 4px !important;
     }
     /* Sidebar avatar name tooltip */
-    /* Userlist resize handle — absolute inside .ichc-ul-header at the left edge */
+    /* Userlist resize handle — absolute against #ichc-userlist, spanning its full
+       left edge. It used to live inside .ichc-ul-header and was therefore only as tall
+       as that bar; it now runs past the PM strip and alongside the ON CAM / ACTIVE
+       section rules, which is a far easier target to hit.
+       Trade-off: this 8px strip sits over the left edge of the user rows, so the very
+       edge of a row drags instead of opening a profile. That is the usual behaviour for
+       a resizable panel edge, and row content starts inboard of it. */
     #ichc-userlist-resizer {
         position: absolute !important;
         left: 0 !important;
@@ -6123,19 +6761,22 @@
         cursor: col-resize !important;
         touch-action: none !important;
         user-select: none !important;
-        z-index: 2 !important;
+        z-index: 8 !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         background: transparent !important;
         transition: background 0.15s !important;
     }
+    /* Grip runs most of the panel now rather than a 28px nub, so the handle reads as
+       the full-height edge it has become. */
     #ichc-userlist-resizer::after {
         content: '' !important;
         width: 2px !important;
-        height: 28px !important;
+        height: calc(100% - 16px) !important;
+        max-height: none !important;
         border-radius: 2px !important;
-        background: rgba(255,255,255,0.14) !important;
+        background: rgba(var(--ichc-tint-rgb),0.14) !important;
         transition: background 0.15s !important;
     }
     #ichc-userlist-resizer:hover,
@@ -6175,8 +6816,8 @@
         left: auto !important;
         width: 340px !important;
         max-height: 400px !important;
-        background: #18191c !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 12px !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.55) !important;
         display: flex !important;
@@ -6189,7 +6830,7 @@
         display: flex !important;
         gap: 2px !important;
         padding: 6px 6px 0 !important;
-        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
         flex-shrink: 0 !important;
     }
     .ichc-gif-tab {
@@ -6200,31 +6841,31 @@
         cursor: pointer !important;
         border: 0 !important;
         background: transparent !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         transition: background 0.12s, color 0.12s !important;
     }
-    .ichc-gif-tab:hover { color: #dbdee1 !important; }
+    .ichc-gif-tab:hover { color: var(--ichc-text) !important; }
     .ichc-gif-tab.active {
-        background: rgba(255,255,255,0.06) !important;
-        color: #dbdee1 !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
+        color: var(--ichc-text) !important;
     }
     #ichc-gif-search {
         flex-shrink: 0 !important;
         padding: 6px !important;
-        border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.04) !important;
     }
     #ichc-gif-search input {
         width: 100% !important;
         box-sizing: border-box !important;
-        background: #111214 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-bg) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 6px !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         font-size: 11px !important;
         padding: 6px 8px !important;
         outline: none !important;
     }
-    #ichc-gif-search input:focus { border-color: rgba(255,255,255,0.16) !important; }
+    #ichc-gif-search input:focus { border-color: rgba(var(--ichc-tint-rgb),0.16) !important; }
     #ichc-gif-grid {
         flex: 1 1 auto !important;
         overflow-y: auto !important;
@@ -6242,8 +6883,8 @@
         overflow: hidden !important;
         border-radius: 6px !important;
         cursor: pointer !important;
-        background: #111214 !important;
-        border: 1px solid rgba(255,255,255,0.04) !important;
+        background: var(--ichc-bg) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.04) !important;
         transition: transform 0.12s, border-color 0.12s !important;
         display: flex !important;
         align-items: center !important;
@@ -6251,7 +6892,7 @@
     }
     .ichc-gif-item:hover {
         transform: scale(1.06) !important;
-        border-color: rgba(255,255,255,0.14) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.14) !important;
         z-index: 2 !important;
     }
     .ichc-gif-item img {
@@ -6273,7 +6914,7 @@
         justify-content: center !important;
     }
     .ichc-emote-item:hover {
-        background: rgba(255,255,255,0.07) !important;
+        background: rgba(var(--ichc-tint-rgb),0.07) !important;
         transform: scale(1.15) !important;
         z-index: 2 !important;
     }
@@ -6295,34 +6936,34 @@
         display: flex !important;
         gap: 6px !important;
         padding: 6px !important;
-        border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.04) !important;
     }
     #ichc-gif-block-add[hidden] { display: none !important; }
     #ichc-gif-block-add input {
         flex: 1 1 auto !important;
         min-width: 0 !important;
-        background: #111214 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-bg) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 6px !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         font-size: 11px !important;
         padding: 6px 8px !important;
         outline: none !important;
     }
-    #ichc-gif-block-add input:focus { border-color: rgba(255,255,255,0.16) !important; }
+    #ichc-gif-block-add input:focus { border-color: rgba(var(--ichc-tint-rgb),0.16) !important; }
     #ichc-gif-block-add button {
         flex-shrink: 0 !important;
         padding: 5px 10px !important;
         border-radius: 6px !important;
-        background: #5865f2 !important;
-        color: #fff !important;
+        background: var(--ichc-accent) !important;
+        color: var(--ichc-text-strong) !important;
         font-size: 11px !important;
         font-weight: 700 !important;
         border: 0 !important;
         cursor: pointer !important;
         transition: background 0.12s !important;
     }
-    #ichc-gif-block-add button:hover { background: #4752c4 !important; }
+    #ichc-gif-block-add button:hover { background: var(--ichc-accent-hover) !important; }
     #ichc-gif-grid.ichc-blocked-list {
         display: flex !important;
         flex-direction: column !important;
@@ -6339,14 +6980,14 @@
         border-radius: 6px !important;
         min-height: 36px !important;
     }
-    .ichc-blocked-row:hover { background: rgba(255,255,255,0.04) !important; }
+    .ichc-blocked-row:hover { background: rgba(var(--ichc-tint-rgb),0.04) !important; }
     .ichc-blocked-thumb {
         width: 28px !important;
         height: 28px !important;
         object-fit: cover !important;
         border-radius: 4px !important;
         flex-shrink: 0 !important;
-        background: rgba(255,255,255,0.06) !important;
+        background: rgba(var(--ichc-tint-rgb),0.06) !important;
     }
     .ichc-blocked-label {
         flex: 1 1 auto !important;
@@ -6355,7 +6996,7 @@
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
         font-size: 11px !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
     }
     .ichc-blocked-unblock-btn {
         flex-shrink: 0 !important;
@@ -6364,7 +7005,7 @@
         border-radius: 4px !important;
         border: 0 !important;
         background: transparent !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 14px !important;
         line-height: 1 !important;
         cursor: pointer !important;
@@ -6379,7 +7020,7 @@
         padding: 20px 8px !important;
         text-align: center !important;
         font-size: 11px !important;
-        color: #80848e !important;
+        color: var(--ichc-text-muted) !important;
         line-height: 1.5 !important;
     }
     /* light theme overrides for blocked tab */
@@ -6396,8 +7037,8 @@
     #ichc-scroll-indicator {
         position: fixed !important;
         transform: translateX(-50%) !important;
-        background: #5865f2 !important;
-        color: #fff !important;
+        background: var(--ichc-accent) !important;
+        color: var(--ichc-text-strong) !important;
         font-size: 12px !important;
         font-weight: 700 !important;
         padding: 5px 16px !important;
@@ -6413,7 +7054,7 @@
         letter-spacing: 0.01em !important;
     }
     #ichc-scroll-indicator:hover {
-        background: #4752c4 !important;
+        background: var(--ichc-accent-hover) !important;
         box-shadow: 0 4px 18px rgba(0,0,0,0.65) !important;
     }
     #ichc-scroll-indicator[hidden] { display: none !important; }
@@ -6441,7 +7082,7 @@
         transition: color 0.12s, background 0.12s !important;
     }
     #ichc-gif-toggle-btn:hover {
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         background: transparent !important;
     }
     #ichc-gif-toggle-btn svg {
@@ -6476,16 +7117,16 @@
         position: absolute !important; inset: 0 !important;
         display: flex !important; align-items: center !important; justify-content: center !important;
         font-size: 20px !important; line-height: 1 !important;
-        border: 1px solid rgba(255,255,255,0.10) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
         border-radius: 7px !important;
-        background: rgba(255,255,255,0.05) !important;
+        background: rgba(var(--ichc-tint-rgb),0.05) !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
         user-select: none !important;
     }
     #ichc-gif-toggle-btn:hover .ichc-gif-cube-face {
-        border-color: rgba(255,255,255,0.20) !important;
-        background: rgba(255,255,255,0.10) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.20) !important;
+        background: rgba(var(--ichc-tint-rgb),0.10) !important;
     }
     .ichc-gif-cube-face img {
         width: 100% !important; height: 100% !important;
@@ -6504,8 +7145,8 @@
         align-items: center !important;
         gap: 4px !important;
         padding: 6px 8px !important;
-        background: #2b2d31 !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: var(--ichc-surface-4) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
         border-radius: 8px !important;
         box-shadow: 0 4px 16px rgba(0,0,0,0.45) !important;
         z-index: 2147483647 !important;
@@ -6527,8 +7168,8 @@
         overflow: hidden !important;
     }
     .ichc-quickbar-item:hover {
-        background: rgba(255,255,255,0.08) !important;
-        border-color: rgba(255,255,255,0.14) !important;
+        background: rgba(var(--ichc-tint-rgb),0.08) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.14) !important;
     }
     .ichc-quickbar-item img {
         width: 100% !important;
@@ -6689,12 +7330,27 @@
         background: #dde0e4 !important;
     }
 
-    /* Chat log */
-    html.ichc-light-theme #txt {
-        background: #dde0e4 !important;
-        color: #111214 !important;
+    /* Chat log — keyed to the POLARITY marker, not to one palette.
+       ─────────────────────────────────────────────────────────────────────────
+       Why this block has to exist at all: the site emits its own colours inline on
+       <font>/<span>/<b> inside chat rows, and they are chosen for a dark backdrop.
+       On any light background they wash out, so they have to be forcibly overridden
+       — that is what the ugly element list below is for.
+
+       It was previously written against `ichc-light-theme` with that theme's own
+       hardcoded greys baked in, so Rosé Pine Dawn (and any future light palette)
+       inherited the dark values and rendered near-white text on a cream background.
+       Values are now tokens, so each light theme states this in its own colours.
+
+       Trade-off worth knowing: forcing a single colour here flattens the per-user
+       chat text colours on light themes. That is pre-existing behaviour, not new —
+       but it is the reason a user's chosen colour "stops working" in light mode. */
+    html.ichc-light-theme #txt,
+    html.ichc-theme-is-light #txt {
+        background: var(--ichc-surface-2) !important;
+        color: var(--ichc-text-bright) !important;
     }
-    /* Beat the dark-theme broad rule (#txt font/span/td etc → #d4dde7 !important) */
+    /* Beat the dark-theme broad rule (#txt font/span/td etc → var(--ichc-text)) */
     html.ichc-light-theme #txt font,
     html.ichc-light-theme #txt span,
     html.ichc-light-theme #txt b,
@@ -6702,22 +7358,39 @@
     html.ichc-light-theme #txt td,
     html.ichc-light-theme #txt tr,
     html.ichc-light-theme #txt p,
-    html.ichc-light-theme #txt li { color: #111214 !important; }
+    html.ichc-light-theme #txt li,
+    html.ichc-theme-is-light #txt font,
+    html.ichc-theme-is-light #txt span,
+    html.ichc-theme-is-light #txt b,
+    html.ichc-theme-is-light #txt div,
+    html.ichc-theme-is-light #txt td,
+    html.ichc-theme-is-light #txt tr,
+    html.ichc-theme-is-light #txt p,
+    html.ichc-theme-is-light #txt li { color: var(--ichc-text-bright) !important; }
     /* Force userlink nicks dark — dark theme sets var(--ichc-chat-name-color) */
     html.ichc-light-theme #txt a.userlink,
     html.ichc-light-theme #txt a[data-ichc-chat-nick="1"],
     html.ichc-light-theme #txt a.userlink:visited,
-    html.ichc-light-theme #txt a[data-ichc-chat-nick="1"]:visited { color: #4752c4 !important; }
-    html.ichc-light-theme #txt a:not(.userlink):not([data-ichc-chat-nick]) { color: #5865f2 !important; }
-    html.ichc-light-theme #txt > table,
-    html.ichc-light-theme #txt > div,
-    html.ichc-light-theme #txt > p,
-    html.ichc-light-theme #txt .line {
-        background: rgba(180,185,194,0.35) !important;
-        border-color: rgba(0,0,0,0.06) !important;
-    }
+    html.ichc-light-theme #txt a[data-ichc-chat-nick="1"]:visited,
+    html.ichc-theme-is-light #txt a.userlink,
+    html.ichc-theme-is-light #txt a[data-ichc-chat-nick="1"],
+    html.ichc-theme-is-light #txt a.userlink:visited,
+    html.ichc-theme-is-light #txt a[data-ichc-chat-nick="1"]:visited { color: var(--ichc-accent-hover) !important; }
+    html.ichc-light-theme #txt a:not(.userlink):not([data-ichc-chat-nick]),
+    html.ichc-theme-is-light #txt a:not(.userlink):not([data-ichc-chat-nick]) { color: var(--ichc-accent) !important; }
+    /* ...but nothing inside a nick anchor. chat.js writes the user's readable-on-light
+       colour onto the anchor itself; the broad element rule above carries an ID so it
+       outweighs a bare inherit, and a nick wrapped in <b>/<span> would otherwise flatten
+       to body text and lose the per-user colour entirely. Specificity here is
+       deliberately one class higher so inheritance wins. */
+    html.ichc-light-theme #txt a.userlink *,
+    html.ichc-light-theme #txt a[data-ichc-chat-nick="1"] *,
+    html.ichc-theme-is-light #txt a.userlink *,
+    html.ichc-theme-is-light #txt a[data-ichc-chat-nick="1"] * { color: inherit !important; }
     html.ichc-light-theme #txt .ichc-chat-event,
-    html.ichc-light-theme #txt .ichc-chat-event * { color: #5c5f66 !important; }
+    html.ichc-light-theme #txt .ichc-chat-event *,
+    html.ichc-theme-is-light #txt .ichc-chat-event,
+    html.ichc-theme-is-light #txt .ichc-chat-event * { color: var(--ichc-text-muted) !important; }
 
     /* Input row */
     html.ichc-light-theme #ichc-input-row {
@@ -6739,14 +7412,16 @@
     html.ichc-light-theme #ichc-send-btn:hover { background: #4752c4 !important; }
 
     /* Cams area */
+    /* No cam-stage colours here on purpose. The stage follows the palette via the
+       base rules (#cams is transparent, tiles use --ichc-surface/--ichc-bg), so every
+       theme gets its own backdrop behind the cams. This block previously pinned it to
+       #c8ccd2 with #b8bbbe tiles, which is the one thing it must not do — a hardcoded
+       grey is not "the light theme", it is a fifth colour scheme fighting the other
+       five. Borders come from the tint token so they darken on light palettes instead
+       of going white. */
     html.ichc-light-theme #cams,
     html.ichc-light-theme #ichc-cams-panel {
-        background: #c8ccd2 !important;
         border: none !important;
-    }
-    html.ichc-light-theme #cams .rounded_square {
-        background: #b8bbbe !important;
-        border: 1px solid #a8adb6 !important;
     }
     html.ichc-light-theme #cams .cam_overlay,
     html.ichc-light-theme #cams .cam_overlay * { color: #313338 !important; }
@@ -6763,34 +7438,88 @@
     html.ichc-light-theme .ichc-cam-resume-msg { color: #5c6070 !important; }
 
     /* User list panel */
-    html.ichc-light-theme #ichc-userlist,
-    html.ichc-light-theme #ichc-ul-inner {
-        background: #dde0e4 !important;
+    /* Light palettes get an explicitly darker userlist than the page behind it.
+       #ichc-userlist has no background of its own in the base rules, so on a light
+       theme the page showed straight through and the panel read as one flat sheet with
+       the chat. surface-4 is the darkest step in each palette's surface ramp, so this
+       stays in-theme rather than reintroducing a hardcoded grey. Keyed to the polarity
+       marker so every light theme gets it. */
+    /* ── Light theme: the userlist is deliberately DARK ──────────────────────────
+       Re-declaring the palette on #ichc-userlist is the whole mechanism. Custom
+       properties inherit, so every token-driven rule inside the panel — rows, karma,
+       section rules, scrollbar, search box — picks up the dark ramp with no extra
+       selectors. --ichc-tint-rgb flips back to white here too, otherwise all the hover
+       fills and hairlines inside would stay black-on-dark and vanish.
+       Only `ichc-light-theme` gets this; Dawn and Paper keep light userlists via the
+       surface-4 rule below. */
+    html.ichc-light-theme #ichc-userlist {
+        --ichc-bg:            #111214;
+        --ichc-bg-rgb:        17,18,20;
+        --ichc-surface:       #18191c;
+        --ichc-surface-2:     #1e2024;
+        --ichc-surface-3:     #25272b;
+        --ichc-surface-4:     #2d2f34;
+        --ichc-border:        #36383d;
+        --ichc-surface-rgb:   24,25,28;
+        --ichc-text-faint:    #4e5058;
+        --ichc-text-muted:    #80848e;
+        --ichc-text-dim:      #9ca3af;
+        --ichc-text-3:        #b5bac1;
+        --ichc-text-2:        #c9cdd2;
+        --ichc-text:          #dbdee1;
+        --ichc-text-bright:   #f2f3f5;
+        --ichc-text-strong:   #ffffff;
+        --ichc-tint-rgb:      255,255,255;
+        --ichc-accent:        #5865f2;
+        --ichc-accent-soft:   #7289da;
+        --ichc-accent-hover:  #4752c4;
+        --ichc-sec-cam:       #6cbf8a;
+        --ichc-sec-active:    #7289da;
+        background: var(--ichc-surface) !important;
+        color: var(--ichc-text) !important;
+        border-left: 1px solid rgba(0,0,0,0.18) !important;
+    }
+
+    /* Must repeat #ichc-chat-shell: the expanded-state rule
+       `#ichc-chat-shell:not(.ichc-ul-collapsed) #ichc-userlist` carries TWO ids and
+       outweighs any single-id selector, so a rule without it is silently ignored.
+       (That is exactly why the plain rule below was not taking effect.) */
+    html.ichc-theme-is-light:not(.ichc-light-theme) #ichc-chat-shell:not(.ichc-ul-collapsed) #ichc-userlist {
+        background: var(--ichc-surface-4) !important;
+    }
+    html.ichc-theme-is-light:not(.ichc-light-theme) #ichc-userlist,
+    html.ichc-theme-is-light:not(.ichc-light-theme) #ichc-ul-inner {
+        background: var(--ichc-surface-4) !important;
         border: none !important;
-        color: #313338 !important;
+        color: var(--ichc-text) !important;
     }
     html.ichc-light-theme #ichc-ul-filter {
-        background: #d4d7dc !important;
-        border-bottom: 1px solid #b8bbbe !important;
-        color: #313338 !important;
+        background: var(--ichc-surface-2) !important;
+        border-bottom: 1px solid var(--ichc-border) !important;
+        color: var(--ichc-text) !important;
     }
     html.ichc-light-theme #ichc-ul-filter-input {
-        background: #c8ccd2 !important;
-        border: 1px solid #a8adb6 !important;
-        color: #313338 !important;
+        background: var(--ichc-surface-3) !important;
+        border: 1px solid var(--ichc-border) !important;
+        color: var(--ichc-text) !important;
     }
     html.ichc-light-theme #ichc-userlist .ichc-ul-user:hover {
-        background: #cdd0d6 !important;
+        background: rgba(var(--ichc-tint-rgb),0.08) !important;
     }
-    html.ichc-light-theme #ichc-userlist .ichc-ul-username { color: #313338 !important; }
+    html.ichc-light-theme #ichc-userlist .ichc-ul-username { color: var(--ichc-text) !important; }
     html.ichc-light-theme #ichc-userlist .ichc-ul-username.ichc-ul-mod { color: #c27c0e !important; }
     /* Username text (current redesign) — presence states default to light colors
        for dark mode; flip them dark for light mode. */
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, #313338) !important; }
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user.cammed .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, #1b1d21) !important; }
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user.cammed.ichc-ul-hidden-live .ichc-ul-user-name { color: #6b7280 !important; }
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user.mod .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, #4752c4) !important; }
-    html.ichc-light-theme #ichc-userlist .ichc-ul-user.idle .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, #9298a4) !important; }
+    /* Light-polarity themes read a name's readable-on-LIGHT variant.
+       `:not(.ichc-light-theme)` matters: that theme's userlist is deliberately dark
+       (see the scoped palette above), so its names must keep the readable-on-DARK
+       variant from the base rules. Without the exclusion every name in it would be
+       dark-on-dark. Dawn and Paper, whose userlists really are light, still match. */
+    html.ichc-theme-is-light:not(.ichc-light-theme) #ichc-userlist .ichc-ul-user:not(.idle):not(.cammed) .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, var(--ichc-text)) !important; }
+    html.ichc-theme-is-light:not(.ichc-light-theme) #ichc-userlist .ichc-ul-user.cammed .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, var(--ichc-text-bright)) !important; }
+    html.ichc-theme-is-light:not(.ichc-light-theme) #ichc-userlist .ichc-ul-user.cammed.ichc-ul-hidden-live .ichc-ul-user-name { color: var(--ichc-text-muted) !important; }
+    html.ichc-theme-is-light:not(.ichc-light-theme) #ichc-userlist .ichc-ul-user.mod .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, var(--ichc-accent-soft)) !important; }
+    html.ichc-theme-is-light:not(.ichc-light-theme) #ichc-userlist .ichc-ul-user.idle .ichc-ul-user-name { color: var(--ichc-ul-name-color-lt, var(--ichc-text-faint)) !important; }
     html.ichc-light-theme .ichc-wc-nick {
         background: rgba(0,0,0,0.05) !important;
         color: #313338 !important;
@@ -6800,8 +7529,8 @@
     html.ichc-light-theme #ichc-userlist .ichc-ul-dot-online { background: #3ba55c !important; }
     html.ichc-light-theme #ichc-userlist .ichc-ul-dot-cam { background: #5865f2 !important; }
     html.ichc-light-theme #ichc-userlist .ichc-ul-section-header {
-        color: #4e5058 !important;
-        border-bottom: 1px solid #b8bbbe !important;
+        color: var(--ichc-text-3) !important;
+        border-bottom: 1px solid var(--ichc-border) !important;
     }
 
     /* Cog button in header — light theme */
@@ -6871,8 +7600,8 @@
     .ichc-tc-popup {
         position: fixed !important;
         z-index: 2147483646 !important;
-        background: #1e2024 !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: var(--ichc-surface-2) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
         border-radius: 8px !important;
         box-shadow: 0 4px 20px rgba(0,0,0,0.55) !important;
         overflow: hidden !important;
@@ -6889,7 +7618,7 @@
         gap: 8px !important;
         padding: 5px 10px !important;
         cursor: pointer !important;
-        color: #dbdee1 !important;
+        color: var(--ichc-text) !important;
         user-select: none !important;
     }
     .ichc-tc-item:hover,
@@ -6912,7 +7641,7 @@
         vertical-align: middle !important;
     }
     .ichc-tc-label {
-        color: #b5bac1 !important;
+        color: var(--ichc-text-3) !important;
         font-size: 12px !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -6991,21 +7720,21 @@
         line-height: 1.35 !important;
     }
     #txt .ichc-history-ts {
-        color: #6f757e !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 10px !important;
         margin-right: 5px !important;
     }
     #txt .ichc-history-nick {
         font-weight: 700 !important;
-        color: #9aa3b2 !important;
+        color: var(--ichc-text-dim) !important;
         margin-right: 5px !important;
     }
-    #txt .ichc-history-body { color: #aab2bd !important; }
+    #txt .ichc-history-body { color: var(--ichc-text-3) !important; }
     #txt .ichc-history-divider {
         margin: 3px 0 4px !important;
         padding-top: 3px !important;
-        border-top: 1px dashed rgba(255,255,255,0.10) !important;
-        color: #6f757e !important;
+        border-top: 1px dashed rgba(var(--ichc-tint-rgb),0.10) !important;
+        color: var(--ichc-text-muted) !important;
         font-size: 10px !important;
         text-align: center !important;
         letter-spacing: 0.02em !important;
@@ -7076,7 +7805,7 @@
         position: absolute !important;
         inset: 0 !important;
         border-radius: 7px !important;
-        background: rgba(255,255,255,0.04) !important;
+        background: rgba(var(--ichc-tint-rgb),0.04) !important;
         -webkit-backdrop-filter: blur(4px) saturate(140%) !important;
         backdrop-filter: blur(4px) saturate(140%) !important;
         pointer-events: none !important;
@@ -7176,8 +7905,8 @@
     ── */
     #ichc-chat-shell:not(.ichc-ul-collapsed) #ichc-userlist {
         grid-row: 1 / -1 !important;
-        background: #212328 !important;
-        border-left: 1px solid rgba(255,255,255,0.05) !important;
+        background: var(--ichc-surface-2) !important;
+        border-left: 1px solid rgba(var(--ichc-tint-rgb),0.05) !important;
     }
     /* The row keeps its original columns (1fr / emote 40px / more 32px) and the
        edit box spans the first two, stretching across the userlist column as it
@@ -7190,7 +7919,7 @@
         background: rgba(40,42,49,0.30) !important;
         -webkit-backdrop-filter: blur(8px) saturate(140%) brightness(1.10) !important;
         backdrop-filter: blur(8px) saturate(140%) brightness(1.10) !important;
-        border-top: 1px solid rgba(255,255,255,0.12) !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
     }
     /* Edit box: square, shadow pressed *inward* so it reads as recessed into the
        glass. --ichc-box-sx/sy are rewritten by _initInputShadowFollow() in
@@ -7213,12 +7942,12 @@
     #ichc-input-row #txtMsg {
         height: 100% !important;
         border-radius: 0 !important;
-        background-color: rgba(255,255,255,0.05) !important;
+        background-color: rgba(var(--ichc-tint-rgb),0.05) !important;
         background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='140'%20height='140'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='1.05'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='140'%20height='140'%20filter='url(%23n)'%20opacity='0.14'/%3E%3C/svg%3E") !important;
         background-repeat: repeat !important;
         background-size: 140px 140px !important;
         background-blend-mode: soft-light !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
         box-shadow: inset var(--ichc-box-sx, 2px) var(--ichc-box-sy, 2px) 7px rgba(0,0,0,0.34),
                     inset calc(var(--ichc-box-sx, 2px) * 0.6) calc(var(--ichc-box-sy, 2px) * 0.6) 3px rgba(0,0,0,0.24),
                     inset calc(var(--ichc-box-sx, 2px) * 0.3) calc(var(--ichc-box-sy, 2px) * 0.3) 1px rgba(0,0,0,0.20),
@@ -7226,7 +7955,7 @@
         transition: box-shadow 140ms ease-out !important;
     }
     #ichc-input-row #txtMsg:focus {
-        border-color: var(--ichc-input-border, #5865f2) !important;
+        border-color: var(--ichc-input-border, var(--ichc-accent)) !important;
         box-shadow: inset var(--ichc-box-sx, 2px) var(--ichc-box-sy, 2px) 7px rgba(0,0,0,0.34),
                     inset calc(var(--ichc-box-sx, 2px) * 0.6) calc(var(--ichc-box-sy, 2px) * 0.6) 3px rgba(0,0,0,0.24),
                     inset calc(var(--ichc-box-sx, 2px) * 0.3) calc(var(--ichc-box-sy, 2px) * 0.3) 1px rgba(0,0,0,0.20),
@@ -7244,8 +7973,8 @@
         box-shadow: none !important;
     }
     html.ichc-light-theme #ichc-chat-shell:not(.ichc-ul-collapsed) #ichc-userlist {
-        background: #e8eaee !important;
-        border-left: 1px solid rgba(0,0,0,0.05) !important;
+        background: var(--ichc-surface) !important;
+        border-left: 1px solid rgba(0,0,0,0.18) !important;
     }
     html.ichc-light-theme #ichc-input-row {
         background: rgba(220,223,229,0.30) !important;
