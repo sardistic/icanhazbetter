@@ -85,9 +85,115 @@
 
     // ─── JS ──────────────────────────────────────────────────────────────────────
 
+    // ── "Scrolling paused" indicator ────────────────────────────────────────────
+    // The site pauses chat auto-scroll as soon as you scroll away from the bottom
+    // (onChatHistoryScroll -> scrollOff) and announces it in two places, BOTH of
+    // which this extension hides:
+    //
+    //   * #scrollControl swaps to a play icon labelled "Resume Text Window
+    //     Scrolling" — hidden by theme.css and by the hideByIds list in
+    //     modernize.js, because the command bar was moved into the cog menu.
+    //   * #errorMessageDiv is filled with "Scrolling has been paused. &nbsp;
+    //     (Click here to resume scrolling)" — hidden by theme.css in a room.
+    //
+    // So the log stops following new messages, the messages keep arriving, and
+    // nothing on screen says why. That is the "scrolling gets stuck and there is
+    // no way of knowing / the text isn't updating" report. This puts the state
+    // back in our own chrome, and makes resuming one click.
+    const _PAUSE_RE = /scrolling has been paused/i;
+    let _pauseBaselineRows = null;
+
+    function _scrollPauseSource() { return document.getElementById('errorMessageDiv'); }
+
+    function _siteScrollPaused() {
+        const el = _scrollPauseSource();
+        return !!el && _PAUSE_RE.test(el.textContent || '');
+    }
+
+    function _resumeSiteScroll() {
+        // cR() is the site's own resume: it restores the pause icon, sets du.eo=1
+        // and scrolls to the bottom. Calling it is better than faking a scroll,
+        // because it also clears the state that made it stop following.
+        runInPageContext("(() => { try { if (typeof cR === 'function') { cR(); } } catch (e) {} })();");
+        const log = getChatLog();
+        if (log) { log.scrollTop = log.scrollHeight; }
+        _pauseBaselineRows = null;
+        _syncScrollPausePill();
+    }
+
+    function _ensureScrollPausePill() {
+        let pill = document.getElementById('ichc-scroll-paused');
+        if (pill) { return pill; }
+        const host = document.getElementById('chat_container') || getChatLog()?.parentElement;
+        if (!host) { return null; }
+        pill = document.createElement('button');
+        pill.type = 'button';          // inside the ASP.NET form; must not submit
+        pill.id = 'ichc-scroll-paused';
+        pill.hidden = true;
+        pill.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            _resumeSiteScroll();
+        });
+        host.appendChild(pill);
+        return pill;
+    }
+
+    function _syncScrollPausePill() {
+        const pill = _ensureScrollPausePill();
+        if (!pill) { return; }
+        const log = getChatLog();
+        const paused = _siteScrollPaused();
+
+        // Scrolled back to the bottom by hand: the site resumes itself, so the
+        // pill should not linger even if its announcement text is still sitting in
+        // #errorMessageDiv.
+        const atBottom = log && (log.scrollHeight - log.scrollTop - log.clientHeight) < 60;
+
+        if (!paused || atBottom) {
+            pill.hidden = true;
+            _pauseBaselineRows = null;
+            return;
+        }
+
+        if (_pauseBaselineRows === null) { _pauseBaselineRows = log ? log.children.length : 0; }
+        const arrived = log ? Math.max(0, log.children.length - _pauseBaselineRows) : 0;
+        pill.textContent = arrived
+            ? 'Scrolling paused — ' + arrived + ' new message' + (arrived === 1 ? '' : 's')
+            : 'Scrolling paused — click to resume';
+        pill.hidden = false;
+    }
+
+    function initScrollPauseIndicator() {
+        const src = _scrollPauseSource();
+        if (!src || src.dataset.ichcPauseWatched === '1') { return; }
+        src.dataset.ichcPauseWatched = '1';
+        // Scoped to that one element — this is not a document-wide observer.
+        new MutationObserver(() => _syncScrollPausePill())
+            .observe(src, { childList: true, characterData: true, subtree: true, attributes: true });
+        const log = getChatLog();
+        if (log) {
+            log.addEventListener('scroll', () => _syncScrollPausePill(), { passive: true });
+        }
+        _syncScrollPausePill();
+    }
+
+    // The report was that this bites most when the window is not focused: messages
+    // keep arriving, the log drifts past the site's 450px threshold, and the next
+    // scroll event trips scrollOff(). By the time the user comes back it is already
+    // paused. Re-checking on focus/visibility means the indicator is on screen the
+    // moment they look at it, rather than waiting for the next mutation.
+    window.addEventListener('focus', () => _syncScrollPausePill());
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) { _syncScrollPausePill(); }
+    });
+
     document.addEventListener('DOMContentLoaded', () => {
         initChatScrollSync();
         initChatHoverHighlight();
+        initScrollPauseIndicator();
+        // #errorMessageDiv may not exist yet on a slow join; the init is idempotent.
+        [1200, 4000].forEach(d => window.setTimeout(initScrollPauseIndicator, d));
 
         // Emote ban/unban via event delegation
         document.addEventListener('click', e => {

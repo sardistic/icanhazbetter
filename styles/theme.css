@@ -8794,3 +8794,42 @@
         }
         html:not(:has(#chat_container)) .page_section_white { padding: 12px !important; }
     }
+
+    /* ── "Scrolling paused" pill ──
+       The site pauses chat auto-scroll on any scroll away from the bottom, and
+       announces it through #scrollControl and #errorMessageDiv — both of which
+       this stylesheet hides, so the log silently stopped following new messages.
+       This is that state, put back where it can be seen and clicked. */
+    #ichc-scroll-paused {
+        position: absolute !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        bottom: calc(var(--ichc-input-height, 50px) + 8px) !important;
+        z-index: 20 !important;
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        max-width: calc(100% - 24px) !important;
+        padding: 5px 12px !important;
+        border-radius: 999px !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.14) !important;
+        background: var(--ichc-accent) !important;
+        color: #fff !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        line-height: 1.2 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        cursor: pointer !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.45) !important;
+        transition: background 0.14s !important;
+    }
+    #ichc-scroll-paused:hover {
+        background: var(--ichc-accent-hover) !important;
+    }
+    #ichc-scroll-paused[hidden] {
+        display: none !important;
+    }
