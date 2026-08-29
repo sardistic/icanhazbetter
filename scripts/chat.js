@@ -3,8 +3,24 @@
 
     // ─── Shared utilities (duplicated from ichc-theme) ───────────────────────────
 
+    // Runs `source` in the PAGE's own JS realm, via the background service worker.
+    //
+    // A previous attempt injected a <script> element directly instead. Do not do
+    // that: this function is reachable at document_start, when <head> does not yet
+    // exist, so the element lands as a child of <html> mid-parse and wrecks the
+    // page. It is reverted.
+    //
+    // What IS kept from that attempt is the engine guard. Firefox's `chrome.*`
+    // alias is callback-based, so sendMessage returns undefined there and
+    // `.catch()` on the result is a TypeError that aborts the CALLER — the message
+    // is dispatched (the call precedes the property access), so the damage is to
+    // whatever the caller meant to do next, silently.
     function runInPageContext(source) {
-        chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
+        try {
+            const api = (typeof browser !== 'undefined' && browser.runtime) ? browser : chrome;
+            const ret = api.runtime.sendMessage({ type: 'ichc-exec', code: source });
+            if (ret && typeof ret.catch === 'function') { ret.catch(() => {}); }
+        } catch (_) {}
     }
 
     const ogPreviewState = {
@@ -71,6 +87,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         initChatScrollSync();
+        initChatHoverHighlight();
 
         // Emote ban/unban via event delegation
         document.addEventListener('click', e => {
@@ -104,6 +121,13 @@
                     const next = _relativeTime(epoch);
                     if (el.textContent !== next) { el.textContent = next; }
                 }
+                // Catch-up for rows whose body changed without a theme pass over
+                // them: applyChatTheme's scope is the inserted node, so text
+                // added to (or an image removed from) an EXISTING row never
+                // re-runs the check there. This ticker already walks exactly the
+                // rows that can be affected.
+                const owner = el.closest('.ichc-row-ts');
+                if (owner) { _syncTsOnlyRow(owner); }
             });
         }, 5000);
     });
@@ -456,6 +480,80 @@
         return [...rows];
     }
 
+    // ── Rows that are nothing but a timestamp ────────────────────────────────
+    // The chat log accumulates rows with no message left in them: the site
+    // builds some rows it never fills, a failed emote image removes itself
+    // (`img.onerror`), and several of our own passes hide a row's body in place
+    // (cam-offer intercept, an event whose node was nested inside the row).
+    // They still carry their timestamp.
+    //
+    // Such a row used to collapse to zero height and paint its label over the
+    // row below — that is the "stray timestamp on top of a real message" report.
+    // The fix for that gave every `.ichc-row-ts` a line box, which turned each
+    // one into a blank 15px line with a time on the right instead: the "random
+    // spacing". Neither is wanted. A timestamp with no message has nothing to
+    // say, so the whole row goes.
+    //
+    // Ignored when deciding "empty": the timestamp itself, the chrome we inject
+    // regardless of content (reply button, year badge), and `.ichc-nick-repeat`
+    // — the wrapper `_updateGroupNickWrap` puts around the REPEATED nick on a
+    // grouped continuation row, which theme.css hides outright. A live row dump
+    // showed why that one matters: the blank rows in a busy room are grouped
+    // continuation rows whose entire content is
+    //     <font class="ichc-ts">1m ago</font>
+    //     <span class="ichc-nick-repeat"><a class="userlink">nick</a>: </span>
+    //     <button class="ichc-reply-btn">
+    // — a hidden nick, a timestamp, and our own button. Counting the hidden nick
+    // as a message body is what let those rows through the first version of this
+    // check. An image, an emote, or any other text is a real body.
+    const _TS_ROW_IGNORE = '.ichc-ts, .ichc-reply-btn, .ichc-chat-year-badge, .ichc-year-badge-img, .ichc-nick-sep, .ichc-nick-repeat';
+    const _TS_ROW_MEDIA = 'img, video, canvas, iframe, object, embed, svg, audio';
+
+    // Bounded at the row: `closest()` would escape past it and read ancestors
+    // that have nothing to do with this row's content.
+    function _tsRowContentIgnored(el, row) {
+        for (let n = el; n && n !== row; n = n.parentElement) {
+            if (n.matches?.(_TS_ROW_IGNORE)) { return true; }
+            // Several passes hide a row's body IN PLACE with an inline
+            // display:none (condensed join/leave on a nested node, the cam-offer
+            // intercept). Such a row is just as empty on screen. The inline
+            // value is read rather than the computed one deliberately: this runs
+            // over every text node of every timestamped row on a 5s ticker, and
+            // getComputedStyle would force style resolution each time.
+            if (n.style?.display === 'none') { return true; }
+        }
+        return false;
+    }
+
+    function _rowIsTimestampOnly(row) {
+        for (const el of row.querySelectorAll(_TS_ROW_MEDIA)) {
+            if (!_tsRowContentIgnored(el, row)) { return false; }
+        }
+        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            if (!node.textContent.trim()) { continue; }
+            if (_tsRowContentIgnored(node.parentElement, row)) { continue; }
+            return false;
+        }
+        return true;
+    }
+
+    // Only rows that own the out-of-flow timestamp slot can produce the blank
+    // line, so only those are tested. Written as an attribute consumed by a
+    // static rule in theme.css, and only on change — the chat observer watches
+    // childList, so attribute writes do not re-enter it, but a no-op write is
+    // still a style invalidation on every pass.
+    function _syncTsOnlyRow(row) {
+        if (!row.classList.contains('ichc-row-ts')) {
+            if (row.dataset.ichcTsOnly) { delete row.dataset.ichcTsOnly; }
+            return;
+        }
+        const only = _rowIsTimestampOnly(row);
+        if (only === (row.dataset.ichcTsOnly === '1')) { return; }
+        if (only) { row.dataset.ichcTsOnly = '1'; } else { delete row.dataset.ichcTsOnly; }
+    }
+
     function isLightTheme() {
         // Polarity, not a specific palette: `ichc-theme-is-light` is set by
         // applyTheme() in modernize.js for every light-background theme. The
@@ -509,6 +607,12 @@
         getScopedChatElements(root, 'font[color], [style*="color"]').forEach(node => {
             if (node.matches?.('a.userlink')) { return; }
             const color = extractInlineColor(node);
+
+            // NOTE: message bodies are deliberately NOT painted with the sender's
+            // chosen colour. That was tried and reverted on request — it made every
+            // message text and nick take the picked colour, which is not wanted.
+            // The flattening rule in theme.css stays, and only unreadable colours
+            // are corrected, as below.
             if (lightMode) {
                 // In light mode: light-colored text → force dark so it's readable.
                 if (color && !isDarkChatColor(color)) {
@@ -603,12 +707,24 @@
                     }
                 });
 
-                // A right-floated box is placed on the line it is encountered on, not
-                // necessarily the first one — so a timestamp appearing after the message
-                // text drops to a lower line and reads as sitting inside the message.
-                // Hoisting it to the front of the row pins it to the top right.
+                // Non-table timestamps are positioned out of flow (see
+                // `#txt .ichc-ts:not(td)` in theme.css) — the label is rewritten on a
+                // 5s ticker and changes width, so anything in flow beside it re-wraps
+                // the message. `ichc-row-ts` is what reserves the gutter, and only rows
+                // that really carry one get it. The hoist to first child is kept so the
+                // element still reads (and renders, if the rule ever fails to apply)
+                // ahead of the message rather than buried inside it.
                 const tsEl = row.querySelector(':scope > .ichc-ts:not(td)');
                 if (tsEl && row.firstChild !== tsEl) { row.insertBefore(tsEl, row.firstChild); }
+                // Exactly ONE element may own the slot. getChatRowsInScope() counts every
+                // nested table/div/p/ul as a row too, so a plain `contains a timestamp`
+                // test marks an outer row AND the inner wrappers inside it — each one
+                // then reserves its own 64px gutter and the innermost becomes the
+                // timestamp's containing block, pulling it away from the row's right
+                // edge. The owner is the outermost chat row the timestamp sits in.
+                const tsAny = row.querySelector('.ichc-ts:not(td)');
+                const tsOwner = tsAny ? (tsAny.closest('#txt > *') || tsAny.closest('.line')) : null;
+                row.classList.toggle('ichc-row-ts', !!tsOwner && tsOwner === row);
 
                 if (tsFound) {
                     row.dataset.ichcTsHidden = '1';
@@ -618,6 +734,12 @@
                     row.dataset.ichcTsTries = String(_tsTries + 1);
                 }
             }
+
+            // Deliberately OUTSIDE the guard above, which stops running once a
+            // timestamp has been found: a row can lose its body long after it
+            // was themed (a failed emote image removes itself) and can equally
+            // gain one a tick later, so this has to be re-decided every pass.
+            _syncTsOnlyRow(row);
         });
 
         // Strip inline colors stamped by the font-color loop above so CSS hues on
@@ -726,19 +848,31 @@
     }
 
     function _rowReplySnippet(row, nick) {
-        let text = (row.textContent || '').replace(/\s+/g, ' ').trim();
+        // Read a CLONE with our own furniture removed. Reading row.textContent
+        // directly swept up everything the extension had injected into the row —
+        // the relative timestamp, the year badge, and the reply button's own "↩"
+        // glyph, since the button is a child of the row it is attached to. On a
+        // grouped continuation row the nick is inside .ichc-nick-repeat and the
+        // "strip up to the nick" step below finds nothing to strip, so the
+        // timestamp stayed on the front of the snippet: the stray character in
+        // front of the quoted text.
+        const clone = row.cloneNode(true);
+        clone.querySelectorAll(_TS_ROW_IGNORE + ', .ichc-og-card, .ichc-emote-ban-btn')
+            .forEach(el => el.remove());
+        let text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
         // Strip a leading "nick" / "nick:" prefix so the snippet is just the message.
         const lower = text.toLowerCase();
         const idx = lower.indexOf(nick.toLowerCase());
         if (idx !== -1 && idx < 40) {
             text = text.slice(idx + nick.length).replace(/^[\s:]+/, '');
         }
-        return text.slice(0, 80);
+        return text.replace(/^[\s:\u21a9]+/, '').slice(0, 80);
     }
 
     function _ensureReplyButton(row, nick) {
         if (row.querySelector(':scope > .ichc-reply-btn')) { return; }
         const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = 'ichc-reply-btn';
         btn.title = 'Reply to ' + nick;
         btn.textContent = '↩';
@@ -766,11 +900,16 @@
         const input = _getMsgInput();
         if (input) {
             _wireReplyInput(input);
-            const mention = '@' + nick + ' ';
             const start = input.selectionStart ?? input.value.length;
             const end = input.selectionEnd ?? input.value.length;
             const v = input.value;
-            input.value = v.slice(0, start) + mention + v.slice(end);
+            const before = v.slice(0, start);
+            // Separate from whatever is already typed, the same way the emote and
+            // gif inserts do — without this, replying mid-sentence produced
+            // "hello@nick ".
+            const sep = before && !/\s$/.test(before) ? ' ' : '';
+            const mention = sep + '@' + nick + ' ';
+            input.value = before + mention + v.slice(end);
             const pos = start + mention.length;
             input.focus();
             try { input.setSelectionRange(pos, pos); } catch (_) {}
@@ -810,12 +949,65 @@
         }
 
         const close = document.createElement('button');
+        close.type = 'button';
         close.className = 'ichc-reply-bar-close';
         close.textContent = '×';
         close.title = 'Cancel reply';
         close.addEventListener('click', _clearReply);
 
         bar.append(label, close);
+    }
+
+    function _chatNickKey(raw) {
+        // The room commonly includes the separator inside the author anchor
+        // (`<a>nick:</a>`), while an @mention link contains `@nick`. Both must
+        // collapse to the same selector key or target rows can never match.
+        let value = String(raw || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+        try { value = value.normalize('NFKC'); } catch (_) {}
+        return value.toLowerCase()
+            .replace(/^\s*@\s*/, '')
+            .replace(/\s*[:,.!?'\"]+\s*$/, '')
+            .trim();
+    }
+
+    function _chatAuthorAnchor(row) {
+        const links = [...row.querySelectorAll('a.userlink, a[data-ichc-chat-nick]')];
+        // Mentions can carry the same classes/processed marker as the sender.
+        // The sender is the leading non-@ link followed by the message separator.
+        return links.find(a => {
+            const text = (a.textContent || '').trim();
+            if (!text || text.startsWith('@')) { return false; }
+            if (/[:：]\s*$/.test(text)) { return true; }
+            const next = a.nextSibling;
+            return next?.nodeType === Node.TEXT_NODE && /^\s*[:：]/.test(next.textContent || '');
+        }) || links.find(a => !/^\s*@/.test(a.textContent || '')) || null;
+    }
+
+    function _rowNickKey(row) {
+        // Stamp first, anchor second. reGroupChatRows writes `data-ichc-nick` from
+        // the very same canonicalizer, so for a stamped row the two agree by
+        // construction — and the stamp additionally carries the INHERITED nick on
+        // a grouped continuation row that has no anchor of its own.
+        //
+        // The order matters for cost, not just correctness: _applyHoverHighlight
+        // asks this of every row in the log on each hover change, and the anchor
+        // path runs a querySelectorAll plus two scans per row. At a capped 1,600
+        // rows that was a full-log DOM query storm on every row the pointer
+        // crossed, so chat hovering got heavier as the log filled up. An
+        // attribute read costs nothing; unstamped rows still fall through to the
+        // anchor, which is the case the stamp cannot cover.
+        const stamped = _chatNickKey(row?.dataset?.ichcNick || '');
+        if (stamped) { return stamped; }
+        return _chatNickKey(_chatAuthorAnchor(row)?.textContent || '');
+    }
+
+    function _hoverChatRow(target) {
+        if (!(target instanceof Element)) { return null; }
+        // `.line` is the semantic row when present. The direct-child fallbacks
+        // cover the table/p/div/ul/li forms used across room revisions, whether
+        // or not reGroupChatRows managed to stamp them beforehand.
+        return target.closest('#txt .line') ||
+            target.closest('#txt > table, #txt > div, #txt > p, #txt > ul, #txt > li');
     }
 
     function reGroupChatRows(log, tailCount = 0) {
@@ -837,8 +1029,8 @@
             row.classList.contains('ichc-bcast-event') ||
             row.classList.contains('ichc-event-collector');
         const explicitNick = row => {
-            const nickEl = row.querySelector('a.userlink, a[data-ichc-chat-nick]');
-            return nickEl ? nickEl.textContent.trim().toLowerCase() : '';
+            const nickEl = _chatAuthorAnchor(row);
+            return nickEl ? _chatNickKey(nickEl.textContent) : '';
         };
 
         // Seed inheritance for a tail-only pass. Native continuation rows can omit
@@ -872,9 +1064,17 @@
         rows.forEach((row, i) => {
             const nick = nickOf.get(row);
             if (!nick) {
+                delete row.dataset.ichcNick;
                 _updateGroupNickWrap(row, false);
                 return;
             }
+            // Author identity, for the hover highlight. This loop is the right
+            // place for it: `nickOf` already carries the INHERITED nick for the
+            // native continuation rows that omit the anchor, so a grouped row
+            // lights up with the rest of its author's messages instead of being
+            // left out. Written only on change — the row is inside the observed
+            // chat tree.
+            if (row.dataset.ichcNick !== nick) { row.dataset.ichcNick = nick; }
             _ensureReplyButton(row, nick);
             const prevNick = i > 0 ? nickOf.get(rows[i - 1]) : priorNick;
             const nextNick = i < rows.length - 1 ? nickOf.get(rows[i + 1]) : null;
@@ -885,6 +1085,197 @@
             else if (sameAsNext) { row.classList.add('ichc-chat-group-first'); }
             _updateGroupNickWrap(row, sameAsPrev);
         });
+    }
+
+    // ── Hover highlight: one author's whole conversation, plus who they @'d ───
+    // Hovering a chat row lights every row by the same author, and — in a second
+    // colour — every row by whoever that message is @-ing.
+    //
+    // Rows receive a temporary data attribute consumed by STATIC rules in
+    // theme.css. Do not return to a generated <style>: Firefox can enforce the
+    // page's inline-style CSP against it even though manifest-injected extension
+    // CSS is allowed, leaving the target identities correct but no rows painted.
+    // The chat observer watches childList only, so attributes do not re-enter it.
+    const _AT_NICK_RE = /@([a-z0-9][a-z0-9._\-]{0,31})/gi;
+    const _HL_MAX_MENTIONS = 4;     // bounds the generated rule; nobody @-s five people
+    let _hlRow = null;
+    let _hlAuthor = '';
+    let _hlMentioned = '';
+    let _hlMentionTokens = [];
+    let _hlRows = [];
+    let _hlPaintedRows = [];
+    let _hlFrame = 0;
+
+    function _mentionedNicksIn(row, author) {
+        const found = [];
+        const tokens = [];
+        const add = (raw, token = null) => {
+            const nick = _chatNickKey(raw);
+            if (!nick || nick === author || found.includes(nick)) { return false; }
+            found.push(nick);
+            if (token) { tokens.push(token); }
+            return found.length >= _HL_MAX_MENTIONS;
+        };
+
+        // 1. Nick ANCHORS. The site renders an @mention as a link, exactly like the
+        //    author's own name — so a text-node-only scan that skipped `a` (which is
+        //    what the first version did, to avoid re-reading the author) found
+        //    nothing at all in a real room. The author is excluded by name instead,
+        //    which also covers a grouped row whose anchor is wrapped away.
+        const links = row.querySelectorAll('a');
+        for (const a of links) {
+            if (a.closest('.ichc-og-card')) { continue; }   // link preview, not a nick
+            const text = (a.textContent || '').trim();
+            const isNickLink = a.classList.contains('userlink') ||
+                               a.hasAttribute('data-ichc-chat-nick');
+            if (!isNickLink && text.charAt(0) !== '@') { continue; }
+            // `data-ichc-chat-nick` is a boolean marker whose value is always
+            // "1" (see applyChatTheme), not a stored username. Using the dataset
+            // value here generated a selector for a fictional nick named "1", so
+            // linked @mentions never highlighted their target's rows.
+            if (add(text, a)) { return { nicks: found, tokens }; }
+        }
+
+        // 2. Plain-text @nick, for rooms/rows where the site does not linkify.
+        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            // Anchors are handled above; our own furniture never names anyone.
+            if (node.parentElement?.closest('a, .ichc-ts, .ichc-reply-btn, .ichc-og-card')) { continue; }
+            _AT_NICK_RE.lastIndex = 0;
+            let m;
+            while ((m = _AT_NICK_RE.exec(node.textContent)) !== null) {
+                if (add(m[1])) { return { nicks: found, tokens }; }
+            }
+        }
+        return { nicks: found, tokens };
+    }
+
+    function _setMentionTokens(tokens) {
+        // Attribute changes are intentionally used here: the chat observer watches
+        // childList only, so highlighting the handful of linked @names neither
+        // rebuilds message markup nor schedules the arrival/grouping machinery.
+        _hlMentionTokens.forEach(el => {
+            if (el?.dataset) { delete el.dataset.ichcHoverMention; }
+        });
+        _hlMentionTokens = tokens.filter(el => el?.isConnected);
+        _hlMentionTokens.forEach(el => { el.dataset.ichcHoverMention = '1'; });
+    }
+
+    function _applyHoverHighlight() {
+        _hlFrame = 0;
+        _hlPaintedRows.forEach(({ row, background, borderColor }) => {
+            if (!row?.style) { return; }
+            if (background.value) {
+                row.style.setProperty('background', background.value, background.priority);
+            } else {
+                row.style.removeProperty('background');
+            }
+            if (borderColor.value) {
+                row.style.setProperty('border-color', borderColor.value, borderColor.priority);
+            } else {
+                row.style.removeProperty('border-color');
+            }
+        });
+        _hlPaintedRows = [];
+        _hlRows.forEach(row => {
+            if (row?.dataset) { delete row.dataset.ichcHoverRole; }
+        });
+        _hlRows = [];
+
+        const mentioned = _hlMentioned ? _hlMentioned.split(' ') : [];
+        const mentionedSet = new Set(mentioned);
+        let authorMatches = 0;
+        let targetMatches = 0;
+        const log = getChatLog();
+        const rows = new Set();
+        // Pointing at nobody: the undo above is the entire job. Walking the whole
+        // log to confirm that nothing matches '' is pure waste, and this runs on
+        // every pointer move that leaves the chat.
+        if (log && _hlAuthor) {
+            [...log.children].forEach(node => {
+                if (node instanceof HTMLElement) { rows.add(node); }
+            });
+            log.querySelectorAll('.line, [data-ichc-nick]').forEach(row => rows.add(row));
+        }
+        rows.forEach(row => {
+            const key = _rowNickKey(row);
+            const role = key && key === _hlAuthor ? 'author' :
+                (key && mentionedSet.has(key) ? 'target' : '');
+            if (!role) { return; }
+            row.dataset.ichcHoverRole = role;
+            _hlRows.push(row);
+            _hlPaintedRows.push({
+                row,
+                background: {
+                    value: row.style.getPropertyValue('background'),
+                    priority: row.style.getPropertyPriority('background'),
+                },
+                borderColor: {
+                    value: row.style.getPropertyValue('border-color'),
+                    priority: row.style.getPropertyPriority('border-color'),
+                },
+            });
+            // CSSOM writes are a rendering guarantee for the live page. They are
+            // reversible above and preserve any site-owned inline value/priority.
+            row.style.setProperty('background',
+                role === 'target' ? 'var(--ichc-hl-at-bg)' : 'var(--ichc-hl-author-bg)',
+                'important');
+            if (role === 'target') {
+                row.style.setProperty('border-color', 'var(--ichc-hl-at-border)', 'important');
+            }
+            if (role === 'author') { authorMatches++; } else { targetMatches++; }
+        });
+
+        // A tiny live diagnostic, because a real-room mismatch is more useful than
+        // another mock guess. Run `window.__ichcHoverHighlightState` in the content
+        // script console while hovering to see parsed keys and actual match counts.
+        window.__ichcHoverHighlightState = {
+            author: _hlAuthor,
+            mentioned,
+            authorMatches,
+            targetMatches,
+            hoveredText: (_hlRow?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 180),
+        };
+    }
+
+    function _setHoverHighlight(author, mentioned) {
+        const joined = mentioned.join(' ');
+        if (author === _hlAuthor && joined === _hlMentioned) { return; }
+        _hlAuthor = author;
+        _hlMentioned = joined;
+        // Coalesced: a fast sweep across a grouped block would otherwise rewrite
+        // the rule once per row crossed.
+        if (!_hlFrame) { _hlFrame = requestAnimationFrame(_applyHoverHighlight); }
+    }
+
+    function _clearHoverHighlight() {
+        _hlRow = null;
+        _setMentionTokens([]);
+        _setHoverHighlight('', []);
+    }
+
+    function initChatHoverHighlight() {
+        // One delegated listener on the document rather than on #txt: the site
+        // can rebuild the log, and pointer moves anywhere else are exactly the
+        // signal to clear.
+        document.addEventListener('pointerover', e => {
+            const target = e.target;
+            if (!(target instanceof Element)) { return; }
+            const row = _hoverChatRow(target);
+            if (!row) { _clearHoverHighlight(); return; }
+            // Staying inside the same row is the common case — skip the text walk.
+            if (row === _hlRow) { return; }
+            _hlRow = row;
+            const author = _rowNickKey(row);
+            if (!author) { _clearHoverHighlight(); return; }
+            const mentions = _mentionedNicksIn(row, author);
+            _setMentionTokens(mentions.tokens);
+            _setHoverHighlight(author, mentions.nicks);
+        }, true);
+        // Leaving the window fires no further pointerover to clear on.
+        document.addEventListener('pointerleave', _clearHoverHighlight);
+        window.addEventListener('blur', _clearHoverHighlight);
     }
 
     const _PLAIN_IMG_RE = /https?:\/\/[^\s<>"']+\.(?:jpe?g|gif|png|webp)(?:\?[^\s<>"']*)?/gi;
@@ -1051,7 +1442,11 @@
         if (ogPreviewState.inflight.has(url)) { return ogPreviewState.inflight.get(url); }
 
         const request = enqueueOgFetch(() =>
-            chrome.runtime.sendMessage({ type: 'ichc-og-fetch', url })
+            // Same engine difference as runInPageContext: `chrome.*` is
+            // callback-based in Firefox, so this must go through `browser.*` there
+            // or the returned value has no .then and link previews die silently.
+            ((typeof browser !== 'undefined' && browser.runtime) ? browser : chrome)
+                .runtime.sendMessage({ type: 'ichc-og-fetch', url })
                 .then(payload => parseOgPreview(payload, url))
                 .catch(() => null)
         ).then(preview => {
@@ -1237,6 +1632,10 @@
             node.classList.contains('ichc-history-row') ||
             node.classList.contains('ichc-history-divider') ||
             node.classList.contains('ichc-history-block') ||
+            // A cam-slot offer is a transient prompt with live buttons, not a
+            // message. Retaining it would persist it to history and re-inject a
+            // dead offer — with a working "Offer slot" button — on the next load.
+            node.classList.contains('ichc-slot-offer-row') ||
             node.closest?.('.ichc-muted-body, .ichc-history-block')) { return false; }
         return true;
     }
@@ -1407,6 +1806,11 @@
             if (rows.length >= chatCache.count) {
                 const recent = rows.slice(-CHAT_CACHE_MAX);
                 chatCache.rows = recent.map(r => r.cloneNode(true));
+                // These rows were salvaged from a clear, so they are detached and
+                // will never be seen by a later snapshot. Dropping `src` keeps it
+                // parallel to `rows` — a stale one would let the next snapshot
+                // hand a row someone else's clone.
+                chatCache.src = [];
                 chatCache.count = recent.length;
             }
             _showChatRestoreBar();
@@ -1459,6 +1863,112 @@
     }
 
     const _sig = rec => (rec.t || 0) + '|' + (rec.n || '').toLowerCase() + '|' + (rec.m || '');
+
+    // ── Last message per nick, read by the cam overlay in modernize.js ──────────
+    // A lazy backwards scan rather than a maintained per-nick cache, deliberately:
+    // the log is already capped for long sessions, one pass answers every visible
+    // cam at once, and there is nothing to evict or to keep in step with row
+    // pruning. It also reads the FULLY PROCESSED row, so emotes and inline images
+    // are already in their final form by the time they are cloned.
+    const LAST_MSG_SCAN_ROWS = 400;
+    // HISTORY_STRIP without the media classes: persisted history wants plain text,
+    // but the overlay is the one consumer that wants the emotes and gifs kept. The
+    // emote ban button goes, though — it is chrome for the chat log, and it would
+    // be a dead control floating over a cam.
+    const LAST_MSG_STRIP = '.ichc-ts, .ichc-reply-btn, a.userlink, .ichc-og-card,' +
+        ' .ichc-event-collector, .ichc-chat-year-badge, .ichc-nick-block, .ichc-nick-sep,' +
+        ' .ichc-muted-row, .ichc-emote-ban-btn';
+    // "Just an emoji" for sizing purposes: at least one pictograph, and nothing
+    // besides pictographs, skin-tone modifiers, flag halves, variation selectors,
+    // ZWJ and whitespace. Property escapes rather than a hand-listed subset, but
+    // NOT \p{Emoji_Component} — that one includes the ASCII digits (they are keycap
+    // components), which would enlarge a message consisting of "123".
+    const _EMOJI_ONLY_RE =
+        /^(?=[\s\S]*(?:\p{Extended_Pictographic}|\p{Regional_Indicator}))(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|[\uFE0E\uFE0F\u200D\s])+$/u;
+
+    function _lastMsgContent(row) {
+        const clone = row.cloneNode(true);
+        clone.querySelectorAll(LAST_MSG_STRIP).forEach(el => el.remove());
+
+        // Removing the nick link leaves the ": " separator that followed it.
+        for (const node of clone.childNodes) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                const trimmed = node.textContent.replace(/^[\s:]+/, '');
+                if (trimmed !== node.textContent) { node.textContent = trimmed; }
+                if (trimmed.trim()) { break; }
+            } else if (node.nodeType === Node.ELEMENT_NODE) { break; }
+        }
+
+        const media = [...clone.querySelectorAll('.ichc-chat-inline-img')];
+        for (const el of media) {
+            // A cloned <video> starts its own decode pipeline. Muted and without
+            // controls it stays a moving thumbnail rather than a player, which is
+            // all the overlay is for.
+            if (el.tagName === 'VIDEO') { el.controls = false; el.muted = true; el.loop = true; }
+        }
+
+        const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!text && !media.length) { return null; }
+        const frag = document.createDocumentFragment();
+        while (clone.firstChild) { frag.appendChild(clone.firstChild); }
+        return {
+            frag,
+            text,
+            // Media-only messages (a lone emote or gif) get the same enlargement as
+            // a lone emoji — from the reader's side they are the same thing.
+            big: (!text && media.length > 0) || (!!text && _EMOJI_ONLY_RE.test(text)),
+        };
+    }
+
+    // Returns Map(lowercased nick -> { frag, text, big }) for the nicks asked about,
+    // in a single backwards pass over the log.
+    function _lastMsgForNicks(nicks) {
+        const out = new Map();
+        const log = getChatLog();
+        if (!log || !nicks || !nicks.length) { return out; }
+        const want = new Set(nicks.map(n => String(n).trim().toLowerCase()).filter(Boolean));
+        if (!want.size) { return out; }
+
+        const rows = log.children;
+        for (let i = rows.length - 1, seen = 0; i >= 0 && seen < LAST_MSG_SCAN_ROWS && want.size; i--) {
+            const row = rows[i];
+            if (!_isRetainableRow(row)) { continue; }
+            seen++;
+            const link = row.querySelector('a.userlink');
+            if (!link) { continue; }
+            const nick = (link.textContent || '').trim().toLowerCase();
+            if (!nick || !want.has(nick)) { continue; }
+            // A join/leave row also carries a userlink; only "nick: message" counts.
+            const next = link.nextSibling;
+            if (!(next?.nodeType === Node.TEXT_NODE && /^\s*:/.test(next.textContent))) { continue; }
+            const content = _lastMsgContent(row);
+            if (!content) { continue; }
+            out.set(nick, content);
+            want.delete(nick);
+        }
+        return out;
+    }
+
+    // Shared with modernize.js through the isolated world both content scripts run
+    // in. A function on a global rather than an object in an event detail: the
+    // overlay pulls when it is ready to render, and the event below only says that
+    // something changed.
+    window.__ichcLastMsg = { forNicks: _lastMsgForNicks };
+
+    // Coalesced so a burst of messages costs one notification, and delayed so the
+    // row is fully themed (emotes wrapped, images inlined) before anything clones it.
+    let _chatRowNotifyTimer = null;
+    const _chatRowNotifyNicks = new Set();
+    function _notifyChatRow(nick) {
+        if (nick) { _chatRowNotifyNicks.add(nick.toLowerCase()); }
+        if (_chatRowNotifyTimer) { return; }
+        _chatRowNotifyTimer = window.setTimeout(() => {
+            _chatRowNotifyTimer = null;
+            const nicks = [..._chatRowNotifyNicks];
+            _chatRowNotifyNicks.clear();
+            window.dispatchEvent(new CustomEvent('ichc-chat-row', { detail: { nicks } }));
+        }, 180);
+    }
 
     let _lastChatHistorySaveAt = 0;
     function _saveChatHistory() {
@@ -1544,7 +2054,15 @@
     }
 
     const CHAT_CACHE_MAX = 800;   // was 400 — longer scroll back on restore
-    const chatCache = { rows: [], count: 0, snapTimer: null, lossShown: false, lastContentAt: 0, lossCheckTimer: null };
+    // Newest rows are re-cloned on every snapshot; older ones are reused. The
+    // extension decorates a row asynchronously (badges, emotes, inline media,
+    // relative timestamps), so a row cloned the instant it arrived would be
+    // cached half-dressed. This window is the settle time — comfortably longer
+    // than any of those passes at the 1.5s snapshot debounce.
+    const CHAT_CACHE_FRESH = 48;
+    // `src` is the live row each cached clone was made from, parallel to `rows`.
+    // It exists only so the next snapshot can tell which clones it may keep.
+    const chatCache = { rows: [], src: [], count: 0, snapTimer: null, lossShown: false, lastContentAt: 0, lossCheckTimer: null };
 
     // Forensics for "the chat cleared itself at random". The two detectors below catch
     // a clear but say nothing about its ORIGIN, and the two origins want opposite fixes:
@@ -1579,10 +2097,37 @@
         // Bound before cloning. Previously a 5,000-row room cloned every row on
         // every snapshot and threw most clones away afterward, so the recovery
         // feature itself grew more expensive the longer the tab stayed open.
-        const snap = rows.slice(-CHAT_CACHE_MAX).map(r => r.cloneNode(true));
+        const window_ = rows.slice(-CHAT_CACHE_MAX);
+
+        // ...and then only clone what is actually new. Bounding the window still
+        // left every snapshot deep-cloning all 800 of its rows, ~40 times a
+        // minute in a busy room: tens of thousands of nodes built and thrown
+        // away per second, ramping up as the log filled and never coming back
+        // down. A row that has already been cloned and has had time to finish
+        // being decorated cannot change again, so its clone is carried over and
+        // only the newest CHAT_CACHE_FRESH rows are re-cloned. Steady-state cost
+        // drops from CHAT_CACHE_MAX clones per snapshot to the arrival rate.
+        const reuse = new Map();
+        for (let i = 0; i < chatCache.src.length; i++) {
+            const clone = chatCache.rows[i];
+            if (clone) { reuse.set(chatCache.src[i], clone); }
+        }
+        const settledEnd = Math.max(0, window_.length - CHAT_CACHE_FRESH);
+        const snap = new Array(window_.length);
+        for (let i = 0; i < window_.length; i++) {
+            const row = window_[i];
+            snap[i] = (i < settledEnd && reuse.get(row)) || row.cloneNode(true);
+        }
+
         chatCache.rows = snap;
+        chatCache.src = window_;
         chatCache.count = snap.length;
         chatCache.lastContentAt = Date.now();
+        // The cache is module-scoped and otherwise unobservable, and its size is
+        // one of the few things that can grow across a long session. Exposed so
+        // scratchpad/lag-probe.js can sample it from the room console — same
+        // reason window.__ichcHoverHighlightState exists.
+        window.__ichcChatCacheCount = snap.length;
         _saveChatHistory();   // same debounce as the in-memory snapshot
     }
     function _scheduleChatSnapshot() {
@@ -2419,11 +2964,15 @@
         return ts.getTime();
     }
 
+    // No seconds. The timestamp lives in a fixed-width slot (`--ichc-ts-slot`) so it
+    // can never reflow the message beside it, and "12:37:59 pm" was the one label wide
+    // enough to overrun that slot — for a second count that is only refreshed every 5s
+    // and that nobody reads.
     function _fmt12h(epochMs) {
         const d = new Date(epochMs);
         const ampm = d.getHours() < 12 ? 'am' : 'pm';
         const h12 = d.getHours() % 12 || 12;
-        return `${h12}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} ${ampm}`;
+        return `${h12}:${String(d.getMinutes()).padStart(2, '0')} ${ampm}`;
     }
 
     function _relativeTime(epochMs) {
@@ -2485,6 +3034,7 @@
         wrap.dataset.ichcEmoteCode = code;
         wrap.dataset.ichcEmoteType = type;
         const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = 'ichc-emote-ban-btn';
         btn.title = 'Hide this emote';
         btn.textContent = '×';
@@ -2854,6 +3404,7 @@
                                  node.classList.contains('ichc-history-block') ||
                                  node.classList.contains('ichc-history-row') ||
                                  node.classList.contains('ichc-history-divider') ||
+                                 node.classList.contains('ichc-slot-offer-row') ||
                                  node.classList.contains('ichc-muted-row') ||
                                  !!node.closest?.('.ichc-condensed-bar') ||
                                  !!node.closest?.('.ichc-history-block') ||
@@ -2880,6 +3431,10 @@
                                         const next = a.nextSibling;
                                         if (next?.nodeType === Node.TEXT_NODE && /^\s*:/.test(next.textContent)) {
                                             _scheduleSeal();
+                                            // Tell the cam overlay a message landed. The nick
+                                            // only — the overlay pulls the content itself once
+                                            // our own theming pass has finished with the row.
+                                            _notifyChatRow((a.textContent || '').trim());
                                         }
                                     }
                                     applyChatTheme(node);
@@ -3012,7 +3567,14 @@
     });
 
     // ── Cam-slot offer: intercept native toasts → inline actionable chat row ──
-    const _CAM_OFFER_RE = /offer your cam slot to\s+([^\s,\.!?]+)/i;
+    // Loosened from the original /offer your cam slot to (\S+)/. The site's wording
+    // is not ours to control, and a single word changing anywhere in the middle of
+    // the old phrase silently disabled the whole feature with nothing in the log to
+    // say so. "offer" … "cam"/"slot" … nick is the part that has to hold.
+    const _CAM_OFFER_RE = /offer\s+(?:your\s+)?(?:cam\s*)?(?:slot\s+)?to\s+([^\s,\.!?<>]+)/i;
+    // Cheap pre-filter so the expensive regex only runs on text that is plausibly an
+    // offer. Every mutation on the page passes through here.
+    const _CAM_OFFER_HINT = /offer/i;
     const _seenOfferNodes = new WeakSet();
     const _recentOfferNicks = new Set();
 
@@ -3072,29 +3634,65 @@
     }
 
     function _tryCamOfferIntercept(node) {
-        if (_seenOfferNodes.has(node) || node.nodeType !== 1) { return; }
+        if (!node || node.nodeType !== 1 || _seenOfferNodes.has(node)) { return false; }
         // Skip if an ancestor was already handled (avoids duplicate injections for child nodes)
         for (let p = node.parentElement; p; p = p.parentElement) {
-            if (_seenOfferNodes.has(p)) { return; }
+            if (_seenOfferNodes.has(p)) { return false; }
         }
+        // Never intercept our own injected row — its message text contains the very
+        // phrase we match on, so without this the row would re-trigger the matcher.
+        if (node.closest?.('.ichc-slot-offer-row')) { return false; }
         const text = node.textContent || '';
-        if (!_CAM_OFFER_RE.test(text)) { return; }
-        _seenOfferNodes.add(node);
+        if (!_CAM_OFFER_HINT.test(text)) { return false; }
         const match = _CAM_OFFER_RE.exec(text);
-        if (!match) { return; }
-        node.style.setProperty('display', 'none', 'important');
+        if (!match) { return false; }
+        _seenOfferNodes.add(node);
+        node.style?.setProperty?.('display', 'none', 'important');
         _injectCamOfferRow(match[1].trim());
+        return true;
     }
 
     (function initCamOfferInterceptor() {
+        // A node can be inserted EMPTY and filled a tick later — the site builds its
+        // toast shell first and writes the text into it afterwards. The original
+        // observer only read textContent at insertion time, so it saw "" and never
+        // looked again, which is the most likely reason the prompt stopped appearing.
+        // Each candidate now gets a second look on the next frame, and a third a
+        // moment later, before being forgotten.
+        const _recheck = node => {
+            if (_tryCamOfferIntercept(node)) { return; }
+            window.setTimeout(() => { if (!_tryCamOfferIntercept(node)) {
+                window.setTimeout(() => _tryCamOfferIntercept(node), 600);
+            } }, 0);
+        };
         const obs = new MutationObserver(muts => {
             for (const mut of muts) {
                 for (const node of mut.addedNodes) {
-                    _tryCamOfferIntercept(node);
+                    if (node.nodeType === 1) { _recheck(node); }
+                    // Text written straight into an existing element arrives as a
+                    // text node with no element wrapper of its own; check its parent.
+                    else if (node.nodeType === 3 && _CAM_OFFER_HINT.test(node.data || '')) {
+                        _tryCamOfferIntercept(node.parentElement);
+                    }
                 }
             }
         });
+        // childList only, deliberately. The reused-toast case (one element whose text
+        // is rewritten) still lands here: assigning textContent replaces the element's
+        // children, which IS a childList mutation. Only in-place `node.data = …` would
+        // need characterData, and observing that across the whole document would wake
+        // this callback for every message and every tick of the 5s timestamp refresh —
+        // a standing cost on every long session to catch a case the site may not have.
         obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+
+        // Manual probe, for confirming the row itself still renders when the site is
+        // not currently offering anything:
+        //   document.dispatchEvent(new CustomEvent('ichc-test-cam-offer', { detail: { nick: 'somenick' } }))
+        // Page-dispatched events reach content-script listeners, so this works from
+        // the browser console in both engines.
+        document.addEventListener('ichc-test-cam-offer', e => {
+            _injectCamOfferRow(String(e.detail?.nick || 'testuser'));
+        });
     })();
 
 })();

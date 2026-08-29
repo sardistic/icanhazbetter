@@ -11,6 +11,17 @@
         display: none !important;
         flex-direction: column !important;
         overflow: hidden !important;
+        /* The spacer under the input lives HERE, on the clipping root, not on
+           .pm_outgoing. Measured in scratchpad/pm-pad.cjs: our padding on
+           .pm_outgoing renders correctly in isolation, but a page stylesheet
+           loaded after our content-script CSS outranks it at equal specificity,
+           and zeroing it collapses the gap to 7px — the reported symptom. A rule
+           on #tabs cannot be cancelled by anything aimed at the input row.
+           box-sizing also makes the inline height applyPmGeometry() writes mean
+           the same thing it reads back from getBoundingClientRect(), which
+           otherwise grew the window by its 2px border on every save/restore. */
+        box-sizing: border-box !important;
+        padding-bottom: 6px !important;
         background: #1a1c20 !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
         border-radius: 12px 12px 4px 12px !important;
@@ -265,8 +276,19 @@
         position: relative !important;
         flex: 0 0 auto !important;
         display: block !important;
+        /* height:auto is the load-bearing one. Probed live: row bottom 404 vs input
+           bottom 410 — the input was overflowing its own row by 6px and spilling
+           into the spacer below, because the row had a fixed height (~36px) that we
+           set min-height against but never overrode. That is also why making the
+           input taller made it look worse rather than better: a taller input just
+           spills further. With auto the row grows to fit and the spacer is real. */
+        height: auto !important;
+        max-height: none !important;
         min-height: 36px !important;
-        padding: 6px 10px 8px !important;
+        /* Bottom pad is deliberately larger than the top: the input sat flush
+           against the panel's bottom edge, and the resize grip lives in that
+           corner, so the gap is breathing room and a grab target both. */
+        padding: 7px 10px !important;
         border-top: 1px solid rgba(255,255,255,0.06) !important;
         background: #1e2024 !important;
         overflow: visible !important;
@@ -274,6 +296,16 @@
         left: auto !important;
         right: auto !important;
         bottom: auto !important;
+    }
+    #tabs .pm_outgoing input[type="button"],
+    #tabs .pm_outgoing .btn {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        bottom: 0 !important;
+        right: 0 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
     #tabs .pm_outgoing input[type="text"] {
         position: relative !important;
@@ -287,9 +319,17 @@
         color: #dbdee1 !important;
         border: 1px solid rgba(255,255,255,0.08) !important;
         border-radius: 8px !important;
-        padding: 6px 10px !important;
+        padding: 7px 10px !important;
         font-size: 13px !important;
         box-sizing: border-box !important;
+        /* Height and line-height are forced, not left to the default. Without
+           them the content box came to 15px for a 13px font — under the ~16.3px a
+           13px line actually needs — so descenders (g, j, y) were sliced off by
+           the input's own bottom edge. Any height the site sets is overridden for
+           the same reason: at height:20px there were 6px left for the glyphs. */
+        height: auto !important;
+        min-height: 30px !important;
+        line-height: 1.35 !important;
     }
     #tabs .pm_outgoing input[type="text"]:focus {
         border-color: var(--ichc-input-border, #5865f2) !important;

@@ -80,8 +80,24 @@
         });
     }
 
+    // Runs `source` in the PAGE's own JS realm, via the background service worker.
+    //
+    // A previous attempt injected a <script> element directly instead. Do not do
+    // that: this function is reachable at document_start, when <head> does not yet
+    // exist, so the element lands as a child of <html> mid-parse and wrecks the
+    // page. It is reverted.
+    //
+    // What IS kept from that attempt is the engine guard. Firefox's `chrome.*`
+    // alias is callback-based, so sendMessage returns undefined there and
+    // `.catch()` on the result is a TypeError that aborts the CALLER — the message
+    // is dispatched (the call precedes the property access), so the damage is to
+    // whatever the caller meant to do next, silently.
     function runInPageContext(source) {
-        chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
+        try {
+            const api = (typeof browser !== 'undefined' && browser.runtime) ? browser : chrome;
+            const ret = api.runtime.sendMessage({ type: 'ichc-exec', code: source });
+            if (ret && typeof ret.catch === 'function') { ret.catch(() => {}); }
+        } catch (_) {}
     }
 
     function setLiveState(isLive) {
@@ -125,7 +141,8 @@
             // buttons sharing one id (observed in the live markup).
             if (panel.querySelector('#ichc-broadcaster-close')) { return; }
             const btn = document.createElement('button');
-            btn.id = 'ichc-broadcaster-close';
+            btn.type = 'button';
+        btn.id = 'ichc-broadcaster-close';
             btn.textContent = '✕';
             btn.title = 'Close';
             btn.addEventListener('click', (e) => {

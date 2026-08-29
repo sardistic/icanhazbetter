@@ -1082,6 +1082,46 @@
         font-weight: 700 !important;
         animation: ichc-mention-glow 2.5s ease-out forwards !important;
     }
+
+    /* ── Hover highlight: one author's whole conversation, and whoever they @'d ──
+       Hovering any chat row lights up every other row by the same author, and —
+       in a second colour — every row by whoever that message is @-ing.
+
+       chat.js temporarily stamps matching rows with `data-ichc-hover-role`.
+       Keeping the paint rules here in the manifest stylesheet matters in Firefox:
+       a generated inline <style> can be rejected by the page CSP even when this
+       extension stylesheet is allowed.
+
+       There are deliberately no left bars and no hover rule on the sender's
+       username. Both pulled the eye toward the nick instead of showing the thread.
+       The author fill is 10% theme colour; the @-target fill is 13% plus a quiet
+       full-row hairline, both mixed into the row's normal surface. A linked @name
+       gets the one local text cue: a wash and underline directly behind the token, applied through
+       `[data-ichc-hover-mention]` while its row is hovered. */
+    #txt {
+        --ichc-hl-author-bg: color-mix(in srgb, var(--ichc-accent) 10%, var(--ichc-chat-row));
+        --ichc-hl-at-bg: color-mix(in srgb, var(--ichc-accent-soft) 13%, var(--ichc-chat-row));
+        --ichc-hl-at-border: color-mix(in srgb, var(--ichc-accent-soft) 24%, transparent);
+        --ichc-hl-at-token-bg: color-mix(in srgb, var(--ichc-accent-soft) 18%, transparent);
+        --ichc-hl-at-token-line: color-mix(in srgb, var(--ichc-accent-soft) 66%, transparent);
+    }
+    /* Repeating the attribute raises specificity above `#txt > p:hover`, so the
+       row under the pointer uses the same thread fill as its matching siblings. */
+    #txt [data-ichc-hover-role="author"][data-ichc-hover-role="author"] {
+        background: var(--ichc-hl-author-bg) !important;
+    }
+    #txt [data-ichc-hover-role="target"][data-ichc-hover-role="target"] {
+        background: var(--ichc-hl-at-bg) !important;
+        border-color: var(--ichc-hl-at-border) !important;
+    }
+    #txt a[data-ichc-hover-mention="1"][data-ichc-hover-mention="1"] {
+        background: var(--ichc-hl-at-token-bg) !important;
+        border-radius: 2px !important;
+        text-decoration: underline !important;
+        text-decoration-color: var(--ichc-hl-at-token-line) !important;
+        text-decoration-thickness: 1px !important;
+        text-underline-offset: 2px !important;
+    }
     .ichc-ul-more-btn.ichc-has-mention,
     #ichc-input-row.ichc-has-mention .ichc-ul-more-btn {
         position: relative !important;
@@ -1119,30 +1159,93 @@
         }
     }
 
-    /* Chat timestamps: right-aligned, dimmed — like PM */
+    /* Chat timestamps: right-aligned, dimmed — like PM.
+       The label is NOT a constant string: chat.js rewrites it every 5s through
+       "9:37:12 pm" → "5m ago" → "3h ago" → "9:37 pm", and those differ by ~20px.
+       Any in-flow timestamp therefore re-wraps the message it shares a line with,
+       and shrink-to-fit table cells make the message column end at a different x
+       on every row. Both are fixed by giving the timestamp one fixed-width slot
+       that message text never enters. */
+    #txt { --ichc-ts-slot: 58px; --ichc-ts-slot-line: 15px; }   /* 10px font x 1.5 */
     #txt td.ichc-ts {
+        box-sizing: border-box !important;
         font-size: 10px !important;
         color: var(--ichc-text-faint) !important;
         white-space: nowrap !important;
+        overflow: hidden !important;
         pointer-events: none !important;
         text-align: right !important;
-        padding-left: 10px !important;
+        padding-left: 8px !important;
         vertical-align: middle !important;
-        width: 1% !important;
+        width: var(--ichc-ts-slot) !important;
+        min-width: var(--ichc-ts-slot) !important;
+        max-width: var(--ichc-ts-slot) !important;
     }
     /* Table-based chat rows: top-align cells, clear site cellpadding */
     #txt > table { width: 100% !important; border-spacing: 0 !important; }
     #txt > table td:not(.ichc-ts) { vertical-align: top !important; padding: 0 3px 0 0 !important; }
     /* Nick block: keep badge + name + colon on one line */
     .ichc-nick-block { display: inline !important; white-space: nowrap !important; }
-    /* Non-table timestamp wrappers (span, small, etc.) */
+    /* Non-table timestamp wrappers (span, small, etc.).
+       These used to be `float: right`. A float is still in the text flow: it
+       shortens the line box it lands on, so the first line of every message was
+       cut short by the timestamp's current width — and a nowrap nick block that
+       no longer fitted got pushed to line 2, leaving a near-empty first line.
+       Out of flow instead; the row reserves the slot below. */
     #txt .ichc-ts:not(td) {
-        float: right !important;
+        position: absolute !important;
+        top: 1px !important;
+        right: 0 !important;
+        float: none !important;
+        margin: 0 !important;
+        max-width: var(--ichc-ts-slot) !important;
+        overflow: hidden !important;
         font-size: 10px !important;
+        line-height: 1.5 !important;
+        text-align: right !important;
         color: var(--ichc-text-faint) !important;
-        margin-left: 8px !important;
         white-space: nowrap !important;
         pointer-events: none !important;
+    }
+    /* Only rows that actually carry an out-of-flow timestamp reserve the gutter,
+       so timestamp-less rows keep their full width. Condensed join/leave rows
+       hide their timestamp entirely (see .ichc-chat-event .ichc-ts above) and
+       must not reserve it either.
+
+       `position: relative` is restated here rather than relied on. An absolutely
+       positioned box escapes to its nearest POSITIONED ancestor, and the row
+       rules above only cover `#txt > table|div|p|ul` and `.line` — a chat row of
+       any other element type would have thrown its timestamp out to whatever
+       happened to be positioned further up, i.e. on top of an unrelated message.
+       The class that owns the slot must also own the containing block. */
+    #txt .ichc-row-ts:not(.ichc-chat-event) {
+        position: relative !important;
+        padding-right: calc(var(--ichc-ts-slot) + 6px) !important;
+    }
+    /* The slot is out of flow, so a row whose message body is empty — nothing but
+       the timestamp left after the site or one of our own passes replaced its
+       content — collapses to zero height and paints its timestamp over the row
+       below. That reads exactly as "a timestamp sitting on top of a real
+       message". This spacer gives such a row a line box as tall as the label and
+       no taller: `vertical-align: middle` keeps it inside the line box of any row
+       that already has content, so ordinary and grouped rows do not grow. */
+    #txt .ichc-row-ts:not(.ichc-chat-event)::before {
+        content: '' !important;
+        display: inline-block !important;
+        width: 0 !important;
+        height: calc(var(--ichc-ts-slot-line)) !important;
+        vertical-align: middle !important;
+    }
+    /* …except that a row with no message at all should not be on screen. The
+       spacer above stops such a row painting its timestamp over its neighbour,
+       but it also renders it as a blank line with a stray time on the right —
+       reported as "random spacing", and visible in runs wherever the log had
+       accumulated content-less rows. `_syncTsOnlyRow` in chat.js stamps the
+       attribute and keeps it current; see the comment there for where the empty
+       rows come from. Both the row and the timestamp it carries go, so the
+       overlap this guard was written for cannot come back through here. */
+    #txt .ichc-row-ts[data-ichc-ts-only="1"] {
+        display: none !important;
     }
     /* Year badge & guest styling in chat messages */
     #txt .ichc-chat-year-badge {
@@ -1805,7 +1908,9 @@
     .ichc-ul-sep   { color: rgba(255,255,255,0.08) !important; margin: 0 3px !important; }
 
     .chat_error_message { color: #f85149 !important; font-size: 11px !important; }
-    #errorMessageDiv {
+    /* Room only. The site reuses this id for form errors elsewhere, and swallowing
+       a sign-in failure would leave the page looking simply unresponsive. */
+    html:has(#chat_container) #errorMessageDiv {
         display: none !important;
         visibility: hidden !important;
         height: 0 !important;
@@ -2047,13 +2152,26 @@
         background: var(--ichc-bg) !important;
         background-attachment: fixed !important;
     }
-    [id$="panelFooter"], .chat_footer, .footer_table,
-    .footer_links, .room_footer_links_wrapper, .page_footer,
-    .gray_back .footer_links, .gray_back .footer_table {
+    /* The native header and footer are replaced by #ichc-topbar and the room
+       submenu — but ONLY inside a room. Everywhere else on the site (room entry,
+       lobby, sign-in, profiles, help) there is no replacement to take their place,
+       so hiding them unconditionally removed the sign-in/join links and the whole
+       footer nav from every page. `html:has(#chat_container)` is the room test
+       already used for the fullscreen lock above: #chat_container exists only once
+       the chat UI itself is on the page. */
+    html:has(#chat_container) [id$="panelFooter"],
+    html:has(#chat_container) .chat_footer,
+    html:has(#chat_container) .footer_table,
+    html:has(#chat_container) .footer_links,
+    html:has(#chat_container) .room_footer_links_wrapper,
+    html:has(#chat_container) .page_footer,
+    html:has(#chat_container) .gray_back .footer_links,
+    html:has(#chat_container) .gray_back .footer_table {
         display: none !important;
     }
-    /* Always hide the site's native page header — we extract what we need into #ichc-topbar */
-    [id$="panelHeader"], .page_header, .gray_back.page_header {
+    html:has(#chat_container) [id$="panelHeader"],
+    html:has(#chat_container) .page_header,
+    html:has(#chat_container) .gray_back.page_header {
         display: none !important;
     }
     #header {
@@ -2166,6 +2284,60 @@
         justify-content: flex-end !important;
         gap: 10px !important;
         flex-shrink: 0 !important;
+    }
+    /* ── Auto-restart state chip ──
+       Armed and disarmed have to be tellable apart without hovering for the
+       tooltip, so they differ on three axes at once — glyph (slashed or not),
+       colour, and the trailing text (restarts left vs "off"). Colour alone would
+       be a code the user has to have learned; the slash is self-describing. */
+    #ichc-autorestart-chip {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        height: 24px !important;
+        padding: 0 8px !important;
+        margin: 0 !important;
+        border-radius: 12px !important;
+        border: 1px solid var(--ichc-border) !important;
+        background: var(--ichc-surface-3) !important;
+        color: var(--ichc-text-muted) !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        flex-shrink: 0 !important;
+        transition: color 0.14s, background 0.14s, border-color 0.14s !important;
+    }
+    #ichc-autorestart-chip:hover {
+        background: var(--ichc-surface-4) !important;
+        color: var(--ichc-text) !important;
+    }
+    #ichc-autorestart-chip svg {
+        width: 13px !important;
+        height: 13px !important;
+        flex-shrink: 0 !important;
+    }
+    #ichc-autorestart-chip.ichc-on {
+        color: #3ba55c !important;
+        border-color: color-mix(in srgb, #3ba55c 45%, transparent) !important;
+        background: color-mix(in srgb, #3ba55c 14%, transparent) !important;
+    }
+    /* A slow turn on the armed icon: the chip is claiming cams will come back by
+       themselves, and motion is the difference between a label and a promise. */
+    #ichc-autorestart-chip.ichc-on svg {
+        animation: ichc-autorestart-spin 5.5s linear infinite !important;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        #ichc-autorestart-chip.ichc-on svg { animation: none !important; }
+    }
+    @keyframes ichc-autorestart-spin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+    .ichc-autorestart-chip-text {
+        font-variant-numeric: tabular-nums !important;
     }
     #ichc-header-userinfo {
         display: flex !important;
@@ -3548,6 +3720,13 @@
         overflow-y: hidden !important;
         overflow-x: hidden !important;
     }
+    /* Before focused freeform has a measurable panel (and in word-cloud mode,
+       where freeform is deliberately disabled), the legacy two-column fallback
+       can exceed #cams' height. It must scroll during that fallback window;
+       overflow:hidden silently cut whole lower cameras in the live probe. */
+    #cams.ichc-has-featured:not(.ichc-cams-freeform) {
+        overflow-y: auto !important;
+    }
     /* Freeform mode (focused AND normal): cards are absolutely positioned by
        the packing engine in modernize.js — focused pins the selected cam
        top-left with the rest justified around it; normal justifies every cam
@@ -3584,6 +3763,15 @@
         top: var(--ichc-fy) !important;
         width: var(--ichc-fw) !important;
         height: var(--ichc-fh) !important;
+        /* The packer computes OUTER card rectangles. Without border-box the
+           1px card border is added outside --ichc-fw/--ichc-fh, so cards on
+           the right/bottom edge overrun #cams and its overflow:hidden crops
+           them. Loading/placeholder chrome also carries a 90px min-height;
+           packed geometry must remain authoritative while those transient
+           states are present. */
+        box-sizing: border-box !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
         max-width: none !important;
         max-height: none !important;
         margin: 0 !important;
@@ -3929,6 +4117,89 @@
         -webkit-text-stroke: 0.4px rgba(1, 6, 12, 0.88) !important;
         pointer-events: none !important;
     }
+    /* ── Last-message overlay (opt-in) ──
+       Sits on the same line as the nick, starting where the nick ends. The offset
+       comes from a hidden copy of the nick rendered in the name's own font rather
+       than from a measured pixel value, so it stays correct when the nick changes,
+       when the font loads, and at every card size. */
+    .ichc-cam-lastmsg {
+        position: absolute !important;
+        top: 12px !important;
+        left: 12px !important;
+        right: 12px !important;
+        z-index: 5 !important;
+        display: flex !important;
+        align-items: baseline !important;
+        gap: 6px !important;
+        min-width: 0 !important;
+        pointer-events: none !important;
+    }
+    .ichc-cam-lastmsg-spacer {
+        /* Must match .name-on-cam's type metrics exactly — it exists only to
+           occupy the nick's width. visibility, not display:none, so it still
+           takes up space. */
+        visibility: hidden !important;
+        flex: 0 0 auto !important;
+        max-width: calc(100% - 70px) !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+    }
+    .ichc-cam-lastmsg-body {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        display: block !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1.35 !important;
+        color: var(--ichc-text) !important;
+        opacity: 0.94 !important;
+        /* Same ink treatment as the nick: this text sits over live video, which
+           can be any colour from frame to frame. */
+        text-shadow:
+            0 0 2px rgba(1, 6, 12, 0.98),
+            0 1px 0 rgba(1, 6, 12, 0.98),
+            -1px 0 0 rgba(1, 6, 12, 0.98),
+            1px 0 0 rgba(1, 6, 12, 0.98),
+            0 -1px 0 rgba(1, 6, 12, 0.98),
+            0 0 10px rgba(1, 6, 12, 0.7) !important;
+    }
+    /* Emotes, gifs and inline images inside the overlay. Height-capped to the line
+       so a tall emote cannot push the overlay over the video. */
+    .ichc-cam-lastmsg-body .ichc-emote-wrap {
+        display: inline-block !important;
+        vertical-align: -0.25em !important;
+        margin: 0 1px !important;
+    }
+    .ichc-cam-lastmsg-body .ichc-chat-inline-img {
+        max-height: 18px !important;
+        max-width: 64px !important;
+        width: auto !important;
+        height: auto !important;
+        object-fit: contain !important;
+        border-radius: 3px !important;
+        margin: 0 !important;
+        cursor: default !important;
+    }
+    /* A message that is nothing but emoji (or nothing but an emote/gif) is the
+       message — at body size it reads as a typo, so it gets its own scale. */
+    .ichc-cam-lastmsg.ichc-big .ichc-cam-lastmsg-body {
+        font-size: 26px !important;
+        line-height: 1.05 !important;
+        opacity: 1 !important;
+    }
+    .ichc-cam-lastmsg.ichc-big .ichc-cam-lastmsg-body .ichc-chat-inline-img {
+        max-height: 46px !important;
+        max-width: 120px !important;
+    }
+    /* Narrow cards need no special case: the spacer holds the nick's width, the
+       body takes what is left and ellipsises. A container query was considered and
+       rejected — it would mean putting `container-type` on .rounded_square, and the
+       containment that creates is read by the freeform packer as card geometry. */
     .ichc-card-tools {
         position: absolute !important;
         right: 8px !important;
@@ -4365,7 +4636,12 @@
         overflow-y: auto !important;
         overflow-x: hidden !important;
         scrollbar-width: thin !important;
-        padding: 0 3px 10px 0 !important;
+        /* Bottom pad clears the chat input row, which overlays the foot of the
+           user list. Without it the last user sits underneath the input box and
+           cannot be scrolled into view. It is scroll runway, not a gap: when the
+           list is shorter than its container the padding lands below the content
+           in space that was already empty, so nothing moves. */
+        padding: 0 3px calc(var(--ichc-input-height, 50px) + 12px) 0 !important;
     }
     /* PM pop-out button — small, pinned to bottom-right of the pm-avatar strip */
     #ichc-pm-avatars #ichc-pm-toggle-btn {
@@ -4807,13 +5083,26 @@
         display: inline-flex !important;
         align-items: center !important;
         line-height: 1 !important;
-        /* Optical nudge, not a layout fix. The label is uppercase, so it has no
-           descenders (measured actualBoundingBoxDescent = 0) and its ink sits high
-           inside the glyph box — geometrically centred, it reads 1.25px above the
-           count chip. 0.1em is that distance at the current size and scales with it.
-           transform, so it does not feed back into the flex centring the way padding
-           would. */
-        transform: translateY(0.1em) !important;
+        /* NO optical nudge. There was a `transform: translateY(0.1em)` here to
+           compensate for uppercase ink sitting high in its glyph box. The premise
+           was right and the amount was wrong, and it was measured off the wrong
+           box: a Range rect reports the LINE box, which for descender-free
+           uppercase sits well below the glyphs, so the correction came out about
+           2.5x too large and pushed the label under everything beside it.
+
+           Measured properly — canvas `actualBoundingBoxAscent/Descent` against the
+           header's centre line (scratchpad/sec-align.cjs) — the real numbers are:
+
+               label ink, untransformed   -0.50px   (i.e. already 0.5px high)
+               count-chip digit ink       -0.50px
+               label ink, with 0.1em      +0.75px   <- 1.25px below the digits
+
+           Untransformed, the label ink lands exactly on the digit ink beside it,
+           which is the alignment the eye actually judges, and both sit half a
+           pixel off the geometric centre — below perception. Anything that nudges
+           the label alone reintroduces the disagreement. If the size or weight of
+           either element changes, re-measure with that harness rather than
+           eyeballing a new em value. */
         opacity: 0.86 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.09em !important;
@@ -5325,11 +5614,61 @@
     /* command bar and all its buttons are hidden — controls moved to cog menu */
     .room_command_bar,
     .chat_button { display: none !important; }
-    /* #colorDiv (color picker) must still be reachable when pickColor() shows it */
+    /* ── The site's colour picker (#colorDiv) ──
+       Read from the site's own scripts110725.js. pickColor() does, in order:
+       on its FIRST call only, seed "#colorTxt" and attach farbtastic to
+       "#colorPicker"; then setColor on that widget; then $("#colorDiv").toggle();
+       then, if the result is :visible, focus "#colorTxt".
+       (Written out rather than pasted, so no stray braces land in this file and
+       spoil the brace-balance check used to sanity-check this stylesheet.)
+
+       Two things follow, and the old rule here broke both.
+
+       1. farbtastic builds its wheel on FIRST call, while #colorDiv is still
+          hidden — it measures the element, so a display:none ancestor gives it
+          nothing to measure. Hiding this container from our stylesheet is
+          therefore not free.
+       2. `.toggle()` and `:visible` both consult the CURRENT rendered state.
+          A stylesheet `display:none` is what jQuery has to fight, and
+          `position: fixed !important` overrode wherever the site had placed the
+          dialog, so even a successful open could land off-screen.
+
+       So: no display rule that outlives the site's own, and no positioning. The
+       hidden default is expressed as "hidden until the site sets an inline
+       display", which stops applying the instant jQuery shows it, and the site
+       keeps control of placement. Only the stacking order is ours, so the dialog
+       cannot open underneath the rebuilt room layout. */
     #colorDiv {
-        position: fixed !important;
         z-index: 2147483646 !important;
+    }
+    #colorDiv:not([style*="display"]) {
         display: none;
+    }
+    /* The cog's colour control. This IS the swatch dot, not a hidden input behind
+       one: an invisible or zero-sized input is not something Firefox will open a
+       colour dialog for, and a visible control is better anyway — the dot the user
+       sees is the thing they click.
+       The engine-specific pseudo-elements strip the default colour-input chrome so
+       it reads as the same dot the other rows show. */
+    input.ichc-color-input {
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        padding: 0 !important;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+        background-color: transparent !important;
+    }
+    input.ichc-color-input::-moz-color-swatch {
+        border: none !important;
+        border-radius: 50% !important;
+    }
+    input.ichc-color-input::-webkit-color-swatch-wrapper {
+        padding: 0 !important;
+    }
+    input.ichc-color-input::-webkit-color-swatch {
+        border: none !important;
+        border-radius: 50% !important;
     }
 
     /* ── Input row: CSS Grid so gif can overlay the input's right edge ──────────
@@ -5589,6 +5928,91 @@
         height: 14px !important;
     }
     .ichc-theme-name { white-space: nowrap !important; }
+    /* Broadcast-quality submenu. Deliberately reuses .ichc-theme-list /
+       .ichc-theme-row for the indent rail, hover and the active tick, so the two
+       expanders in the cog menu read as one control type; only the second line
+       of per-preset detail is new. Widened because that detail line is the whole
+       point of the submenu — it is what a cycling button could never show. */
+    .ichc-bq-list { min-width: 232px !important; }
+    .ichc-bq-text {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 1px !important;
+        min-width: 0 !important;
+    }
+    .ichc-bq-name { white-space: nowrap !important; }
+    .ichc-bq-detail {
+        font-size: 10px !important;
+        line-height: 1.35 !important;
+        color: var(--ichc-text-faint) !important;
+        /* Wraps rather than truncating: a clipped "keeps detail, drops frames"
+           loses exactly the half that distinguishes the preset. */
+        white-space: normal !important;
+    }
+    .ichc-bq-row[aria-current="true"] .ichc-bq-detail {
+        color: var(--ichc-text-muted) !important;
+    }
+    /* The row's font-weight:600 when active would otherwise bold the detail too,
+       which reads as emphasis on the wrong half of the row. */
+    .ichc-bq-row[aria-current="true"] .ichc-bq-detail { font-weight: 400 !important; }
+    /* Observed rooms (experimental multi-room cam mirroring).
+       The frames are parked OFFSCREEN rather than display:none — a display:none
+       browsing context is fair game for background-tab throttling and autoplay
+       refusal, and the whole feature depends on those frames staying live. */
+    #ichc-obs-frames {
+        position: fixed !important;
+        left: -10000px !important;
+        top: 0 !important;
+        width: 820px !important;
+        height: 640px !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
+    #ichc-obs-frames .ichc-obs-frame { width: 800px !important; height: 600px !important; border: 0 !important; }
+    /* Mirror cards ride the site's own .rounded_square / .videocontainer chrome;
+       only the video fill and the origin-room tag are ours. */
+    .ichc-obs-mirror video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+        background: #000 !important;
+    }
+    .ichc-obs-tag {
+        position: absolute !important;
+        top: 4px !important;
+        right: 4px !important;
+        z-index: 5 !important;
+        padding: 1px 6px !important;
+        border-radius: 8px !important;
+        background: rgba(0,0,0,0.55) !important;
+        color: var(--ichc-accent) !important;
+        font-size: 9px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.03em !important;
+        pointer-events: none !important;
+    }
+    /* Cog submenu rows */
+    .ichc-obs-row {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 5px 8px !important;
+        font-size: 12px !important;
+    }
+    .ichc-obs-name { font-weight: 600 !important; color: var(--ichc-text) !important; }
+    .ichc-obs-status { margin-left: auto !important; font-size: 10px !important; color: var(--ichc-text-faint) !important; white-space: nowrap !important; }
+    .ichc-obs-remove {
+        flex-shrink: 0 !important;
+        display: inline-flex !important;
+        padding: 2px !important;
+        border: 0 !important;
+        background: transparent !important;
+        color: var(--ichc-text-faint) !important;
+        cursor: pointer !important;
+    }
+    .ichc-obs-remove:hover { color: #f87171 !important; }
+    .ichc-obs-remove svg { width: 11px !important; height: 11px !important; }
+    .ichc-obs-empty { padding: 5px 8px !important; font-size: 11px !important; font-style: italic !important; color: var(--ichc-text-faint) !important; }
     .ichc-color-swatch {
         display: inline-block !important;
         width: 13px !important;
@@ -6440,9 +6864,10 @@
 
     /* Site footer is now embedded in the room submenu dropdown — hide standalone */
     #ichc-site-footer { display: none !important; }
-    #ctl00_panelFooter {
+    html:has(#chat_container) #ctl00_panelFooter {
         /* Visually hidden but still queryable by JS — display:none can block
-           the site's own scripts from populating footer content. */
+           the site's own scripts from populating footer content. Room only: this
+           panel IS the footer nav on every other page. */
         position: fixed !important;
         top: -9999px !important;
         left: -9999px !important;
@@ -6518,7 +6943,10 @@
         text-decoration: none !important;
     }
 
-    .page_header_userlinks {
+    /* In-room only: the user's identity is rebuilt into #ichc-header-userinfo.
+       Outside a room this span holds "Sign-In or Join" (logged out) or the account
+       links (logged in), and nothing else on the page offers them. */
+    html:has(#chat_container) .page_header_userlinks {
         display: none !important;
     }
 
@@ -7996,4 +8424,373 @@
                     inset calc(var(--ichc-box-sx, 2px) * 0.3) calc(var(--ichc-box-sy, 2px) * 0.3) 1px rgba(0,0,0,0.11),
                     inset 0 0 0 1px rgba(0,0,0,0.11),
                     0 0 0 3px var(--ichc-input-glow, rgba(88,101,242,0.18)) !important;
+    }
+
+    /* ══ Site pages — everything outside a room ═══════════════════════════════
+       Room entry, lobby, sign-in, register, profiles, help, store, FAQ.
+
+       These pages keep the site's own structure: there is no #ichc-topbar and no
+       room submenu out here, so the native header and footer ARE the navigation
+       and must stay. Every rule below is gated on `html:not(:has(#chat_container))`
+       so nothing here can reach into a room — the mirror of the mistake that hid
+       the sign-in links in the first place, which was room-only chrome removal
+       written without a room condition.
+       ────────────────────────────────────────────────────────────────────── */
+
+    /* ── Header bar ── */
+    /* The header is a Bootstrap `.row` inside `form.container-fluid`, so it
+       inherits the container's horizontal padding and the row's negative margins
+       and ends up neither edge-to-edge nor aligned to anything. Pulling it out to
+       the viewport width and then padding the CONTENT back in gives a full-bleed
+       bar whose contents sit in a centred 1280px column — the bar spans the page,
+       the logo and links line up with the content below it.
+       `overflow-x: clip` on the page absorbs the classic 100vw-vs-scrollbar
+       overhang; `clip` rather than `hidden` because `hidden` would make the body a
+       scroll container. */
+    html:not(:has(#chat_container)) body {
+        overflow-x: clip !important;
+    }
+    html:not(:has(#chat_container)) [id$="panelHeader"],
+    html:not(:has(#chat_container)) .page_header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        flex-wrap: nowrap !important;
+        gap: 12px !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        margin: 0 0 0 calc(50% - 50vw) !important;
+        padding: 10px max(18px, calc((100% - 1280px) / 2)) !important;
+        box-sizing: border-box !important;
+        background: var(--ichc-surface) !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        border-radius: 0 !important;
+    }
+    html:not(:has(#chat_container)) .page_header > [class*="col-"] {
+        width: auto !important;
+        max-width: none !important;
+        flex: 0 1 auto !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    html:not(:has(#chat_container)) .page_header > .txtright {
+        margin-left: auto !important;
+        text-align: right !important;
+    }
+    /* The logo column is `col-0 col-lg-2`: Bootstrap collapses col-0 to zero width
+       below the lg breakpoint, which is what removes the logo on anything narrower
+       than a wide desktop. The site's own inline script also zeroes the block's
+       height under 600px. Both are overridden — the logo is the only thing
+       identifying the page. */
+    html:not(:has(#chat_container)) .page_header > .col-0,
+    html:not(:has(#chat_container)) #ichc-logo-header,
+    html:not(:has(#chat_container)) .page_header_logo {
+        display: flex !important;
+        align-items: center !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        visibility: visible !important;
+    }
+    html:not(:has(#chat_container)) .page_header_logo a {
+        display: flex !important;
+        align-items: center !important;
+        line-height: 0 !important;
+    }
+    html:not(:has(#chat_container)) #ichc-logo,
+    html:not(:has(#chat_container)) .ichc-site-logo {
+        display: block !important;
+        height: 34px !important;
+        width: auto !important;
+        max-width: 220px !important;
+        object-fit: contain !important;
+        visibility: visible !important;
+    }
+    @media (max-width: 700px) {
+        html:not(:has(#chat_container)) #ichc-logo,
+        html:not(:has(#chat_container)) .ichc-site-logo {
+            height: 26px !important;
+        }
+    }
+
+    /* ── Sign-in / Join, and the logged-in account links ──
+       The site sizes these with an inline font-size, and the in-room rule shrank
+       them to 12px. Out here they are the page's primary navigation, so they get
+       a readable size and button affordances: the last link (Join / Register)
+       reads as the primary action. */
+    html:not(:has(#chat_container)) .page_header_userlinks {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        margin: 0 !important;
+        font-size: 14px !important;
+        color: var(--ichc-text-muted) !important;
+    }
+    html:not(:has(#chat_container)) .page_header_userlinks span {
+        font-size: 14px !important;
+        color: var(--ichc-text-muted) !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+    }
+    html:not(:has(#chat_container)) .page_header_userlinks a {
+        display: inline-flex !important;
+        align-items: center !important;
+        padding: 6px 14px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
+        background: var(--ichc-surface-3) !important;
+        color: var(--ichc-text) !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        line-height: 1.2 !important;
+        text-decoration: none !important;
+        white-space: nowrap !important;
+        transition: background 0.14s, color 0.14s, border-color 0.14s !important;
+    }
+    html:not(:has(#chat_container)) .page_header_userlinks a:hover {
+        background: var(--ichc-surface-4) !important;
+        color: var(--ichc-text-strong) !important;
+        text-decoration: none !important;
+    }
+    html:not(:has(#chat_container)) .page_header_userlinks a:last-of-type {
+        background: var(--ichc-accent) !important;
+        border-color: transparent !important;
+        color: #fff !important;
+    }
+    html:not(:has(#chat_container)) .page_header_userlinks a:last-of-type:hover {
+        background: var(--ichc-accent-hover) !important;
+    }
+    /* A lone link is an action, not a pair — no "primary" distinction to draw. */
+    html:not(:has(#chat_container)) .page_header_userlinks a:only-of-type {
+        background: var(--ichc-accent) !important;
+        border-color: transparent !important;
+        color: #fff !important;
+    }
+
+    /* ── Content surface ──
+       .page_section_white is flattened to transparent site-wide to kill the white
+       card in a room; out here it is the page's content panel and needs to read
+       as one again. */
+    html:not(:has(#chat_container)) .page_section_white {
+        background: var(--ichc-surface-2) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
+        border-radius: 12px !important;
+        padding: 18px !important;
+        /* Centred in the same 1280px column the header pads its contents into, so
+           the panel's edges line up with the logo and the auth links above. */
+        width: 100% !important;
+        max-width: 1280px !important;
+        margin: 14px auto !important;
+        box-sizing: border-box !important;
+        color: var(--ichc-text) !important;
+        float: none !important;
+    }
+    /* The row wrapping that panel carries Bootstrap's negative margins, which would
+       shift the centred panel off-axis by half the gutter. Scoped to rows that
+       actually contain the panel — not to every sibling that follows it. */
+    html:not(:has(#chat_container)) .row:has(> .page_section_white) {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    html:not(:has(#chat_container)) .gray_text,
+    html:not(:has(#chat_container)) .gray_text p {
+        color: var(--ichc-text-muted) !important;
+    }
+    html:not(:has(#chat_container)) h1,
+    html:not(:has(#chat_container)) h2,
+    html:not(:has(#chat_container)) h3,
+    html:not(:has(#chat_container)) h4,
+    html:not(:has(#chat_container)) h5 {
+        color: var(--ichc-text-bright) !important;
+    }
+
+    /* ── Forms: room entry, sign-in, register ── */
+    html:not(:has(#chat_container)) .select_nick_label {
+        color: var(--ichc-text) !important;
+        font-size: 15px !important;
+    }
+    html:not(:has(#chat_container)) input.form-control,
+    html:not(:has(#chat_container)) input[type="text"],
+    html:not(:has(#chat_container)) input[type="password"],
+    html:not(:has(#chat_container)) input[type="email"],
+    html:not(:has(#chat_container)) textarea,
+    html:not(:has(#chat_container)) select {
+        background: var(--ichc-surface-3) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
+        border-radius: 8px !important;
+        color: var(--ichc-text-bright) !important;
+        padding: 10px 12px !important;
+        /* The site sets font-size:20pt inline on the room-entry nick field; 18px
+           keeps it prominent without overflowing narrow columns. */
+        font-size: 18px !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+    html:not(:has(#chat_container)) input.form-control:focus,
+    html:not(:has(#chat_container)) input[type="text"]:focus,
+    html:not(:has(#chat_container)) input[type="password"]:focus,
+    html:not(:has(#chat_container)) textarea:focus,
+    html:not(:has(#chat_container)) select:focus {
+        border-color: var(--ichc-accent) !important;
+        box-shadow: 0 0 0 3px rgba(88,101,242,0.18) !important;
+    }
+    html:not(:has(#chat_container)) input::placeholder,
+    html:not(:has(#chat_container)) textarea::placeholder {
+        color: var(--ichc-text-faint) !important;
+    }
+
+    /* ── Buttons ── */
+    html:not(:has(#chat_container)) .btn,
+    html:not(:has(#chat_container)) input.btn {
+        border-radius: 8px !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.12) !important;
+        background: var(--ichc-surface-3) !important;
+        color: var(--ichc-text) !important;
+        font-weight: 600 !important;
+        padding: 9px 16px !important;
+        text-shadow: none !important;
+        box-shadow: none !important;
+        transition: background 0.14s, border-color 0.14s, color 0.14s !important;
+    }
+    html:not(:has(#chat_container)) .btn:hover,
+    html:not(:has(#chat_container)) input.btn:hover {
+        background: var(--ichc-surface-4) !important;
+        color: var(--ichc-text-strong) !important;
+    }
+    html:not(:has(#chat_container)) .btn-primary,
+    html:not(:has(#chat_container)) input.btn-primary {
+        background: var(--ichc-accent) !important;
+        border-color: transparent !important;
+        color: #fff !important;
+    }
+    html:not(:has(#chat_container)) .btn-primary:hover,
+    html:not(:has(#chat_container)) input.btn-primary:hover {
+        background: var(--ichc-accent-hover) !important;
+    }
+    html:not(:has(#chat_container)) .btn-danger {
+        background: #b4373a !important;
+        border-color: transparent !important;
+        color: #fff !important;
+    }
+    html:not(:has(#chat_container)) .btn-danger:hover { background: #c94447 !important; }
+    html:not(:has(#chat_container)) .btn-lg,
+    html:not(:has(#chat_container)) input.btn-lg {
+        padding: 12px 22px !important;
+        font-size: 15px !important;
+    }
+    /* The site keeps this disabled until its age-gate script enables it — it must
+       not look clickable while it is not. */
+    html:not(:has(#chat_container)) .btn[disabled],
+    html:not(:has(#chat_container)) input.btn[disabled] {
+        opacity: 0.45 !important;
+        cursor: not-allowed !important;
+    }
+
+    /* ── Room rules panel ──
+       Some rooms ship hundreds of lines of rules, which pushes the join button far
+       below the fold. Bounded and scrollable keeps the form usable without hiding
+       anything the user is being asked to agree to. */
+    html:not(:has(#chat_container)) .roomrules {
+        background: var(--ichc-surface) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        border-radius: 10px !important;
+        padding: 14px 16px !important;
+        max-height: 320px !important;
+        overflow-y: auto !important;
+        color: var(--ichc-text-2) !important;
+        line-height: 1.5 !important;
+    }
+    html:not(:has(#chat_container)) .roomrules a { color: var(--ichc-accent-soft) !important; }
+
+    /* ── Lobby / room directory cards ── */
+    html:not(:has(#chat_container)) .preview_room {
+        border-radius: 10px !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.08) !important;
+        overflow: hidden !important;
+        position: relative !important;
+        transition: transform 0.14s, border-color 0.14s !important;
+    }
+    html:not(:has(#chat_container)) a:hover .preview_room {
+        transform: translateY(-2px) !important;
+        border-color: rgba(var(--ichc-tint-rgb),0.22) !important;
+    }
+    html:not(:has(#chat_container)) .preview_name {
+        color: #fff !important;
+        font-weight: 700 !important;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.9) !important;
+    }
+    html:not(:has(#chat_container)) .preview_info {
+        color: rgba(255,255,255,0.86) !important;
+        font-size: 12px !important;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.9) !important;
+    }
+
+    /* ── Footer navigation ──
+       The only route to help, safety, terms, the store and the directory from
+       outside a room. The in-room rules park this panel off-screen; undo that
+       here, including the offsets, or it stays at -9999px. */
+    html:not(:has(#chat_container)) #ctl00_panelFooter,
+    html:not(:has(#chat_container)) [id$="panelFooter"] {
+        position: static !important;
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
+        pointer-events: auto !important;
+        top: auto !important;
+        left: auto !important;
+    }
+    html:not(:has(#chat_container)) .page_footer {
+        display: block !important;
+        background: transparent !important;
+        margin-top: 18px !important;
+    }
+    html:not(:has(#chat_container)) .footer_links {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        align-items: center !important;
+        gap: 6px 18px !important;
+        padding: 14px 12px !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),0.06) !important;
+    }
+    html:not(:has(#chat_container)) .footer_links a {
+        color: var(--ichc-text-muted) !important;
+        font-size: 13px !important;
+        text-decoration: none !important;
+    }
+    html:not(:has(#chat_container)) .footer_links a:hover {
+        color: var(--ichc-text-bright) !important;
+        text-decoration: none !important;
+    }
+    html:not(:has(#chat_container)) .footer_links a b { color: inherit !important; }
+
+    /* ── Light-polarity themes ──
+       The tokens carry the rest; these are the places that named a colour. */
+    html.ichc-theme-is-light:not(:has(#chat_container)) .page_header_userlinks a:last-of-type,
+    html.ichc-theme-is-light:not(:has(#chat_container)) .page_header_userlinks a:only-of-type,
+    html.ichc-theme-is-light:not(:has(#chat_container)) .btn-primary,
+    html.ichc-theme-is-light:not(:has(#chat_container)) input.btn-primary {
+        color: #fff !important;
+    }
+
+    /* ── Narrow viewports ── */
+    @media (max-width: 700px) {
+        html:not(:has(#chat_container)) [id$="panelHeader"],
+        html:not(:has(#chat_container)) .page_header {
+            padding: 8px 12px !important;
+        }
+        html:not(:has(#chat_container)) .page_header_userlinks a {
+            padding: 6px 10px !important;
+            font-size: 13px !important;
+        }
+        html:not(:has(#chat_container)) .page_section_white { padding: 12px !important; }
     }

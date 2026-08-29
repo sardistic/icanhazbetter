@@ -44,12 +44,23 @@
         terminal:    `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M3.25 3A2.25 2.25 0 0 0 1 5.25v9.5A2.25 2.25 0 0 0 3.25 17h13.5A2.25 2.25 0 0 0 19 14.75v-9.5A2.25 2.25 0 0 0 16.75 3H3.25zm.896 3.97a.75.75 0 0 0-1.06 1.06l1.72 1.72-1.72 1.72a.75.75 0 0 0 1.06 1.06l2.25-2.25a.75.75 0 0 0 0-1.06l-2.25-2.25zm4.729 1.28a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 0-1.5h-3.5z" clip-rule="evenodd"/></svg>`,
         cloud:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M1 12.5A4.5 4.5 0 0 0 5.5 17H15a4 4 0 0 0 1.866-7.539 3.504 3.504 0 0 0-4.504-4.272A4.5 4.5 0 0 0 4.5 8H4a3 3 0 0 0-3 3v1.5z"/></svg>`,
         gauge:       `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path d="M3 12.75a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0V13.5a.75.75 0 0 1 .75-.75zM7 8.25a.75.75 0 0 1 .75.75v6.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75zM11 10.75a.75.75 0 0 1 .75.75v4.25a.75.75 0 0 1-1.5 0V11.5a.75.75 0 0 1 .75-.75zM15 4.25a.75.75 0 0 1 .75.75v10.75a.75.75 0 0 1-1.5 0V5a.75.75 0 0 1 .75-.75z"/></svg>`,
+        // The armed/disarmed pair for auto-restart. Same rotate glyph both times so
+        // the two states read as one control in two positions; the slash is the only
+        // difference, which is what makes "will refresh" vs "will not" legible at a
+        // glance rather than a colour the user has to have learned.
+        rotateOn:    `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h1.433a.75.75 0 0 0 0-1.5H4.083a.75.75 0 0 0-.75.75v3.149a.75.75 0 1 0 1.5 0v-1.058l.19.189a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.423-.47zM4.688 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311H12.77a.75.75 0 0 0 0 1.5h3.149a.75.75 0 0 0 .75-.75V3.984a.75.75 0 0 0-1.5 0v1.06l-.19-.19A7 7 0 0 0 3.265 8.106a.75.75 0 1 0 1.423.47z" clip-rule="evenodd"/></svg>`,
+        rotateOff:   `<svg viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true" style="display:inline-block;vertical-align:-0.1em"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h1.433a.75.75 0 0 0 0-1.5H4.083a.75.75 0 0 0-.75.75v3.149a.75.75 0 1 0 1.5 0v-1.058l.19.189a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.423-.47zM4.688 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311H12.77a.75.75 0 0 0 0 1.5h3.149a.75.75 0 0 0 .75-.75V3.984a.75.75 0 0 0-1.5 0v1.06l-.19-.19A7 7 0 0 0 3.265 8.106a.75.75 0 1 0 1.423.47z" clip-rule="evenodd" opacity="0.75"/><path d="M3.22 3.22a.75.75 0 0 1 1.06 0l11.5 11.5a.75.75 0 1 1-1.06 1.06L3.22 4.28a.75.75 0 0 1 0-1.06z"/></svg>`,
     };
 
     const PREF_KEY = 'ichc_layout_prefs';
     const ORDER_KEY = 'ichc_cam_order';
     const FEATURED_KEY = 'ichc_featured_cam';
     const AUTO_RESTART_KEY = 'ichc_auto_restart_cams';
+    const AUTO_RESTART_COUNT_KEY = 'ichc_auto_restart_count';
+    // Auto-restart disarms itself after this many consecutive automatic restarts.
+    // A room that keeps going idle is a room nobody is watching, and an extension
+    // that keeps reviving cams in it is burning bandwidth on an empty screen.
+    const AUTO_RESTART_LIMIT = 5;
     const SIDE_WIDTH_KEY = 'ichc_stage_side_width';
     const UL_WIDTH_KEY   = 'ichc_ul_width';
     const CAM_SPAN_KEY = 'ichc_cam_spans_v1';
@@ -101,6 +112,7 @@
         autoTimer: null,
         countdownTimer: null,
         restartAt: 0,
+        limitHit: false,   // budget ran out this session — explains the Off state
         lastActiveAt: 0,   // last time the inactivity pause was showing
     };
     const camLayoutState = {
@@ -561,39 +573,74 @@
     // `q` is the data; the apply string is derived from it. Both the page-context
     // patch and the cog menu read the same table, so a preset can never mean two
     // different things depending on which path set it.
+    // Hard ceiling on what any preset may ask for. Enforced below when the apply
+    // strings are built, so a preset table edit can never push the outbound stream
+    // over the cap by accident — the clamp is the last word, not the table.
+    const _BCAST_MAX_KBPS = 980;   // < 1 Mbps
     const _BCAST_Q_SETTINGS = {
         off:    null,
-        sharp:  { width: 640,  height: 480,  maxFps: 30, maxKbps: 1500, degradation: 'maintain-resolution' },
-        smooth: { width: 640,  height: 480,  maxFps: 30, maxKbps: 2500, degradation: 'maintain-framerate' },
-        hd:     { width: 1280, height: 720,  maxFps: 30, maxKbps: 4000, degradation: 'balanced' },
-        fhd:    { width: 1920, height: 1080, maxFps: 30, maxKbps: 6000, degradation: 'balanced' },
+        // 720p keeps its resolution and sheds frames under pressure: the point of
+        // choosing it is the resolution, and at this bitrate something has to give.
+        sd480:  { width: 640,  height: 480,  maxFps: 30, maxKbps: 900, degradation: 'balanced' },
+        hd720:  { width: 1280, height: 720,  maxFps: 30, maxKbps: 980, degradation: 'maintain-resolution' },
     };
     const _BCAST_Q = {
-        off:    { label: 'Off' },
-        sharp:  { label: 'Sharp (480p)' },
-        smooth: { label: 'Smooth (480p·30fps)' },
-        hd:     { label: 'HD (720p)' },
-        fhd:    { label: 'Full HD (1080p)' },
+        off:    { label: 'Off (site default)' },
+        sd480:  { label: '480p' },
+        hd720:  { label: '720p (wide)' },
     };
     Object.keys(_BCAST_Q).forEach(k => {
-        _BCAST_Q[k].apply = 'window.__ichcBcastQ=' + JSON.stringify(_BCAST_Q_SETTINGS[k]) + _AN;
+        const s = _BCAST_Q_SETTINGS[k];
+        if (s && s.maxKbps > _BCAST_MAX_KBPS) { s.maxKbps = _BCAST_MAX_KBPS; }
+        _BCAST_Q[k].apply = 'window.__ichcBcastQ=' + JSON.stringify(s) + _AN;
     });
+    // Presets removed in the trim to three. A stored key from an older build maps
+    // to its nearest survivor rather than silently falling back to Off, which would
+    // drop a broadcaster's caps without telling them.
+    const _BCAST_Q_LEGACY = { sharp: 'sd480', smooth: 'sd480', hd: 'hd720', fhd: 'hd720' };
     // Always returns a key that exists in _BCAST_Q. An unrecognised stored value used
     // to make `_BCAST_Q[key].apply` throw, which the caller's try/catch swallowed —
     // so boot pushed no preset at all and cam-up silently used the defaults.
     function _bcastQKey() {
         try {
-            const k = localStorage.getItem(_BCAST_Q_KEY) || 'off';
-            return Object.prototype.hasOwnProperty.call(_BCAST_Q, k) ? k : 'off';
+            const raw = localStorage.getItem(_BCAST_Q_KEY) || 'off';
+            if (Object.prototype.hasOwnProperty.call(_BCAST_Q, raw)) { return raw; }
+            const migrated = _BCAST_Q_LEGACY[raw];
+            if (migrated) {
+                try { localStorage.setItem(_BCAST_Q_KEY, migrated); } catch (_) {}
+                return migrated;
+            }
+            return 'off';
         } catch (_) { return 'off'; }
     }
     function _bcastQLabel() { return (_BCAST_Q[_bcastQKey()] || _BCAST_Q.off).label; }
-    function _cycleBcastQuality() {
-        const order = ['off', 'sharp', 'smooth', 'hd', 'fhd'];
-        const cur = _bcastQKey();
-        const next = order[(order.indexOf(cur) + 1) % order.length];
+    // Display order for the cog submenu, worst-to-best. Explicit rather than
+    // Object.keys(_BCAST_Q) so reordering the table above cannot silently
+    // reorder the menu.
+    const _BCAST_Q_ORDER = ['off', 'sd480', 'hd720'];
+    // What a preset actually does, in words, DERIVED from _BCAST_Q_SETTINGS
+    // rather than written out a second time — that table is the single source of
+    // truth (see the note above it), so a preset can never describe itself
+    // differently from what it applies.
+    function _bcastQDetail(key) {
+        const s = _BCAST_Q_SETTINGS[key];
+        if (!s) { return 'Site default — no constraints applied'; }
+        const mbps = s.maxKbps >= 1000
+            ? (s.maxKbps / 1000).toFixed(s.maxKbps % 1000 === 0 ? 0 : 1) + ' Mbps'
+            : s.maxKbps + ' kbps';
+        // Both presets sit under the same sub-1 Mbps ceiling, so what separates
+        // them at the bottom of the pipe is what each one sacrifices when the
+        // link cannot keep up. Spelling that out is the point of the list.
+        const tradeoff =
+            s.degradation === 'maintain-resolution' ? 'keeps detail, drops frames' :
+            s.degradation === 'maintain-framerate' ? 'keeps motion, drops detail' :
+            'balances detail and motion';
+        return s.width + '×' + s.height + ' · ' + s.maxFps + 'fps · ' + mbps + ' · ' + tradeoff;
+    }
+    function _setBcastQuality(key) {
+        const next = Object.prototype.hasOwnProperty.call(_BCAST_Q, key) ? key : 'off';
         try { localStorage.setItem(_BCAST_Q_KEY, next); } catch (_) {}
-        console.log('%c[ichc] broadcast quality: ' + cur + ' → ' + next, 'color:#3ba55c;font-weight:bold');
+        console.log('%c[ichc] broadcast quality: ' + next, 'color:#3ba55c;font-weight:bold');
         runInPageContext(_BCAST_Q[next].apply);
         return _BCAST_Q[next];
     }
@@ -1094,6 +1141,10 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         _pruneProfileCaches();   // free localStorage early so the site's own writes never fail
+        // Cosmetic, and it runs before the layout builders — so it is isolated. An
+        // exception here used to take installStageLayout/initUserList/initCamLayout
+        // with it, which leaves a room showing nothing but cams.
+        try { ensureSiteHeaderLogo(); } catch (_) {}   // no-op in a room anyway
         installStageLayout();
         installUnifiedHeader();
         initUserList();
@@ -1107,6 +1158,13 @@
         // Push the saved broadcast-quality preset into the page (read by the quality
         // patch at cam-up). Independent of the diagnostics collector.
         try { runInPageContext(_BCAST_Q[_bcastQKey()].apply); } catch (_) {}
+        // Retried because the site's own scripts may not have defined as() yet.
+        // The patch is idempotent and only sets its flag once it has really wrapped.
+        installFocusGuardPatch();
+        [800, 2500, 6000].forEach(d => window.setTimeout(installFocusGuardPatch, d));
+        // Resume observing persisted rooms once this room has had time to join
+        // — the whole feature is inert while the list is empty.
+        window.setTimeout(() => { try { _obsSync(); } catch (_) {} }, 3000);
         // Clear the init transition-suppression class unconditionally.
         // CSS vars are already set from the localStorage cache, so no layout reflow needed here.
         // The initDynamicLayout retries will refine the layout once the DOM is measurable.
@@ -1168,6 +1226,7 @@
             btnsEl.className = 'ichc-slot-offer-btns';
             dialogBtns.forEach((btn, i) => {
                 const b = document.createElement('button');
+                b.type = 'button';
                 b.className = 'ichc-slot-offer-btn' + (i === 0 ? ' ichc-slot-offer-btn-primary' : '');
                 b.textContent = btn.textContent.trim();
                 b.addEventListener('click', e => {
@@ -1336,10 +1395,67 @@
         return value.replace(/\s+/g, ' ').trim().toLowerCase();
     }
 
+    // Runs `source` in the PAGE's own JS realm, via the background service worker.
+    //
+    // A previous attempt injected a <script> element directly instead. Do not do
+    // that: this function is reachable at document_start, when <head> does not yet
+    // exist, so the element lands as a child of <html> mid-parse and wrecks the
+    // page. It is reverted.
+    //
+    // What IS kept from that attempt is the engine guard. Firefox's `chrome.*`
+    // alias is callback-based, so sendMessage returns undefined there and
+    // `.catch()` on the result is a TypeError that aborts the CALLER — the message
+    // is dispatched (the call precedes the property access), so the damage is to
+    // whatever the caller meant to do next, silently.
     function runInPageContext(source) {
-        chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
+        try {
+            const api = (typeof browser !== 'undefined' && browser.runtime) ? browser : chrome;
+            const ret = api.runtime.sendMessage({ type: 'ichc-exec', code: source });
+            if (ret && typeof ret.catch === 'function') { ret.catch(() => {}); }
+        } catch (_) {}
     }
 
+
+    // ── Stop the site yanking focus into the chat box while you type elsewhere ──
+    // Root cause, from the site's own scripts110725.js:
+    //
+    //   function onChatHistoryScroll(){ … if(scrolled away from bottom){ … scrollOff() } … }
+    //   function scrollOff(){ … if(!du.fq){du.fq=$get(oT)} as(); … }
+    //   function as(){ if(du.fq){ du.fq.focus() } }
+    //
+    // So scrolling the chat log away from the bottom focuses the chat input, and
+    // scrolling back down re-arms it (the `du.eo` flag flips via cR()), so it fires
+    // again on the next scroll up. Anything you were typing in — the user-list
+    // filter, a PM, a site form — loses focus mid-keystroke, repeatedly.
+    //
+    // as() is ALSO used legitimately: send_command() ends with it so focus returns
+    // to chat after you send. So it is not disabled. It is only prevented from
+    // taking focus away from ANOTHER text field. When nothing is focused, or the
+    // chat box already is, it behaves exactly as before.
+    function installFocusGuardPatch() {
+        runInPageContext(`
+(() => {
+    if (window.__ichcFocusGuard) { return; }
+    const orig = window.as;
+    // Site scripts may not have run yet — leave the flag unset so a later retry
+    // can still install this.
+    if (typeof orig !== 'function') { return; }
+    window.__ichcFocusGuard = true;
+    window.as = function () {
+        try {
+            const el = document.activeElement;
+            const typingElsewhere = el && el !== document.body && (
+                el.isContentEditable ||
+                ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.id !== 'txtMsg')
+            );
+            if (typingElsewhere) { return; }
+        } catch (e) {}
+        return orig.apply(this, arguments);
+    };
+    console.log('%c[ichc] focus guard installed on as()', 'color:#3ba55c');
+})();
+        `);
+    }
 
     function installBroadcastQualityPatch() {
         const source = `
@@ -3544,6 +3660,46 @@
         _updateCamDecorStyles();
     }
 
+    // ── Evicting decor for cams that are gone ────────────────────────────────
+    // `_camDecorMap` is keyed by camId and nothing above ever removed an entry
+    // for a cam that left. A camId belongs to a stream, not a person, so every
+    // join, leave, reconnect and site-side card rebuild minted a new one and the
+    // map only ever grew — and with it the generated stylesheet, at two to four
+    // rules per dead camId, EVERY ONE of them a `:has()` selector scoped to
+    // `#cams`. `:has()` makes the engine re-check its subjects whenever that
+    // subtree mutates, and #cams mutates constantly, so hours in a busy room
+    // turned into thousands of live rules re-evaluated on every cam change.
+    // That is a whole-document style-recalc cost that climbs for as long as the
+    // tab stays open, which is exactly the "gets laggy the longer it is left
+    // open" report. Rebuilding the CSS string also walked the whole map on
+    // every single badge application.
+    //
+    // The rule for a camId can only ever match while `#id-<camId>` is in the
+    // document, so an entry whose element is gone is dead weight by definition.
+    // Removal is deferred one pass: the site detaches and re-attaches a card
+    // during its own rebuilds, and dropping the decor the instant an element
+    // blinks out would make karma borders flicker.
+    const _camDecorStrikes = new Map();   // camId → consecutive passes seen absent
+    function _pruneCamDecorMap() {
+        if (!_camDecorMap.size) {
+            if (_camDecorStrikes.size) { _camDecorStrikes.clear(); }
+            return;
+        }
+        let dropped = false;
+        for (const camId of [..._camDecorMap.keys()]) {
+            if (document.getElementById('id-' + camId)) {
+                _camDecorStrikes.delete(camId);
+                continue;
+            }
+            const strikes = (_camDecorStrikes.get(camId) || 0) + 1;
+            if (strikes < 2) { _camDecorStrikes.set(camId, strikes); continue; }
+            _camDecorStrikes.delete(camId);
+            _camDecorMap.delete(camId);
+            dropped = true;
+        }
+        if (dropped) { _updateCamDecorStyles(); }
+    }
+
     function _applyCamBadge(nameEl) {
         if (!nameEl) { return; }
         const nick = nameEl.textContent.trim().toLowerCase();
@@ -3553,6 +3709,8 @@
         const camId = getCamId(card);
         if (!camId) { return; }
         _applyCamDecor(camId, profileKarmaCache.get(nick) ?? null, profileYearCache.get(nick) ?? null, profileBgCache.get(nick) ?? null);
+        // A cam whose name just resolved is a cam that may need its overlay.
+        if (_lastMsgOn()) { _scheduleCamLastMsg(); }
         if (!profileYearCache.has(nick) || !profileBgCache.has(nick)) {
             fetchProfileImage(nick).then(() => {
                 _updateChatBadgesForUser(nick);
@@ -3560,6 +3718,198 @@
             });
         }
     }
+
+    // ── Chat text colour ────────────────────────────────────────────────────────
+    // Applied through the site's OWN save path, taken from its onColorSave():
+    //     set_cookie("textcolor", hex);  send_command("/color " + hex);
+    // Both are page globals. `du.eY` is the site's in-memory copy of the same value;
+    // it is written too, behind a typeof guard, so the site stays self-consistent —
+    // but nothing here depends on that minified name existing.
+    function _normalizeHex(value) {
+        const hex = String(value || '').trim().replace(/^#/, '');
+        return /^[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : '';
+    }
+
+    // Local-only: follows the dialog while the user drags, and never touches the
+    // network. The colour is not committed until `change`.
+    function _previewTextColor(value) {
+        const hex = _normalizeHex(value);
+        if (!hex) { return; }
+        const swatch = document.querySelector('#ichc-cog-menu .ichc-color-swatch');
+        if (!swatch) { return; }
+        // The swatch is the colour input itself, and an input shows its `value`,
+        // not its background — the background is transparent so the native swatch
+        // pseudo-element is what paints. Setting background here would do nothing
+        // visible on it, and setting value on a plain span would do nothing at all.
+        if (swatch.tagName === 'INPUT') { swatch.value = '#' + hex; }
+        else { swatch.style.setProperty('background', '#' + hex, 'important'); }
+    }
+
+    function _applyTextColor(value) {
+        const hex = _normalizeHex(value);
+        if (!hex) { return; }
+        _previewTextColor(hex);
+        try { localStorage.setItem('ichc_font_color', '#' + hex); } catch (_) {}
+
+        // Record it against the local user so their own user-list name picks the
+        // colour up straight away rather than after their next message.
+        const me = document.getElementById('ichc-userinfo-username')?.textContent?.trim();
+        if (me && typeof window.__ichcRecordNickColor === 'function') {
+            window.__ichcRecordNickColor(me, '#' + hex);
+            scheduleUserListBuild(120);
+        }
+
+        runInPageContext(`
+(() => {
+    var hex = ${JSON.stringify(hex)};
+    try { if (typeof set_cookie === 'function') { set_cookie('textcolor', hex); } } catch (e) {}
+    try { if (typeof du === 'object' && du) { du.eY = hex; } } catch (e) {}
+    try {
+        if (typeof send_command === 'function') {
+            send_command('/color ' + hex);
+        } else {
+            console.warn('[ichc] text color: send_command() is not defined on this page.');
+        }
+    } catch (e) {
+        console.warn('[ichc] text color: applying failed', e);
+    }
+})();
+        `);
+        console.log('%c[ichc] text color: #' + hex, 'color:#' + hex + ';font-weight:bold');
+    }
+
+    // ── Site header logo, outside a room ────────────────────────────────────────
+    // Most pages ship the logo already; a few render the header without it, and the
+    // header is the only thing identifying the page. CSS alone cannot add a missing
+    // image, so the logo is guaranteed here rather than merely un-hidden.
+    const SITE_LOGO_URL = 'https://www.icanhazchat.com/Get_Hearted/logo_header.png';
+    function _inRoom() { return !!document.getElementById('chat_container'); }
+
+    function ensureSiteHeaderLogo() {
+        if (_inRoom()) { return; }
+        const header = document.getElementById('ctl00_panelHeader') ||
+            document.querySelector('[id$="panelHeader"], .page_header');
+        if (!header) { return; }
+        // The site's own <img id="ichc-logo"> is preferred whenever it is present —
+        // it already points at this file, and leaving it alone keeps the site's
+        // markup authoritative.
+        if (header.querySelector('#ichc-logo, .ichc-site-logo')) { return; }
+
+        let slot = header.querySelector('.page_header_logo, #ichc-logo-header');
+        if (!slot) {
+            slot = document.createElement('div');
+            slot.className = 'page_header_logo';
+            slot.id = 'ichc-logo-header';
+            header.prepend(slot);
+        }
+        const link = document.createElement('a');
+        link.href = '/';
+        link.title = 'Webcam Chat for the Masses - Home';
+        const img = document.createElement('img');
+        img.className = 'ichc-site-logo';
+        img.src = SITE_LOGO_URL;
+        img.alt = 'icanhazchat';
+        // If the asset ever moves, drop the slot rather than leaving a broken image
+        // icon sitting where the brand should be.
+        img.onerror = () => { slot.remove(); };
+        link.appendChild(img);
+        slot.appendChild(link);
+    }
+
+    // ── Last-message cam overlay (opt-in, cog toggle) ───────────────────────────
+    // Shows each broadcaster's most recent chat line beside their name on their own
+    // cam. Content is pulled from chat.js, which owns the chat DOM and hands back a
+    // cloned, fully-themed fragment — so emotes, inline images and gifs come across
+    // as themselves rather than as :codes:.
+    const LASTMSG_KEY = 'ichc_cam_lastmsg';
+    function _lastMsgOn() {
+        try { return localStorage.getItem(LASTMSG_KEY) === '1'; } catch (_) { return false; }
+    }
+    function _setLastMsgOn(on) {
+        try { localStorage.setItem(LASTMSG_KEY, on ? '1' : '0'); } catch (_) {}
+        _syncCamLastMsg();
+    }
+
+    function _removeAllCamLastMsg() {
+        document.querySelectorAll('.ichc-cam-lastmsg').forEach(el => el.remove());
+    }
+
+    let _lastMsgTimer = null;
+    function _scheduleCamLastMsg(delay) {
+        if (_lastMsgTimer) { return; }
+        _lastMsgTimer = window.setTimeout(() => {
+            _lastMsgTimer = null;
+            _syncCamLastMsg();
+        }, delay || 120);
+    }
+
+    // Reports only when the outcome CHANGES, so it explains a blank overlay without
+    // adding a line per cam pass. "0 with a recent message" means the lookup ran and
+    // simply found nothing from those nicks in the visible log.
+    let _lastMsgDiag = '';
+    function _lastMsgReport(state) {
+        if (state === _lastMsgDiag) { return; }
+        _lastMsgDiag = state;
+        console.log('%c[ichc] last-msg overlay: ' + state, 'color:#7289da');
+    }
+
+    function _syncCamLastMsg() {
+        if (!_lastMsgOn()) { _removeAllCamLastMsg(); _lastMsgDiag = ''; return; }
+        const api = window.__ichcLastMsg;
+        if (!api || typeof api.forNicks !== 'function') {
+            _lastMsgReport('chat.js lookup not reachable yet');
+            return;   // chat.js not up yet
+        }
+
+        const nameEls = [...document.querySelectorAll('#cams .name-on-cam')];
+        if (!nameEls.length) { _lastMsgReport('no cam names on screen'); return; }
+        const byNick = new Map();
+        for (const el of nameEls) {
+            const nick = (el.textContent || '').trim();
+            if (nick) { byNick.set(nick.toLowerCase(), el); }
+        }
+        const found = api.forNicks([...byNick.keys()]);
+        _lastMsgReport(byNick.size + ' cam name(s), ' + found.size + ' with a recent message');
+
+        for (const [nick, nameEl] of byNick) {
+            const parent = nameEl.parentElement;
+            if (!parent) { continue; }
+            const content = found.get(nick);
+            let overlay = parent.querySelector(':scope > .ichc-cam-lastmsg');
+            if (!content) { overlay?.remove(); continue; }
+
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.className = 'ichc-cam-lastmsg';
+                // A hidden copy of the nick, in the name's own font, is what pushes
+                // the message clear of it — no measuring, and it re-fits by itself
+                // when the nick or the font changes.
+                const spacer = document.createElement('span');
+                spacer.className = 'ichc-cam-lastmsg-spacer';
+                spacer.setAttribute('aria-hidden', 'true');
+                const body = document.createElement('span');
+                body.className = 'ichc-cam-lastmsg-body';
+                overlay.append(spacer, body);
+                // Directly after the name so both share its containing block and
+                // therefore its coordinate system.
+                nameEl.insertAdjacentElement('afterend', overlay);
+            }
+            overlay.querySelector('.ichc-cam-lastmsg-spacer').textContent = (nameEl.textContent || '').trim();
+            const body = overlay.querySelector('.ichc-cam-lastmsg-body');
+            // Only repaint when the line actually changed — this runs on every cam
+            // pass, and replacing identical nodes would restart every gif in view.
+            const sig = content.text + '|' + (content.frag.childElementCount || 0) + '|' + content.big;
+            if (overlay.dataset.ichcSig === sig) { continue; }
+            overlay.dataset.ichcSig = sig;
+            body.replaceChildren(content.frag);
+            overlay.classList.toggle('ichc-big', !!content.big);
+            overlay.title = content.text || '';
+        }
+    }
+
+    window.addEventListener('ichc-chat-row', () => {
+        if (_lastMsgOn()) { _scheduleCamLastMsg(); }
+    });
 
     function _updateCamBadgesForUser(key) {
         const karma = profileKarmaCache.get(key);
@@ -3947,6 +4297,10 @@
             _attachCamBadgeObserver();
             _refreshAllChatCamStatus();
             _initChatOverlayScrollbar();
+            // Same cadence deliberately: this is the tick that already knows the
+            // cam DOM may have been rebuilt underneath us, and two passes of it
+            // is the grace period _pruneCamDecorMap wants before evicting.
+            _pruneCamDecorMap();
         }, 3000);
     }
 
@@ -4741,6 +5095,35 @@
             );
     }
 
+    // Focus never survives hiding. A hidden card still matches the stored focus
+    // key, so the focus slot stays held by something invisible and the cam pops
+    // back at focus size the moment it is unhidden — hiding and unhiding a user
+    // must not change which cam is focused. Every hide/reveal path drops the key
+    // when this card owns it.
+    function clearFeaturedCamForCard(card) {
+        if (!card) { return; }
+        const featured = (localStorage.getItem(FEATURED_KEY) || '').trim().toLowerCase();
+        if (!featured) { return; }
+        // Cards are keyed by camId, but a card with no camId falls back to its
+        // name — check both, plus whatever the last layout pass stamped.
+        const keys = [
+            (card.dataset?.ichcCam || '').toLowerCase(),
+            getCardKey(card).toLowerCase(),
+            getCardName(card).trim().toLowerCase(),
+        ].filter(Boolean);
+        if (!keys.includes(featured)) { return; }
+        localStorage.removeItem(FEATURED_KEY);
+        _featuredWasFound = false;
+    }
+
+    function clearFeaturedCamForUser(username) {
+        const key = (username || '').trim().toLowerCase();
+        if (!key) { return; }
+        document.querySelectorAll('#cams .rounded_square').forEach(card => {
+            if (getCardName(card).trim().toLowerCase() === key) { clearFeaturedCamForCard(card); }
+        });
+    }
+
     function setBlockedStateForCard(card, shouldBlock) {
         const name = getCardName(card).trim();
         if (!name || looksLikePlaceholderName(name)) { return ''; }
@@ -4748,6 +5131,7 @@
         const blocked = loadBlockedUsers();
         if (shouldBlock) {
             blocked.add(name.toLowerCase());
+            clearFeaturedCamForCard(card);
         } else {
             blocked.delete(name.toLowerCase());
         }
@@ -4785,14 +5169,26 @@
                 // re-classify the card as ichc-ghost-slot before media loads.
                 const card = vc.closest('.rounded_square');
                 if (card) { delete card.dataset.ichcFirstSeenAt; }
-                // Invoke the native Start/retry button so the stream reconnects.
+                // Unhiding restores the cam, not the focus. Without this, a focus
+                // key left pointing at this cam (set before it was hidden, and
+                // never cleared because the hidden card still matched it) makes
+                // every reveal come back fullscreen.
+                clearFeaturedCamForCard(card);
+                // Click the site's RETRY control so the stream reconnects — and
+                // nothing else. This used to go through
+                // getNativeCamToggleControl(), which returns the first element in
+                // document order matching a deliberately broad selector list
+                // (`.cam-button`, `[id^="cambtn"]`, …) and whose label heuristic
+                // calls ANY bare `cambtn1-<id>` a "Start". The only control we
+                // have actually verified restarts a feed is `cambtn1-<id>-retry`
+                // (the cam-refresh path clicks exactly that); a bare
+                // `cambtn1-<id>` / `.cam-button` is a different site control, so
+                // revealing a cam was firing an unidentified native button.
                 window.setTimeout(() => {
-                    const startBtn = card
-                        ? getNativeCamToggleControl(card)
-                        : vc.querySelector('[id^="cambtn1"], [id$="-retry"]');
-                    if (startBtn && getNativeCamActionLabel(startBtn) === 'Start') {
-                        invokeNativeElementAction(startBtn);
-                    }
+                    const scope = card || vc;
+                    const retryBtn = scope.querySelector('[id^="cambtn1-"][id$="-retry"]')
+                        || scope.querySelector('[id$="-retry"]');
+                    if (retryBtn) { invokeNativeElementAction(retryBtn); }
                 }, 80);
             }
         });
@@ -6146,12 +6542,16 @@
   };
 
   // Re-apply a persisted broadcast-quality preset on load.
+  // This table must agree with _BCAST_Q_SETTINGS in the content script — it is the
+  // same three presets, under the same sub-1 Mbps ceiling, reached by the boot path
+  // instead of the menu. Retired keys map to their nearest survivor exactly as
+  // _BCAST_Q_LEGACY does, so a broadcaster who had picked HD before the trim does
+  // not silently come back up uncapped.
   try {
-    const bq = localStorage.getItem('ichc_bq');
-    if (bq === 'sharp') { window.ichcSetBroadcastQuality({ width: 640, height: 480, maxFps: 30, maxKbps: 1500, degradation: 'maintain-resolution' }); }
-    else if (bq === 'smooth') { window.ichcSetBroadcastQuality({ width: 640, height: 480, maxFps: 30, maxKbps: 2500, degradation: 'maintain-framerate' }); }
-    else if (bq === 'hd') { window.ichcSetBroadcastQuality({ width: 1280, height: 720, maxFps: 30, maxKbps: 4000, degradation: 'balanced' }); }
-    else if (bq === 'fhd') { window.ichcSetBroadcastQuality({ width: 1920, height: 1080, maxFps: 30, maxKbps: 6000, degradation: 'balanced' }); }
+    const raw = localStorage.getItem('ichc_bq');
+    const bq = ({ sharp: 'sd480', smooth: 'sd480', hd: 'hd720', fhd: 'hd720' })[raw] || raw;
+    if (bq === 'sd480') { window.ichcSetBroadcastQuality({ width: 640, height: 480, maxFps: 30, maxKbps: 900, degradation: 'balanced' }); }
+    else if (bq === 'hd720') { window.ichcSetBroadcastQuality({ width: 1280, height: 720, maxFps: 30, maxKbps: 980, degradation: 'maintain-resolution' }); }
   } catch (e) {}
 
   async function sample() {
@@ -7821,28 +8221,6 @@
             return;
         }
 
-        // The site's colour picker reports back through this (see the Text color item):
-        // the page writes the saved colour to documentElement.dataset and fires the
-        // event. Bound once per cog build; the guard keeps repeat builds from stacking
-        // listeners.
-        if (!window.__ichcColorListener) {
-            window.__ichcColorListener = true;
-            window.addEventListener('ichc-color-picked', () => {
-                const color = document.documentElement.dataset.ichcPickedColor;
-                if (!color) { return; }
-                try { localStorage.setItem('ichc_font_color', color); } catch (_) {}
-                const swatch = document.querySelector('#ichc-cog-menu .ichc-color-swatch');
-                if (swatch) { swatch.style.setProperty('background', color, 'important'); }
-                // Record it against the local user so their own userlist name picks the
-                // colour up straight away rather than after their next message.
-                const me = document.getElementById('ichc-userinfo-username')?.textContent?.trim();
-                if (me && typeof window.__ichcRecordNickColor === 'function') {
-                    window.__ichcRecordNickColor(me, color);
-                    scheduleUserListBuild(120);
-                }
-            });
-        }
-
         const wrapper = document.createElement('div');
         wrapper.id = 'ichc-cog-wrapper';
 
@@ -7896,10 +8274,23 @@
             {
                 label: 'Broadcast quality: ' + _bcastQLabel(),
                 icon: ICONS.gauge,
+                qualityPicker: true,
+                keepOpen: true,
+            },
+            {
+                label: 'Observed rooms',
+                icon: ICONS.eye,
+                obsPicker: true,
+                keepOpen: true,
+            },
+            {
+                label: 'Last msg cam overlay: ' + (_lastMsgOn() ? 'On' : 'Off'),
+                icon: ICONS.chat,
                 keepOpen: true,
                 action(labelEl) {
-                    const next = _cycleBcastQuality();
-                    if (labelEl) { labelEl.textContent = 'Broadcast quality: ' + next.label; }
+                    const on = !_lastMsgOn();
+                    _setLastMsgOn(on);
+                    if (labelEl) { labelEl.textContent = 'Last msg cam overlay: ' + (on ? 'On' : 'Off'); }
                 },
             },
             {
@@ -7908,6 +8299,9 @@
                 keepOpen: true,
                 action(labelEl) {
                     const on = !_autoRestartEnabled();
+                    if (on) { lurkState.limitHit = false; }
+                    // _setAutoRestart repaints the label, the paused-screen toggle
+                    // and the topbar indicator through _syncAutoRestartUi.
                     _setAutoRestart(on);
                     if (on) {
                         // If cams are currently paused, start the countdown now.
@@ -7918,64 +8312,39 @@
                         _cancelCamAutoRestart();
                     }
                     if (labelEl) { labelEl.textContent = 'Auto-restart cams: ' + (on ? 'On' : 'Off'); }
-                    // Keep the on-screen paused toggle (if visible) in sync.
-                    document.querySelector('.ichc-cam-resume-toggle')?.classList.toggle('ichc-on', on);
                 },
             },
             {
                 label: 'Text color',
                 icon: ICONS.palette,
-                swatch: true,
-                action() {
-                    // Drive the site's own picker. It is a jscolor dialog opened by the
-                    // global pickColor(), with onColorSave / onColorCancel callbacks —
-                    // confirmed against the live command bar, which links
-                    // javascript:pickColor(). This replaces a bespoke <input type=color>
-                    // that guessed at the site (it set window.chatFontColor and poked
-                    // #colorDiv, neither of which exists), so the colour never actually
-                    // applied to the user's messages.
+                // Renders the swatch AS an <input type="color">; the wiring and the
+                // saved value are applied where the row is built.
+                colorInput: true,
+                // The menu stays open: the native colour dialog is a separate OS
+                // window, and the input it belongs to must remain in the document
+                // while that dialog is up.
+                keepOpen: true,
+                action(labelEl) {
+                    // The site's own dialog is NOT used. From its scripts110725.js,
+                    // pickColor() ends with $("#colorDiv").toggle() and then branches
+                    // on :visible — but #colorDiv is not in the room document, so
+                    // toggle() hit an empty set, :visible was false, and the site ran
+                    // its else branch, as(), which focuses the chat input. That is
+                    // exactly what was reported: menu closes, chat box takes focus,
+                    // nothing else. An earlier comment in this file had already found
+                    // the same thing ("neither of which exists").
                     //
-                    // onColorSave is wrapped once so the saved colour also reaches us:
-                    // the page publishes it on documentElement.dataset and fires a plain
-                    // Event. A dataset string is used rather than CustomEvent detail
-                    // because object payloads do not cross the content-script boundary
-                    // reliably in Firefox.
-                    runInPageContext(`
-(() => {
-    try {
-        if (!window.__ichcColorHooked && typeof window.onColorSave === 'function') {
-            window.__ichcColorHooked = true;
-            const orig = window.onColorSave;
-            window.onColorSave = function() {
-                let ret;
-                try { ret = orig.apply(this, arguments); } catch (_) {}
-                try {
-                    let c = '';
-                    for (let i = 0; i < arguments.length; i++) {
-                        const a = arguments[i];
-                        if (typeof a === 'string' && /^#?[0-9a-fA-F]{3,8}$/.test(a.trim())) { c = a.trim(); break; }
-                        if (a && typeof a.toHEXString === 'function') { c = a.toHEXString(); break; }
-                    }
-                    if (!c) {
-                        const inp = document.querySelector('input.jscolor, input[class*="jscolor"]');
-                        if (inp && inp.value) { c = inp.value.trim(); }
-                    }
-                    if (c) {
-                        if (c[0] !== '#') { c = '#' + c; }
-                        document.documentElement.dataset.ichcPickedColor = c;
-                        window.dispatchEvent(new Event('ichc-color-picked'));
-                    }
-                } catch (_) {}
-                return ret;
-            };
-        }
-        if (typeof window.pickColor === 'function') { window.pickColor(); return; }
-        // Fallback: click the command bar's own pickColor link
-        const link = Array.from(document.querySelectorAll('a[href*="pickColor"]'))[0];
-        if (link) { link.click(); }
-    } catch (_) {}
-})();
-                    `);
+                    // What actually applies a colour, from the site's onColorSave():
+                    //     set_cookie("textcolor", hex); send_command("/color " + hex);
+                    // Both are plain page globals, so a native colour input driving
+                    // those two calls does the whole job.
+                    //
+                    // Clicking the swatch itself already opens the dialog — this only
+                    // forwards a click on the rest of the row, and is why the swatch
+                    // stops propagation rather than letting it bubble back here.
+                    const input = labelEl?.closest?.('.ichc-cog-item')
+                        ?.querySelector('input.ichc-color-swatch');
+                    if (input) { input.click(); }
                 },
             },
             { label: 'Image viewing',   icon: ICONS.imageIcon, fn: 'toggleImages()' },
@@ -8007,14 +8376,36 @@
                             menu.hidden = true;
                             cogBtn.setAttribute('aria-expanded', 'false');
                         }
-                    } else {
+                    } else if (item.fn) {
                         runInPageContext(item.fn);
-                        menu.hidden = true;
-                        cogBtn.setAttribute('aria-expanded', 'false');
+                        if (!item.keepOpen) {
+                            menu.hidden = true;
+                            cogBtn.setAttribute('aria-expanded', 'false');
+                        }
                     }
+                    // Neither `action` nor `fn` means an EXPANDABLE item (the theme
+                    // picker, the broadcast-quality picker). Its own listener below
+                    // toggles the sub-list, and this handler must do nothing at all.
+                    //
+                    // It used to fall into the `else` above, which closed the entire
+                    // cog menu the instant you clicked an expander — you never got to
+                    // see the sub-list you had just opened. It also called
+                    // `runInPageContext(undefined)`, firing a bogus
+                    // `{type:'ichc-exec', code: undefined}` message at the background
+                    // script on every such click. That silently did nothing because
+                    // runInPageContext is fire-and-forget with a swallowed rejection,
+                    // which is exactly why it went unnoticed.
                 });
             }
-            el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span class="ichc-cog-item-label">${item.label}</span>${item.swatch ? '<span class="ichc-color-swatch" aria-hidden="true"></span>' : ''}`;
+            // The colour row's swatch IS the <input type="color">, not a span beside
+            // one. A zero-sized, transparent input is not something Firefox will
+            // open a colour dialog for, and an invisible control is also worse to
+            // use — this way the dot the user can see is the control itself, and a
+            // direct click on it needs no programmatic .click() at all.
+            const swatchHtml = item.colorInput
+                ? '<input type="color" class="ichc-color-swatch ichc-color-input" aria-label="Chat text colour">'
+                : (item.swatch ? '<span class="ichc-color-swatch" aria-hidden="true"></span>' : '');
+            el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span class="ichc-cog-item-label">${item.label}</span>${swatchHtml}`;
             if (item.themePicker) {
                 // Expands in place rather than flying out sideways: the cog menu is
                 // already anchored near the viewport edge, so a nested popover would
@@ -8057,9 +8448,160 @@
                 });
                 item.afterEl = list;
             }
-            if (item.swatch) {
+            if (item.obsPicker) {
+                // Same expand-in-place shell as the theme and quality pickers.
+                // Rows are REBUILT on every expand rather than once at cog build:
+                // room status is live data, and the menu outlives many
+                // observe/unobserve cycles.
+                el.classList.add('ichc-cog-item-expandable');
+                el.setAttribute('aria-expanded', 'false');
+                const list = document.createElement('div');
+                list.className = 'ichc-theme-list ichc-obs-list';
+                list.hidden = true;
+                let statusTimer = 0;
+                const rebuild = () => {
+                    list.textContent = '';
+                    const rooms = _obsRooms().filter(r => r !== _obsCurrentRoom());
+                    if (!rooms.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'ichc-obs-empty';
+                        empty.textContent = 'No rooms observed';
+                        list.appendChild(empty);
+                    }
+                    rooms.forEach(room => {
+                        const row = document.createElement('div');
+                        row.className = 'ichc-obs-row';
+                        const name = document.createElement('span');
+                        name.className = 'ichc-obs-name';
+                        name.textContent = room;
+                        const status = document.createElement('span');
+                        status.className = 'ichc-obs-status';
+                        status.textContent = _obsState.frames.get(room)?.status || 'starting…';
+                        const remove = document.createElement('button');
+                        remove.type = 'button';
+                        remove.className = 'ichc-obs-remove';
+                        remove.title = 'Stop observing ' + room;
+                        remove.innerHTML = ICONS.xmark;
+                        remove.addEventListener('click', e => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            _obsSaveRooms(_obsRooms().filter(r => r !== room));
+                            rebuild();
+                        });
+                        row.append(name, status, remove);
+                        list.appendChild(row);
+                    });
+                    const add = document.createElement('button');
+                    add.type = 'button';
+                    add.className = 'ichc-theme-row ichc-obs-add';
+                    add.textContent = '+ Observe a room…';
+                    add.addEventListener('click', e => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const room = (window.prompt('Room to observe (its cams join this plane; chat stays here):') || '')
+                            .trim().toLowerCase();
+                        if (!room || room === _obsCurrentRoom()) { return; }
+                        _obsSaveRooms([..._obsRooms(), room]);
+                        rebuild();
+                    });
+                    list.appendChild(add);
+                };
+                el.addEventListener('click', () => {
+                    const opening = list.hidden;
+                    if (opening) {
+                        rebuild();
+                        // Live status while showing — 'loading…' should become
+                        // 'N cams' before the user's eyes, not on re-open.
+                        window.clearInterval(statusTimer);
+                        statusTimer = window.setInterval(() => {
+                            if (list.hidden) { window.clearInterval(statusTimer); statusTimer = 0; return; }
+                            list.querySelectorAll('.ichc-obs-row').forEach(row => {
+                                const room = row.querySelector('.ichc-obs-name')?.textContent;
+                                const st = row.querySelector('.ichc-obs-status');
+                                const cur = room ? (_obsState.frames.get(room)?.status || 'starting…') : '';
+                                if (st && cur && st.textContent !== cur) { st.textContent = cur; }
+                            });
+                        }, 1000);
+                    }
+                    list.hidden = !list.hidden;
+                    el.setAttribute('aria-expanded', String(!list.hidden));
+                });
+                item.afterEl = list;
+            }
+            if (item.qualityPicker) {
+                // Same expand-in-place treatment as the theme picker directly
+                // above, for the same reason: the cog menu is anchored near the
+                // viewport edge, so a fly-out submenu would need collision
+                // handling for one short list of fixed rows.
+                //
+                // This replaces a cycle-through-five-states button. Cycling made
+                // the presets effectively undiscoverable — reaching Full HD meant
+                // stepping through four others and applying each one on the way,
+                // and nothing on screen ever revealed that Sharp and Smooth are
+                // the same resolution and framerate differing only in what they
+                // sacrifice under bandwidth pressure. Every preset now states its
+                // resolution, framerate, ceiling and trade-off up front.
+                el.classList.add('ichc-cog-item-expandable');
+                el.setAttribute('aria-expanded', 'false');
+                const list = document.createElement('div');
+                // Reuses the theme-list/theme-row chrome — indent rail, hover,
+                // active tick — and adds only the second line of detail.
+                list.className = 'ichc-theme-list ichc-bq-list';
+                list.hidden = true;
+                const activeKey = _bcastQKey();
+                _BCAST_Q_ORDER.forEach(key => {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'ichc-theme-row ichc-bq-row';
+                    row.dataset.bqId = key;
+                    row.setAttribute('aria-current', String(key === activeKey));
+                    const text = document.createElement('span');
+                    text.className = 'ichc-bq-text';
+                    const nameEl = document.createElement('span');
+                    nameEl.className = 'ichc-bq-name';
+                    nameEl.textContent = _BCAST_Q[key].label;
+                    const detailEl = document.createElement('span');
+                    detailEl.className = 'ichc-bq-detail';
+                    // textContent, not innerHTML — these strings are derived from
+                    // the settings table but there is no reason to give them
+                    // markup power.
+                    detailEl.textContent = _bcastQDetail(key);
+                    text.append(nameEl, detailEl);
+                    row.appendChild(text);
+                    row.addEventListener('click', e => {
+                        e.preventDefault();
+                        e.stopPropagation();   // do not toggle the expander shut
+                        const applied = _setBcastQuality(key);
+                        list.querySelectorAll('.ichc-bq-row').forEach(r => {
+                            r.setAttribute('aria-current', String(r.dataset.bqId === key));
+                        });
+                        const labelEl = el.querySelector('.ichc-cog-item-label');
+                        if (labelEl) { labelEl.textContent = 'Broadcast quality: ' + applied.label; }
+                    });
+                    list.appendChild(row);
+                });
+                el.addEventListener('click', () => {
+                    list.hidden = !list.hidden;
+                    el.setAttribute('aria-expanded', String(!list.hidden));
+                });
+                item.afterEl = list;
+            }
+            if (item.swatch || item.colorInput) {
                 const sw = el.querySelector('.ichc-color-swatch');
-                try { const s = localStorage.getItem('ichc_font_color'); if (s && sw) { sw.style.background = s; } } catch (_) {}
+                let saved = '';
+                try { saved = localStorage.getItem('ichc_font_color') || ''; } catch (_) {}
+                if (sw && item.colorInput) {
+                    // An <input type="color"> only accepts #rrggbb; anything else
+                    // leaves it at its own default rather than silently blanking.
+                    if (/^#[0-9a-f]{6}$/i.test(saved)) { sw.value = saved; }
+                    sw.addEventListener('input', () => _previewTextColor(sw.value));
+                    sw.addEventListener('change', () => _applyTextColor(sw.value));
+                    // The row is an <a href="#">; without this a click on the swatch
+                    // bubbles up and the row handler runs too.
+                    sw.addEventListener('click', e => e.stopPropagation());
+                } else if (sw && saved) {
+                    sw.style.background = saved;
+                }
             }
             menu.appendChild(el);
             if (item.afterEl) { menu.appendChild(item.afterEl); }
@@ -8620,6 +9162,9 @@
             [200, 600, 1400].forEach(d => window.setTimeout(transformCommandBar, d));
             return;
         }
+        // The header exists now, so the auto-restart chip has somewhere to live.
+        // Re-run on every pass: a topbar rebuild drops the chip with it.
+        _syncAutoRestartIndicator();
 
         // Theme button goes in the footer
         const footerBar = ensureFooterBar();
@@ -8709,8 +9254,104 @@
     function _autoRestartEnabled() {
         try { return localStorage.getItem(AUTO_RESTART_KEY) === '1'; } catch (_) { return false; }
     }
-    function _setAutoRestart(on) {
+    function _setAutoRestart(on, opts) {
         try { localStorage.setItem(AUTO_RESTART_KEY, on ? '1' : '0'); } catch (_) {}
+        // Turning it on by hand is the user vouching for another full run of
+        // restarts, so the budget starts over. Turning it off leaves the count
+        // alone: nothing reads it while disarmed, and the next manual arm resets it.
+        if (on && !(opts && opts.keepCount)) { _setAutoRestartCount(0); }
+        _syncAutoRestartUi();
+    }
+    function _autoRestartCount() {
+        try { return Math.max(0, parseInt(localStorage.getItem(AUTO_RESTART_COUNT_KEY), 10) || 0); } catch (_) { return 0; }
+    }
+    function _setAutoRestartCount(n) {
+        try { localStorage.setItem(AUTO_RESTART_COUNT_KEY, String(Math.max(0, n | 0))); } catch (_) {}
+    }
+    function _autoRestartLeft() {
+        return Math.max(0, AUTO_RESTART_LIMIT - _autoRestartCount());
+    }
+    // One place that repaints every surface showing auto-restart state: the topbar
+    // indicator, the paused-screen toggle, the cog row, and the countdown line.
+    // Called from every mutation of the setting so they cannot drift apart.
+    function _syncAutoRestartUi() {
+        const on = _autoRestartEnabled();
+        _syncAutoRestartIndicator();
+        const toggle = document.querySelector('.ichc-cam-resume-toggle');
+        if (toggle) {
+            toggle.classList.toggle('ichc-on', on);
+            toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+        document.querySelectorAll('.ichc-cog-item-label').forEach(el => {
+            if (/^Auto-restart cams: /.test(el.textContent || '')) {
+                el.textContent = 'Auto-restart cams: ' + (on ? 'On' : 'Off');
+            }
+        });
+        _updateCamResumeCountdown();
+    }
+
+    // Spent the budget: turn the setting off for real (so every surface reads
+    // "Off" and a reload stays off) and say why on the paused screen.
+    function _disarmAutoRestartAtLimit() {
+        _cancelCamAutoRestart();
+        _setAutoRestart(false, { keepCount: true });
+        lurkState.limitHit = true;
+        console.log('%c[ichc] auto-restart cams disarmed after ' + AUTO_RESTART_LIMIT + ' restarts', 'color:#faa61a;font-weight:bold');
+        _syncAutoRestartUi();
+    }
+
+    // ── Always-visible auto-restart state chip ───────────────────────────────────
+    // The only readouts of this setting used to be the cog submenu (hidden until
+    // opened) and the toggle on the paused screen (which exists only while cams are
+    // already down) — so in the state that matters, before a pause, nothing on
+    // screen said whether cams would come back on their own. This chip lives in the
+    // topbar next to the cog and always answers that question.
+    function _ensureAutoRestartIndicator() {
+        let chip = document.getElementById('ichc-autorestart-chip');
+        if (chip) { return chip; }
+        const actions = document.getElementById('ichc-header-actions');
+        if (!actions) { return null; }
+        chip = document.createElement('button');
+        chip.type = 'button';
+        chip.id = 'ichc-autorestart-chip';
+        chip.addEventListener('click', () => {
+            const on = !_autoRestartEnabled();
+            if (on) { lurkState.limitHit = false; }
+            _setAutoRestart(on);
+            if (on) {
+                if (document.getElementById('cams')?.classList.contains('ichc-lurk-active')) {
+                    _scheduleCamAutoRestart();
+                }
+            } else {
+                _cancelCamAutoRestart();
+            }
+        });
+        // Before the cog so the cog stays the rightmost control it has always been.
+        const cog = document.getElementById('ichc-cog-wrapper');
+        if (cog && cog.parentElement === actions) { actions.insertBefore(chip, cog); }
+        else { actions.appendChild(chip); }
+        return chip;
+    }
+
+    function _syncAutoRestartIndicator() {
+        const chip = _ensureAutoRestartIndicator();
+        if (!chip) { return; }
+        const on = _autoRestartEnabled();
+        const left = _autoRestartLeft();
+        chip.classList.toggle('ichc-on', on);
+        chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+        chip.innerHTML = (on ? ICONS.rotateOn : ICONS.rotateOff) +
+            '<span class="ichc-autorestart-chip-text"></span>';
+        // textContent for the label: it is the only part that varies, and it never
+        // needs markup.
+        const text = chip.querySelector('.ichc-autorestart-chip-text');
+        if (text) { text.textContent = on ? String(left) : 'off'; }
+        chip.title = on
+            ? 'Cams will auto-restart when the room goes idle — ' + left +
+              (left === 1 ? ' restart left' : ' restarts left') + '. Click to turn off.'
+            : (lurkState.limitHit
+                ? 'Auto-restart turned itself off after ' + AUTO_RESTART_LIMIT + ' restarts. Click to turn back on.'
+                : 'Cams will NOT auto-restart when the room goes idle. Click to turn on.');
     }
 
     function _cancelCamAutoRestart() {
@@ -8756,12 +9397,21 @@
 
     function _scheduleCamAutoRestart() {
         if (lurkState.autoTimer) { return; } // already counting down
+        // Budget is checked at SCHEDULE time as well as after each restart, so a
+        // page reload that lands with the budget already spent cannot start a
+        // fresh countdown off a stale enabled flag.
+        if (_autoRestartLeft() <= 0) { _disarmAutoRestartAtLimit(); return; }
         const delay = 2000 + Math.floor(Math.random() * 8001); // 2–10s
         lurkState.restartAt = Date.now() + delay;
         lurkState.autoTimer = window.setTimeout(() => {
             lurkState.autoTimer = null;
             _cancelCamAutoRestart();
+            _setAutoRestartCount(_autoRestartCount() + 1);
             _triggerCamRestart();
+            // Disarm AFTER the fifth restart, not instead of it — the user asked
+            // for five restarts, so the fifth one happens and the sixth never does.
+            if (_autoRestartLeft() <= 0) { _disarmAutoRestartAtLimit(); }
+            else { _syncAutoRestartUi(); }
         }, delay);
         if (!lurkState.countdownTimer) {
             lurkState.countdownTimer = window.setInterval(_updateCamResumeCountdown, 500);
@@ -8773,7 +9423,15 @@
         const el = document.querySelector('.ichc-cam-resume-countdown');
         if (!el) { return; }
         if (!lurkState.restartAt) {
-            el.textContent = _autoRestartEnabled() ? 'Auto-restart is on.' : '';
+            if (_autoRestartEnabled()) {
+                const left = _autoRestartLeft();
+                el.textContent = 'Auto-restart is on — ' + left +
+                    (left === 1 ? ' restart left.' : ' restarts left.');
+            } else if (lurkState.limitHit) {
+                el.textContent = 'Auto-restart turned itself off after ' + AUTO_RESTART_LIMIT + ' restarts.';
+            } else {
+                el.textContent = '';
+            }
             return;
         }
         const secs = Math.max(0, Math.ceil((lurkState.restartAt - Date.now()) / 1000));
@@ -8843,7 +9501,12 @@
                 btn.innerHTML = ICONS.rotate + '<span>Restart Cams</span>';
                 btn.addEventListener('click', () => {
                     _cancelCamAutoRestart();
+                    // A manual restart is the user saying they are still here, so
+                    // the automatic budget starts over from full.
+                    _setAutoRestartCount(0);
+                    lurkState.limitHit = false;
                     _triggerCamRestart();
+                    _syncAutoRestartUi();
                 });
                 wrap.appendChild(btn);
 
@@ -8863,6 +9526,7 @@
                 _renderToggle();
                 toggle.addEventListener('click', () => {
                     const on = !_autoRestartEnabled();
+                    if (on) { lurkState.limitHit = false; }
                     _setAutoRestart(on);
                     _renderToggle();
                     if (on) { _scheduleCamAutoRestart(); } else { _cancelCamAutoRestart(); }
@@ -8885,6 +9549,7 @@
         // Schedule/cancel auto-restart on the visibility transition.
         if (visible && !lurkState.wasVisible) {
             lurkState.wasVisible = true;
+            _syncAutoRestartIndicator();
             if (_autoRestartEnabled()) { _scheduleCamAutoRestart(); }
         } else if (!visible && lurkState.wasVisible) {
             lurkState.wasVisible = false;
@@ -9247,6 +9912,7 @@
                 const bl = loadBlockedUsers();
                 bl.add(key);
                 saveBlockedUsers(bl);
+                clearFeaturedCamForUser(key);
                 syncCamCards();
                 buildUserList();
             });
@@ -9880,7 +10546,31 @@
             if (savedPmBtn && !savedPmAvatars.contains(savedPmBtn)) {
                 savedPmAvatars.insertBefore(savedPmBtn, savedPmAvatars.firstChild || null);
             }
-            // Collapse tab lives in the bottom-right of the PM avatar strip
+            // Collapse tab lives in the bottom-right of the PM avatar strip.
+            //
+            // THE LEAK, measured in a live 6.5-hour session: 2,803 duplicate
+            // collapse buttons inside this strip, 19,631 nodes — 54% of the
+            // entire document. `collapseBtn` is created fresh on every
+            // buildUserList() (see its `document.createElement` above), but the
+            // strip is REUSED across builds, so `contains(collapseBtn)` asks
+            // whether the strip already holds THIS brand-new node. It never
+            // does. The guard therefore never fired, every rebuild appended
+            // another button, and nothing ever removed one. The userlist
+            // rebuilds on a 350ms debounce whenever the room's user list
+            // mutates, which in a busy room is several times a minute.
+            //
+            // The duplicates also all carried `id="ichc-ul-collapse-btn"`, so
+            // `getElementById` kept returning the OLDEST one — which is why
+            // `_toggleUserListCollapse` and the placement fix-up in
+            // `transformCommandBar` were operating on a stale button while the
+            // visible one was the last appended.
+            //
+            // Evict any previous tab before adopting the new one. Scoped to the
+            // strip because that is the only container that survives a rebuild;
+            // the header this button was first appended to is itself rebuilt.
+            savedPmAvatars.querySelectorAll('#ichc-ul-collapse-btn').forEach(stale => {
+                if (stale !== collapseBtn) { stale.remove(); }
+            });
             if (!savedPmAvatars.contains(collapseBtn)) {
                 savedPmAvatars.appendChild(collapseBtn);
             }
@@ -10513,37 +11203,73 @@
                 // §9 — collapsed by default; persist expanded flag across reloads.
                 const _offOpen = prevOfflineOpen || localStorage.getItem('ichc_ul_hidden_open') === 'true';
                 if (_offOpen) { section.classList.add('is-open'); }
-                header.addEventListener('click', () => {
-                    const open = section.classList.toggle('is-open');
-                    localStorage.setItem('ichc_ul_hidden_open', String(open));
-                });
                 section.appendChild(header);
 
                 const list = document.createElement('div');
                 list.className = 'ichc-ul-offline-hidden-list';
-                // Build display-name lookup once — getBlockedUserDisplayName does 4+ querySelectorAll
-                // calls per key, making it O(n×m) when called inside the forEach loop.
-                const _dnMap = new Map();
-                const _dnAdd = t => { const s = (t || '').trim(); if (s) { _dnMap.set(s.toLowerCase(), s); } };
-                getLiveCamEntries().forEach(e => _dnAdd(e.name));
-                document.querySelectorAll('#cams .name-on-cam, #activeUserList a.userlink, #txt a.userlink')
-                    .forEach(el => _dnAdd(el.textContent));
-                offlineHiddenKeys.forEach(key => {
-                    const row = document.createElement('div');
-                    row.className = 'ichc-ul-offline-hidden-row';
-                    const name = document.createElement('span');
-                    name.className = 'ichc-ul-offline-hidden-name';
-                    name.textContent = _dnMap.get((key || '').trim().toLowerCase()) || key;
-                    const removeBtn = document.createElement('button');
-                    removeBtn.type = 'button';
-                    removeBtn.className = 'ichc-ul-offline-remove-btn';
-                    removeBtn.title = 'Remove from hidden list';
-                    removeBtn.innerHTML = ICONS.xmark;
-                    removeBtn.addEventListener('click', () => revealBlockedUser(key));
-                    row.appendChild(name);
-                    row.appendChild(removeBtn);
-                    list.appendChild(row);
+
+                // Built on demand, not on every rebuild. The same live session
+                // that exposed the collapse-button leak had 2,166 offline-hidden
+                // users, i.e. 6,498 nodes (row + name + remove button each) —
+                // 18% of the document — reconstructed from scratch every time
+                // the userlist rebuilt, several times a minute, for a section
+                // that is COLLAPSED BY DEFAULT and so was almost never looked
+                // at. The cost scaled with how many people the user had ever
+                // hidden, across all sessions, which is why it grew without any
+                // single session leaking.
+                //
+                // The keys are captured by closure, so expanding later still
+                // renders the set this build computed; the next rebuild replaces
+                // the section wholesale anyway.
+                let _hiddenFilled = false;
+                const fillHiddenList = () => {
+                    if (_hiddenFilled) { return; }
+                    _hiddenFilled = true;
+                    // Build display-name lookup once — getBlockedUserDisplayName does 4+ querySelectorAll
+                    // calls per key, making it O(n×m) when called inside the forEach loop.
+                    const _dnMap = new Map();
+                    const _dnAdd = t => { const s = (t || '').trim(); if (s) { _dnMap.set(s.toLowerCase(), s); } };
+                    getLiveCamEntries().forEach(e => _dnAdd(e.name));
+                    document.querySelectorAll('#cams .name-on-cam, #activeUserList a.userlink, #txt a.userlink')
+                        .forEach(el => _dnAdd(el.textContent));
+                    const frag = document.createDocumentFragment();
+                    offlineHiddenKeys.forEach(key => {
+                        const row = document.createElement('div');
+                        row.className = 'ichc-ul-offline-hidden-row';
+                        const name = document.createElement('span');
+                        name.className = 'ichc-ul-offline-hidden-name';
+                        name.textContent = _dnMap.get((key || '').trim().toLowerCase()) || key;
+                        const removeBtn = document.createElement('button');
+                        removeBtn.type = 'button';
+                        removeBtn.className = 'ichc-ul-offline-remove-btn';
+                        removeBtn.title = 'Remove from hidden list';
+                        removeBtn.innerHTML = ICONS.xmark;
+                        removeBtn.addEventListener('click', () => revealBlockedUser(key));
+                        row.appendChild(name);
+                        row.appendChild(removeBtn);
+                        frag.appendChild(row);
+                    });
+                    list.appendChild(frag);
+                };
+
+                header.addEventListener('click', () => {
+                    const open = section.classList.toggle('is-open');
+                    if (open) {
+                        fillHiddenList();
+                        // Rows built after the user already typed a filter would
+                        // otherwise all come back visible.
+                        const q = searchInput.value.trim();
+                        if (q) { filterOfflineHidden(q); }
+                    }
+                    localStorage.setItem('ichc_ul_hidden_open', String(open));
                 });
+
+                // Only pay for the rows if the section is actually open. The
+                // count in the header comes from `offlineHiddenKeys.length`
+                // above, so a collapsed section still reports the right number
+                // without materialising a single row.
+                if (_offOpen) { fillHiddenList(); }
+
                 section.appendChild(list);
                 scrollBody.appendChild(section);
             }
@@ -10837,6 +11563,14 @@
         // Use a short delay so site JS that runs on the same tick can't re-steal focus after us.
         if (_hadSearchFocus || (_blFocusedId === 'txtMsg' && document.activeElement?.id !== 'txtMsg')) {
             window.setTimeout(() => {
+                // Only restore into a vacuum. The rebuild blurs what it destroyed and
+                // leaves focus on <body>; if anything else holds focus by the time this
+                // fires, the user put it there in the intervening 50ms and taking it
+                // back mid-keystroke is how characters ended up in the chat box while
+                // typing somewhere else. A user list refresh must never outrank a
+                // deliberate focus.
+                const now = document.activeElement;
+                if (now && now !== document.body && now !== document.documentElement) { return; }
                 if (_hadSearchFocus) {
                     const inp = panel.querySelector('.ichc-ul-search-input');
                     if (inp) {
@@ -11010,6 +11744,10 @@
     function isDecorativeCamMedia(node) {
         if (!node || !(node instanceof Element)) { return true; }
         if (node.closest('.ichc-card-tools')) { return true; }
+        // Emotes and gifs inside the last-message overlay are <img>/<video> sitting
+        // in the card. Without this they would be collected as the cam's own media,
+        // and getMediaAspect would size the whole card from an emote.
+        if (node.closest('.ichc-cam-lastmsg')) { return true; }
         if (node.matches('.cam-logo, .smicon, .name-on-cam')) { return true; }
 
         const className = typeof node.className === 'string' ? node.className.toLowerCase() : '';
@@ -11039,7 +11777,7 @@
         if (!container) { return false; }
         const meaningfulChildren = [...container.children].filter(node => {
             if (!(node instanceof Element)) { return false; }
-            if (node.matches('.name-on-cam, .ichc-card-tools, .cam-logo, .smicon')) { return false; }
+            if (node.matches('.name-on-cam, .ichc-card-tools, .cam-logo, .smicon, .ichc-cam-lastmsg')) { return false; }
             if (node.matches('.cam-button, .cam-button2, [id^="cambtn"]')) { return false; }
             return true;
         });
@@ -12150,6 +12888,27 @@
         return rects;
     }
 
+    // Convert a fractional packed rectangle into the integer CSS box we apply
+    // to a card. Work from the four edges so rounding cannot accumulate, then
+    // clamp to the measured #cams content box. The returned w/h are OUTER card
+    // dimensions (the placed-card CSS therefore uses border-box).
+    function _ichcQuantizePackedRect(layout, x, y, w, h) {
+        const minX = Math.ceil(layout.padL);
+        const minY = Math.ceil(layout.padT);
+        const maxX = Math.max(minX + 1, Math.floor(layout.padL + layout.bounds.w));
+        const maxY = Math.max(minY + 1, Math.floor(layout.padT + layout.bounds.h));
+        const left = Math.max(minX, Math.min(maxX - 1, Math.round(layout.padL + x)));
+        const top = Math.max(minY, Math.min(maxY - 1, Math.round(layout.padT + y)));
+        const right = Math.max(left + 1, Math.min(maxX, Math.round(layout.padL + x + w)));
+        const bottom = Math.max(top + 1, Math.min(maxY, Math.round(layout.padT + y + h)));
+        return { x: left, y: top, w: right - left, h: bottom - top };
+    }
+
+    function _ichcShouldUseFreeform(hasCams, wordCloudMode, freeformPref, focused, thumbCount) {
+        return !!hasCams && !wordCloudMode &&
+            (focused || (freeformPref && thumbCount > 0));
+    }
+
     function applyFeaturedCam() {
         const cams = document.getElementById('cams');
         const featured = (localStorage.getItem(FEATURED_KEY) || '').trim().toLowerCase();
@@ -12162,14 +12921,23 @@
         const thumbCards = [];
 
         getCamCards().forEach(card => {
-            const active = !!featured && card.dataset.ichcCam === featured;
+            // A card the user has hidden can never hold the focus slot: it takes
+            // no space on screen, so focused mode would pack every other cam
+            // around an empty corner and the card would snap to focus size the
+            // moment it was revealed. Hide paths clear the key too
+            // (clearFeaturedCamForCard); this also disarms keys stored before that
+            // existed. Ghost slots are deliberately NOT included — a focused cam
+            // whose media drops out for a few seconds must keep its focus rather
+            // than flap the whole layout, which is what the grace period below is
+            // for.
+            const userHidden = card.classList.contains('ichc-hidden-slot') ||
+                card.classList.contains('ichc-persist-hidden-slot');
+            const active = !!featured && card.dataset.ichcCam === featured && !userHidden;
             card.classList.toggle('ichc-featured', active);
             if (active) {
                 featuredCard = card;
                 found = true;
-            } else if (!card.classList.contains('ichc-hidden-slot') &&
-                !card.classList.contains('ichc-persist-hidden-slot') &&
-                !card.classList.contains('ichc-ghost-slot')) {
+            } else if (!userHidden && !card.classList.contains('ichc-ghost-slot')) {
                 // Only VISIBLE cams count toward the layout math — hidden/ghost
                 // slots take no space, so counting them would shrink everything.
                 thumbCards.push(card);
@@ -12196,12 +12964,16 @@
         // full height, but the word cloud expects cams to shrink to content.
         // Toggle the mode classes BEFORE measuring so the tighter freeform
         // gap is what the packing math actually reads.
-        // Escape hatch for A/B testing a layout regression against the legacy
-        // grid without reinstalling: localStorage ichc_freeform = 'off'.
+        // Escape hatch for A/B testing the NORMAL gallery against the legacy
+        // grid without reinstalling: localStorage ichc_freeform = 'off'. Focused
+        // mode always uses the focused packer: its legacy two-column fallback
+        // can be taller than #cams and was observed live clipping lower cards.
+        // (A transient unmeasurable focused pass still uses the fallback below,
+        // but CSS makes that short-lived state scroll instead of crop.)
         let _freeformPref = true;
         try { _freeformPref = localStorage.getItem('ichc_freeform') !== 'off'; } catch (_) {}
-        const wantFreeform = !!cams && !_wordCloudMode && _freeformPref &&
-            (found || thumbCards.length > 0);
+        const wantFreeform = _ichcShouldUseFreeform(
+            !!cams, _wordCloudMode, _freeformPref, found, thumbCards.length);
         if (cams) {
             cams.classList.toggle('ichc-has-featured', found);
             if (wantFreeform) { cams.classList.add('ichc-cams-freeform'); }
@@ -12255,7 +13027,9 @@
                     const packed = _packFocusedLayout(
                         containerW, containerH, gap, videoAR(featuredCard),
                         thumbCards.map(videoAR));
-                    if (packed) { layout = { ...packed, padL, padT }; }
+                    if (packed) {
+                        layout = { ...packed, padL, padT, bounds: { w: containerW, h: containerH } };
+                    }
                 } else {
                     // Normal mode: justified rows over the whole panel, with
                     // the user's per-cam size levels honored by
@@ -12268,7 +13042,15 @@
                         return { index, ar: videoAR(card), level };
                     });
                     const rects = _packNormalLayout(containerW, containerH, gap, items);
-                    if (rects) { layout = { focus: null, rects, padL, padT }; }
+                    if (rects) {
+                        layout = {
+                            focus: null,
+                            rects,
+                            padL,
+                            padT,
+                            bounds: { w: containerW, h: containerH },
+                        };
+                    }
                 }
             }
         }
@@ -12328,10 +13110,16 @@
         // A stylesheet `!important` beats a non-important inline declaration,
         // and the site never touches custom properties, so this is immune.
         const placeAbs = (card, x, y, w, h) => {
-            card.style.setProperty('--ichc-fx', `${Math.round(layout.padL + x)}px`);
-            card.style.setProperty('--ichc-fy', `${Math.round(layout.padT + y)}px`);
-            card.style.setProperty('--ichc-fw', `${Math.round(w)}px`);
-            card.style.setProperty('--ichc-fh', `${Math.round(h)}px`);
+            // Quantize EDGES, not position and size independently. Independent
+            // rounding can turn an in-bounds fractional rectangle into one
+            // whose right/bottom edge is a pixel outside #cams. Clamp against
+            // the measured content box as a final invariant because #cams
+            // deliberately clips overflow.
+            const q = _ichcQuantizePackedRect(layout, x, y, w, h);
+            card.style.setProperty('--ichc-fx', `${q.x}px`);
+            card.style.setProperty('--ichc-fy', `${q.y}px`);
+            card.style.setProperty('--ichc-fw', `${q.w}px`);
+            card.style.setProperty('--ichc-fh', `${q.h}px`);
             card.dataset.ichcPlaced = '1';
             // Drop our own inline geometry so the site's writes cannot outrank
             // the stylesheet rule that now owns placement.
@@ -12472,6 +13260,247 @@
             });
         } catch (_) {}
     }
+
+    // ── Observed rooms: mirror other rooms' cams into this room's plane ──────
+    // EXPERIMENTAL — exists to answer the multi-room feasibility questions live
+    // (see HANDOFF). Each observed room loads in a hidden SAME-ORIGIN iframe
+    // whose own site scripts join the room and negotiate WebRTC exactly as a
+    // second tab would. The host then mirrors each playing cam by pointing a
+    // local <video> at the SAME MediaStream object — same-origin realms pass
+    // the stream by reference: no re-encode, no bandwidth beyond the join
+    // itself. A MediaStream cannot be structured-cloned, which is why separate
+    // tabs can never do this and iframes are the only cheap plane-merge.
+    //
+    // Deliberately NOT manifest all_frames: no extension UI boots inside the
+    // frame; the host reaches in through contentDocument. Inert until a room
+    // is added from the cog menu (Observed rooms).
+    //
+    // THE OPEN QUESTION this is built to answer: whether the site's single
+    // ASP.NET session tolerates being in two rooms at once. If adding a room
+    // kicks you out of the one you are reading, the idea is dead — watch this
+    // room's userlist right after adding one.
+    const _OBS_LS = 'ichc_observed_rooms';   // must not start 'ichc_bcast_' (timer eviction)
+    const _OBS_POLL_MS = 2000;
+    const _obsState = { frames: new Map() };  // room → { iframe, status, camCount, timer }
+
+    function _obsRooms() {
+        try {
+            const raw = JSON.parse(localStorage.getItem(_OBS_LS) || '[]');
+            return Array.isArray(raw)
+                ? [...new Set(raw.map(r => String(r).trim().toLowerCase()).filter(Boolean))]
+                : [];
+        } catch (_) { return []; }
+    }
+    function _obsSaveRooms(rooms) {
+        try { localStorage.setItem(_OBS_LS, JSON.stringify([...new Set(rooms)])); } catch (_) {}
+        _obsSync();
+    }
+    function _obsCurrentRoom() {
+        return (location.pathname.split('/').filter(Boolean)[0] || '').toLowerCase();
+    }
+    function _obsFrameHost() {
+        let host = document.getElementById('ichc-obs-frames');
+        if (!host) {
+            host = document.createElement('div');
+            host.id = 'ichc-obs-frames';
+            host.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(host);
+        }
+        return host;
+    }
+
+    function _obsSync() {
+        // Never observe the room we are standing in — that would double-join it.
+        const wanted = _obsRooms().filter(r => r !== _obsCurrentRoom());
+        for (const [room, entry] of [..._obsState.frames]) {
+            if (wanted.includes(room)) { continue; }
+            window.clearInterval(entry.timer);
+            entry.iframe.remove();
+            _obsState.frames.delete(room);
+            document.querySelectorAll('#cams .ichc-obs-mirror[data-ichc-obs-room="' + CSS.escape(room) + '"]')
+                .forEach(m => m.remove());
+            requestCamRelayout(80);
+        }
+        wanted.forEach(room => {
+            if (_obsState.frames.has(room)) { return; }
+            const iframe = document.createElement('iframe');
+            iframe.className = 'ichc-obs-frame';
+            // Never steal focus from the chat input — an open regression already
+            // stalks that box; do not add a suspect.
+            iframe.setAttribute('tabindex', '-1');
+            // Origin-relative, not a hardcoded host: same-origin access IS the
+            // mechanism, so derive the URL from where we actually are.
+            iframe.src = location.origin + '/' + encodeURIComponent(room);
+            _obsFrameHost().appendChild(iframe);
+            const entry = { iframe, status: 'loading…', camCount: 0, timer: 0 };
+            entry.timer = window.setInterval(() => { try { _obsPoll(room); } catch (_) {} }, _OBS_POLL_MS);
+            _obsState.frames.set(room, entry);
+        });
+    }
+
+    // ── Keeping observed frames alive ────────────────────────────────────────
+    // FIELD RESULT (2026-08-17): observed rooms go dark after a while. The site
+    // pauses cams after roughly ten minutes without activity (`lurkMessageDiv`,
+    // "cams disabled due to inactivity"), and a frame parked offscreen can
+    // never look active.
+    //
+    // A synthetic-mousemove keep-alive was written first and REMOVED:
+    // **the user confirms mouse activity does not reset the site's inactivity
+    // timer.** Whatever the site counts (a sent message, a server-visible
+    // action) cannot be faked from a frame without actually posting to that
+    // room, which is not acceptable. So prevention is off the table and this is
+    // purely reactive: let the frame pause, notice, and resume it. Cost is a
+    // gap of up to one poll tick every ~10 minutes.
+    //
+    // Resuming is safe for your broadcast. The native inactivity link runs
+    // `hideLurkMessage()` + `toggleCams()`, and this repo already establishes
+    // (see _triggerCamRestart) that those "only restart inbound viewers; they
+    // do not touch the user's outbound broadcast."
+    const _OBS_RESUME_MIN_MS = 15000;
+
+    // Returns true when the frame is sitting on the site's "cams paused" state.
+    function _obsHandleIdle(room, doc, entry) {
+        const lurk = doc.getElementById('lurkMessageDiv');
+        if (!lurk) { return false; }
+        // Visibility ONLY — deliberately not the text match that syncLurkBanner
+        // ORs in for the main page. The banner's "cams disabled due to
+        // inactivity" text is present in the DOM even while hidden, so a text
+        // test reads as paused permanently. Here that would mean clicking the
+        // site's resume control in every frame every 15 seconds forever, which
+        // touches cam state and is exactly the kind of unattended side effect
+        // that must not ship. The harness caught this: a frame that was never
+        // idled reported itself paused.
+        const view = doc.defaultView;
+        if (!view) { return false; }
+        let paused = false;
+        try {
+            const cs = view.getComputedStyle(lurk);
+            paused = cs.visibility === 'visible' && cs.display !== 'none' &&
+                lurk.getBoundingClientRect().height > 0;
+        } catch (_) { return false; }
+        if (!paused) { return false; }
+        // Click the site's own resume control — the same affordance the main
+        // page's lurk banner offers. Throttled so a frame that refuses to
+        // resume is not clicked twice a second forever.
+        const now = Date.now();
+        if (now - (entry.lastResumeAt || 0) > _OBS_RESUME_MIN_MS) {
+            entry.lastResumeAt = now;
+            entry.resumes = (entry.resumes || 0) + 1;
+            // A plain .click() on the banner link does NOT work: its href is a
+            // `javascript:` URL, and a content-world click cannot execute one
+            // (the same trap invokeNativeElementAction exists to work around on
+            // the main page). runInPageContext is no help either — background.js
+            // targets the SENDING frame, and no content script runs in observed
+            // frames. Firefox-only extension, so reach the frame's page globals
+            // through wrappedJSObject and make the two calls the link makes.
+            try {
+                const w = view.wrappedJSObject || view;
+                if (typeof w.hideLurkMessage === 'function') { w.hideLurkMessage(); }
+                if (typeof w.toggleCams === 'function') { w.toggleCams(); }
+            } catch (_) {}
+        }
+        return true;
+    }
+
+    // A 2s poll rather than a cross-document MutationObserver: the frame's
+    // document is REPLACED on navigation/reconnect, which silently orphans any
+    // observer attached to the old one. A poll over a dozen cards is nothing,
+    // and it re-finds the new document for free every tick.
+    function _obsPoll(room) {
+        const entry = _obsState.frames.get(room);
+        if (!entry) { return; }
+        let doc = null;
+        try { doc = entry.iframe.contentDocument; } catch (_) {}
+        if (!doc) { entry.status = 'blocked (no document)'; entry.camCount = 0; return; }
+        const srcCams = doc.getElementById('cams');
+        if (!srcCams) {
+            entry.status = doc.readyState === 'complete' ? 'no room UI (login? frame-blocked?)' : 'loading…';
+            entry.camCount = 0;
+            return;
+        }
+        const idle = _obsHandleIdle(room, doc, entry);
+        _obsReconcileMirrors(room, srcCams, entry);
+        if (idle) { entry.status += ' · ⏸ idle, resuming'; }
+        // Split-chat early warning. FIELD RESULT (2026-08-17, live Firefox):
+        // chat/userlist are SESSION-scoped — the frame shows the MAIN room's
+        // userlist and receives no chat — while cam signaling is ROOM-scoped,
+        // which is why mirroring works at all. The user reports that when the
+        // site DOES create a second chat identity (two tabs, two rooms), it
+        // suffixes a second username and splits messages between instances.
+        // A frame is safe only while it holds no chat presence, so its #txt
+        // staying empty is the invariant. Rows accumulating here mean the
+        // split has begun and main-room messages may be vanishing into an
+        // invisible iframe — surface it rather than let it fail silently.
+        const chatRows = doc.getElementById('txt')?.children.length || 0;
+        entry.chatRows = chatRows;
+        if (chatRows > 0) { entry.status += ' · ⚠ ' + chatRows + ' chat rows'; }
+    }
+
+    function _obsReconcileMirrors(room, srcCams, entry) {
+        const hostCams = document.getElementById('cams');
+        if (!hostCams) { return; }
+        const liveIds = new Set();
+        let mirrored = 0;
+        let changed = false;
+        srcCams.querySelectorAll('.rounded_square').forEach(srcCard => {
+            const vc = srcCard.querySelector('.videocontainer');
+            const srcVideo = srcCard.querySelector('video');
+            const stream = srcVideo && srcVideo.srcObject;
+            if (!vc || !vc.id || !stream) { return; }   // not a playing cam yet
+            const srcId = vc.id.replace(/^id-/, '');
+            // Mirror ids are namespaced by room so they can never collide with
+            // this room's native camIds — getCamId(), _camDecorMap, FEATURED_KEY
+            // and the persisted card order all key off this string.
+            const mirrorId = 'obs-' + room + '-' + srcId;
+            liveIds.add(mirrorId);
+            let mirror = document.getElementById('id-' + mirrorId)?.closest('.rounded_square');
+            if (!mirror) {
+                mirror = document.createElement('div');
+                mirror.className = 'rounded_square ichc-obs-mirror';
+                mirror.dataset.ichcObsRoom = room;
+                const mvc = document.createElement('div');
+                mvc.className = 'videocontainer';
+                mvc.id = 'id-' + mirrorId;
+                const mv = document.createElement('video');
+                mv.autoplay = true;
+                mv.muted = true;      // v1 mirrors are video-only; audio stays muted in the frame
+                mv.playsInline = true;
+                mvc.appendChild(mv);
+                const nameEl = document.createElement('div');
+                nameEl.className = 'name-on-cam';
+                const tag = document.createElement('div');
+                tag.className = 'ichc-obs-tag';
+                tag.textContent = room;
+                mirror.append(mvc, nameEl, tag);
+                hostCams.appendChild(mirror);
+                changed = true;
+            }
+            const mv = mirror.querySelector('video');
+            if (mv && mv.srcObject !== stream) {
+                // First attach, or the site rebuilt the source card with a fresh
+                // stream — reattach by reference either way.
+                mv.srcObject = stream;
+                const p = mv.play();
+                if (p && p.catch) { p.catch(() => {}); }
+                changed = true;
+            }
+            // Nick only in .name-on-cam (nick-keyed tooling reads it verbatim);
+            // the room lives in its own tag element.
+            const nick = (srcCard.querySelector('.name-on-cam')?.textContent || '').trim();
+            const nameEl = mirror.querySelector('.name-on-cam');
+            if (nameEl && nameEl.textContent !== nick) { nameEl.textContent = nick; }
+            mirrored++;
+        });
+        document.querySelectorAll('#cams .ichc-obs-mirror[data-ichc-obs-room="' + CSS.escape(room) + '"]')
+            .forEach(m => {
+                const id = m.querySelector('.videocontainer')?.id?.replace(/^id-/, '');
+                if (id && !liveIds.has(id)) { m.remove(); changed = true; }
+            });
+        entry.status = mirrored + ' cam' + (mirrored === 1 ? '' : 's');
+        entry.camCount = mirrored;
+        if (changed) { requestCamRelayout(80); }
+    }
+
 
     function initCamLayout() {
         const cams = document.getElementById('cams');

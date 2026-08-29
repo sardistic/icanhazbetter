@@ -30,8 +30,24 @@
 
     // ─── Shared helpers ──────────────────────────────────────────────────────────
 
+    // Runs `source` in the PAGE's own JS realm, via the background service worker.
+    //
+    // A previous attempt injected a <script> element directly instead. Do not do
+    // that: this function is reachable at document_start, when <head> does not yet
+    // exist, so the element lands as a child of <html> mid-parse and wrecks the
+    // page. It is reverted.
+    //
+    // What IS kept from that attempt is the engine guard. Firefox's `chrome.*`
+    // alias is callback-based, so sendMessage returns undefined there and
+    // `.catch()` on the result is a TypeError that aborts the CALLER — the message
+    // is dispatched (the call precedes the property access), so the damage is to
+    // whatever the caller meant to do next, silently.
     function runInPageContext(source) {
-        chrome.runtime.sendMessage({ type: 'ichc-exec', code: source }).catch(() => {});
+        try {
+            const api = (typeof browser !== 'undefined' && browser.runtime) ? browser : chrome;
+            const ret = api.runtime.sendMessage({ type: 'ichc-exec', code: source });
+            if (ret && typeof ret.catch === 'function') { ret.catch(() => {}); }
+        } catch (_) {}
     }
 
     function clampValue(value, min, max) {
@@ -666,20 +682,41 @@
         });
     }
 
+    // The site prefixes a line with a bracketed clock — "[00:28:15] nick: text".
+    // We lift that into dataset.ichcPmTime and re-render it as the right-hand
+    // .ichc-pm-ts stamp, so it must be removed from the body of the row.
+    //
+    // The old scan only looked at DIRECT text-node children of the row. On a
+    // message YOU sent, the clock arrives nested inside the row's first element
+    // (the site wraps it), so nothing matched and those lines kept showing
+    // "[00:28:15]" to the left of the nick while received lines were clean —
+    // exactly the asymmetry reported. Walking to the first non-empty text node in
+    // document order covers both shapes.
     function _stripBracketTs(row) {
         if (!(row instanceof HTMLElement)) { return; }
-        for (const child of row.childNodes) {
-            if (child.nodeType !== Node.TEXT_NODE) { continue; }
-            const match = child.textContent.match(/^\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*/);
-            if (match?.[1] && !row.dataset.ichcPmTime) {
+        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT, null);
+        let node;
+        while ((node = walker.nextNode())) {
+            if (!node.textContent.trim()) { continue; }          // leading whitespace
+            if (node.parentElement?.closest('.ichc-pm-ts')) { return; }   // our own stamp
+            const match = node.textContent.match(/^\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*/);
+            // The first real text is not a clock, so there is nothing to strip.
+            // Bailing here rather than scanning on keeps a "[12:30]" typed in the
+            // middle of a message from being eaten.
+            if (!match) { return; }
+            if (!row.dataset.ichcPmTime) {
                 const parts = match[1].split(':');
                 row.dataset.ichcPmTime = parts.length > 2 ? parts.slice(0, 2).join(':') : match[1];
             }
-            const stripped = child.textContent.replace(/^\s*\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, '');
-            if (stripped !== child.textContent) {
-                child.textContent = stripped;
-                break;
+            node.textContent = node.textContent.slice(match[0].length);
+            // A wrapper that existed only to carry the clock would otherwise leave
+            // a gap in front of the nick.
+            const host = node.parentElement;
+            if (host && host !== row && !host.textContent.trim() &&
+                !host.querySelector('img, video, br')) {
+                host.remove();
             }
+            return;
         }
     }
 

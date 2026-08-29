@@ -1,11 +1,17 @@
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'ichc-exec' && sender.tab?.id) {
-        chrome.scripting.executeScript({
-            target: { tabId: sender.tab.id, frameIds: [sender.frameId ?? 0] },
-            world: 'MAIN',
-            func: (code) => { try { (0, eval)(code); } catch (_) {} },
-            args: [msg.code],
-        }).catch(() => {});
+        // Guarded rather than `.catch()`-chained: Firefox's `chrome.*` alias is
+        // callback-based, so executeScript returns undefined there and calling
+        // .catch() on it throws inside this listener.
+        try {
+            const ret = chrome.scripting.executeScript({
+                target: { tabId: sender.tab.id, frameIds: [sender.frameId ?? 0] },
+                world: 'MAIN',
+                func: (code) => { try { (0, eval)(code); } catch (_) {} },
+                args: [msg.code],
+            });
+            if (ret && typeof ret.catch === 'function') { ret.catch(() => {}); }
+        } catch (_) {}
         return;
     }
 
