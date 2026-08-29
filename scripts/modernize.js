@@ -3942,13 +3942,30 @@
     let _chatAtBottom = true;
     let _chatSavedScrollTop = 0;
     let _chatScrollRestoreRAF = null;
+    // Non-zero while WE are moving the log. A scroll event caused by our own
+    // adjustment must never be read as "the user scrolled up" — that is what
+    // latches following off and leaves the log parked while messages pile up
+    // below it. Pruning rows is the main source: it changes scrollTop by
+    // definition.
+    let _chatScrollAdjusting = 0;
+
+    function _withChatScrollAdjust(fn) {
+        _chatScrollAdjusting++;
+        try { fn(); } finally {
+            // Released after the scroll event this mutation emits.
+            window.setTimeout(() => {
+                _chatScrollAdjusting = Math.max(0, _chatScrollAdjusting - 1);
+            }, 0);
+        }
+    }
 
     function _initChatScrollLock(log) {
         if (!log || log._ichcScrollLock) { return; }
         log._ichcScrollLock = true;
         _chatAtBottom = (log.scrollHeight - log.scrollTop - log.clientHeight) < 80;
         log.addEventListener('scroll', () => {
-            if (_chatScrollRestoreRAF !== null) { return; } // our own restore firing
+            // Ignore scrolls we caused ourselves (restore, prune, focus resync).
+            if (_chatScrollRestoreRAF !== null || _chatScrollAdjusting > 0) { return; }
             const atBottom = (log.scrollHeight - log.scrollTop - log.clientHeight) < 80;
             _chatAtBottom = atBottom;
             if (!atBottom) { _chatSavedScrollTop = log.scrollTop; }
@@ -3964,6 +3981,56 @@
             if (!_chatAtBottom && log.isConnected) { log.scrollTop = saved; }
         });
     }
+
+    // ── Alt-tab resync ──────────────────────────────────────────────────────────
+    // Reported as "scrolling gets stuck ... seems to happen when window isnt
+    // focused". While the window is unfocused the browser suspends
+    // requestAnimationFrame, so _restoreChatScroll's pending frame does not run
+    // until you come back; meanwhile rows keep arriving, the log gets pruned, and
+    // emotes/images finish loading and change row heights. All of that moves the
+    // log without the user touching it.
+    //
+    // If we still believe we are FOLLOWING, the only correct position on return is
+    // the bottom, so snap to it. If the user had deliberately scrolled up before
+    // alt-tabbing, _chatAtBottom is false and their position is left exactly where
+    // they put it — that is the whole point of the scroll lock.
+    function _resyncChatScrollOnFocus() {
+        const log = document.getElementById('txt');
+        if (!log || !log.isConnected) { return; }
+        if (!_chatAtBottom) { return; }   // reading history on purpose
+        if ((log.scrollHeight - log.scrollTop - log.clientHeight) <= 4) { return; }
+        _withChatScrollAdjust(() => { log.scrollTop = log.scrollHeight; });
+    }
+
+    window.addEventListener('focus', _resyncChatScrollOnFocus);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            // One immediate pass, then one after layout settles — returning to a
+            // background tab can still be applying deferred image loads.
+            _resyncChatScrollOnFocus();
+            window.setTimeout(_resyncChatScrollOnFocus, 250);
+        }
+    });
+
+    // Diagnostic for the next report. A content-script global is not reachable
+    // from the page console, so this is triggered by an event the page can fire:
+    //   document.dispatchEvent(new CustomEvent('ichc-scroll-diag'))
+    document.addEventListener('ichc-scroll-diag', () => {
+        const log = document.getElementById('txt');
+        const err = document.getElementById('errorMessageDiv');
+        console.log('[ichc] scroll state', {
+            following: _chatAtBottom,
+            savedScrollTop: _chatSavedScrollTop,
+            adjusting: _chatScrollAdjusting,
+            restorePending: _chatScrollRestoreRAF !== null,
+            scrollTop: log ? Math.round(log.scrollTop) : null,
+            scrollHeight: log ? Math.round(log.scrollHeight) : null,
+            clientHeight: log ? Math.round(log.clientHeight) : null,
+            distanceFromBottom: log ? Math.round(log.scrollHeight - log.scrollTop - log.clientHeight) : null,
+            rows: log ? log.children.length : null,
+            sitePausedBanner: /scrolling has been paused/i.test((err && err.textContent) || ''),
+        });
+    });
 
     // ── Chat log pruning ──────────────────────────────────────────────────────
     // A busy room can hit several thousand richly-decorated rows in a couple of
@@ -3981,6 +4048,7 @@
         if (count <= _CHAT_MAX_ROWS) { return; }
         const excess = count - _CHAT_TRIM_TO;
         const rows = [...log.children].slice(0, excess);
+        const wasAtBottom = _chatAtBottom;
         // Compensate scrollTop so the viewport doesn't jump when top rows are removed.
         const heightBefore = log.scrollHeight;
         const scrollBefore = log.scrollTop;
@@ -3993,7 +4061,15 @@
         });
         const removed = heightBefore - log.scrollHeight;
         const newTop = Math.max(0, scrollBefore - removed);
-        log.scrollTop = newTop;
+        // When following, snap to the true bottom rather than trusting the
+        // arithmetic: rows do not all have their final height yet (emotes and
+        // inline images load late, and load while the tab is in the background),
+        // so scrollBefore - removed can land far enough off the bottom that the
+        // scroll listener latches following OFF. Guarded so the resulting scroll
+        // event is not mistaken for the user scrolling up.
+        _withChatScrollAdjust(() => {
+            log.scrollTop = wasAtBottom ? log.scrollHeight : newTop;
+        });
         if (!_chatAtBottom) { _chatSavedScrollTop = Math.max(0, _chatSavedScrollTop - removed); }
     }
 
