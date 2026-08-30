@@ -1161,7 +1161,11 @@
         // Retried because the site's own scripts may not have defined as() yet.
         // The patch is idempotent and only sets its flag once it has really wrapped.
         installFocusGuardPatch();
-        [800, 2500, 6000].forEach(d => window.setTimeout(installFocusGuardPatch, d));
+        installScrollPauseFix();
+        [800, 2500, 6000].forEach(d => window.setTimeout(() => {
+            installFocusGuardPatch();
+            installScrollPauseFix();
+        }, d));
         // Resume observing persisted rooms once this room has had time to join
         // — the whole feature is inert while the list is empty.
         window.setTimeout(() => { try { _obsSync(); } catch (_) {} }, 3000);
@@ -1432,6 +1436,55 @@
     // to chat after you send. So it is not disabled. It is only prevented from
     // taking focus away from ANOTHER text field. When nothing is focused, or the
     // chat box already is, it behaves exactly as before.
+    // ── The site pauses chat scrolling even when you are at the bottom ─────────
+    // THE ROOT CAUSE of "chat freezes / only updates when I click".
+    //
+    // The site decides you have scrolled away from the bottom with a FIXED pixel
+    // test in onChatHistoryScroll:
+    //
+    //     if (du.fp.scrollTop < du.fp.scrollHeight - 450) { ... scrollOff() }
+    //
+    // 450px is only correct while the chat viewport is shorter than 450px, which
+    // it is in the site's own layout. This extension makes the log much taller —
+    // measured live at clientHeight 1283 — and at the very bottom
+    // scrollTop === scrollHeight - clientHeight, so the test reads
+    //
+    //     scrollHeight - 1283  <  scrollHeight - 450     -> always true
+    //
+    // The site therefore pauses on EVERY scroll event, permanently, no matter
+    // where the user is. That is not just a stalled auto-scroll: cR() ends with
+    // "var c = du.en; du.en = ''; aA(c)", so while paused incoming messages are
+    // buffered into du.en instead of being appended — the chat stops rendering and
+    // dumps a burst whenever something calls cR().
+    //
+    // Rather than reimplement the site's scroll handler, scrollOff() is wrapped to
+    // refuse when the log is genuinely at the bottom. Scrolling up still pauses
+    // (the feature works), and the site's own resume path is untouched.
+    const SCROLL_BOTTOM_SLOP = 150;   // px; "close enough to the bottom to be following"
+    function installScrollPauseFix() {
+        runInPageContext(`
+(() => {
+    if (window.__ichcScrollPauseFix) { return; }
+    const orig = window.scrollOff;
+    if (typeof orig !== 'function') { return; }   // site scripts not up yet; retried
+    window.__ichcScrollPauseFix = true;
+    window.scrollOff = function () {
+        try {
+            const el = (window.du && du.fp) || document.getElementById('txt');
+            if (el && (el.scrollHeight - el.scrollTop - el.clientHeight) < ${SCROLL_BOTTOM_SLOP}) {
+                // At the bottom. The site's fixed 450px test is wrong for a chat
+                // viewport this tall, and pausing here buffers messages that the
+                // user is actively looking at.
+                return;
+            }
+        } catch (e) {}
+        return orig.apply(this, arguments);
+    };
+    console.log('%c[ichc] chat scroll-pause fix installed', 'color:#3ba55c');
+})();
+        `);
+    }
+
     function installFocusGuardPatch() {
         runInPageContext(`
 (() => {
