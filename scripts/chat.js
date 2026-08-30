@@ -110,6 +110,21 @@
         return !!el && _PAUSE_RE.test(el.textContent || '');
     }
 
+    // Rate-limited so a cR() that somehow fails cannot spin. On success the site
+    // calls hideErrorMessage(), which clears the banner and with it this condition.
+    let _lastAutoResumeAt = 0;
+    function _autoResumeSiteScroll() {
+        const now = Date.now();
+        if (now - _lastAutoResumeAt < 1500) { return; }
+        _lastAutoResumeAt = now;
+        // cR() is called with NO argument on purpose. Its body reads
+        //     if (b === "undefined") { b = 1 }  if (b) { as() }
+        // — a comparison against the *string* "undefined", which never matches, so
+        // passing nothing leaves b undefined, skips as(), and the chat input is not
+        // focus-grabbed on every automatic resume.
+        runInPageContext("(() => { try { if (typeof cR === 'function') { cR(); } } catch (e) {} })();");
+    }
+
     function _resumeSiteScroll() {
         // cR() is the site's own resume: it restores the pause icon, sets du.eo=1
         // and scrolls to the bottom. Calling it is better than faking a scroll,
@@ -150,17 +165,29 @@
         // #errorMessageDiv.
         const atBottom = log && (log.scrollHeight - log.scrollTop - log.clientHeight) < 60;
 
-        if (!paused || atBottom) {
+        if (!paused) {
             pill.hidden = true;
-            _pauseBaselineRows = null;
             return;
         }
 
-        if (_pauseBaselineRows === null) { _pauseBaselineRows = log ? log.children.length : 0; }
-        const arrived = log ? Math.max(0, log.children.length - _pauseBaselineRows) : 0;
-        pill.textContent = arrived
-            ? 'Scrolling paused — ' + arrived + ' new message' + (arrived === 1 ? '' : 's')
-            : 'Scrolling paused — click to resume';
+        // Paused AND the user is already at the bottom: this is a DEADLOCK, and it
+        // is the reported bug. The site resumes only from onChatHistoryScroll, which
+        // needs a scroll event — but the user is not scrolling and az() is a no-op
+        // while paused, so no scroll event will ever come. Worse than a stalled
+        // scroll: cR() ends with "var c = du.en; du.en = ''; aA(c)", so while paused
+        // incoming messages are BUFFERED into du.en rather than appended. The chat
+        // looks frozen and then dumps a burst whenever something happens to call
+        // cR(). Nobody is reading history here, so just resume for them.
+        if (atBottom) {
+            pill.hidden = true;
+            _autoResumeSiteScroll();
+            return;
+        }
+
+        // Paused with the user scrolled up: deliberate, so leave the position alone
+        // and say what is waiting. No count is shown — the messages are sitting in
+        // the site's du.en buffer, not in the DOM, so there is nothing to count.
+        pill.textContent = 'Paused — new messages held. Click to resume';
         pill.hidden = false;
     }
 
