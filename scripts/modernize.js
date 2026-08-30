@@ -1162,9 +1162,11 @@
         // The patch is idempotent and only sets its flag once it has really wrapped.
         installFocusGuardPatch();
         installScrollPauseFix();
+        installCamDownAudioFix();
         [800, 2500, 6000].forEach(d => window.setTimeout(() => {
             installFocusGuardPatch();
             installScrollPauseFix();
+            installCamDownAudioFix();
         }, d));
         // Resume observing persisted rooms once this room has had time to join
         // — the whole feature is inert while the list is empty.
@@ -1481,6 +1483,59 @@
         return orig.apply(this, arguments);
     };
     console.log('%c[ichc] chat scroll-pause fix installed', 'color:#3ba55c');
+})();
+        `);
+    }
+
+    // ── Cam down leaves the server thinking you still broadcast audio ──────────
+    // Read from the site's own scripts110725.js:
+    //
+    //   function startBroadcasting(b){ ... send_command("/cam onx");
+    //                                  setTimeout(()=>send_command("/cam audio-on"),2000) ... }
+    //   function stopCam(a){ ... du.fE=0; if(a){ send_command("/cam off") } ... }
+    //   function flashMicOff(){ du.eS=0; ax(); send_command("/cam audio-off"); du.el=0 }
+    //
+    // Going live tells the server BOTH "/cam onx" and "/cam audio-on". Cam down
+    // sends only "/cam off" — never "/cam audio-off" — and leaves du.el / du.eS
+    // set. The server therefore still has the audio flag for this user: the audio
+    // indicator stays up, and the slot is still accounted for, which is why going
+    // live again does not take.
+    //
+    // stopCam is wrapped so a user-initiated cam-down also clears the audio side,
+    // using the site's OWN flashMicOff() where available so its client state
+    // (du.eS, du.el) and its "Your cam:" control strip are updated the same way
+    // they would be by the mute toggle.
+    //
+    // Deliberately within the guardrails in memory/firefox-cam-switch-clean-restart:
+    // no foreign track is put on the site's senders, and the site's broadcast
+    // toggle is never auto-clicked. This only runs on a stop the USER initiated
+    // (stopCam's first argument is what tells the server), never to restart.
+    function installCamDownAudioFix() {
+        runInPageContext(`
+(() => {
+    if (window.__ichcCamDownAudioFix) { return; }
+    const orig = window.stopCam;
+    if (typeof orig !== 'function') { return; }   // site scripts not up yet; retried
+    window.__ichcCamDownAudioFix = true;
+    window.stopCam = function (sendOff) {
+        const result = orig.apply(this, arguments);
+        try {
+            // sendOff is the site's own "tell the server" flag. When it is falsy
+            // the call is a local teardown (e.g. a dropped cam being cleaned up)
+            // and the server was never told anything, so nothing is owed.
+            if (sendOff) {
+                if (typeof flashMicOff === 'function') {
+                    flashMicOff();
+                } else if (typeof send_command === 'function') {
+                    send_command('/cam audio-off');
+                }
+            }
+        } catch (e) {
+            console.warn('[ichc] cam-down audio release failed', e);
+        }
+        return result;
+    };
+    console.log('%c[ichc] cam-down audio release installed', 'color:#3ba55c');
 })();
         `);
     }
