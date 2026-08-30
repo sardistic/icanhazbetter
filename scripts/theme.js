@@ -10,6 +10,7 @@
         replaceIcons();
         polishChatButtons();
         watchBroadcasterPanel();
+        watchOwnCamState();
     });
 
     // ── Icon replacement ──────────────────────────────────────────────────────────
@@ -117,6 +118,76 @@
         // refresh activity. Manual and per-feed refresh controls handle recovery.
     }
 
+    // ── Real broadcast state, instead of guessing from click text ───────────────
+    // The live flag used to be inferred purely from what the clicked element said,
+    // and the inference was inverted for the stop control. The site sets
+    //     $("#dude").html("stop broadcasting")
+    // while broadcasting, and the panel's stop control reads similarly — so a
+    // /broadcast/i test matches the STOP control and marked us LIVE at the exact
+    // moment the user was going down. A second listener corrected it only when the
+    // control happened to be an <a>; on a <button> or <div> it stuck on "live",
+    // which is the cam-down button then doing the wrong thing on the next click.
+    //
+    // Click text is now only an optimistic hint. The authoritative signal is
+    // whether the local user's own cam is on screen.
+    function _selfNick() {
+        return document.getElementById('ichc-userinfo-username')?.textContent?.trim().toLowerCase() || '';
+    }
+
+    function _selfCamPresent() {
+        const me = _selfNick();
+        if (!me) { return null; }   // unknown — no opinion
+        const cams = document.getElementById('cams');
+        if (!cams) { return null; }
+        for (const el of cams.querySelectorAll('.name-on-cam')) {
+            if ((el.textContent || '').trim().toLowerCase() === me) { return true; }
+        }
+        return false;
+    }
+
+    // Self-calibrating: the "absent" answer is only trusted once a cam for this
+    // user has actually been seen at least once. If this site did not render your
+    // own cam in the list, absence would otherwise clear the live flag the moment
+    // you started broadcasting — worse than the bug being fixed. Presence is always
+    // trustworthy: if your cam is up, you are broadcasting.
+    let _selfCamEverSeen = false;
+
+    function syncLiveFromCams() {
+        const present = _selfCamPresent();
+        if (present === null) { return; }
+        if (present) {
+            _selfCamEverSeen = true;
+            setLiveState(true);
+        } else if (_selfCamEverSeen) {
+            setLiveState(false);
+        }
+    }
+
+    let _liveSyncTimer = null;
+    function scheduleLiveSync(delay) {
+        if (_liveSyncTimer) { return; }
+        _liveSyncTimer = window.setTimeout(() => {
+            _liveSyncTimer = null;
+            syncLiveFromCams();
+        }, delay || 300);
+    }
+
+    function watchOwnCamState() {
+        const attach = () => {
+            const cams = document.getElementById('cams');
+            if (!cams || cams.dataset.ichcLiveWatched === '1') { return !!cams; }
+            cams.dataset.ichcLiveWatched = '1';
+            // Debounced: cam churn produces bursts of childList records.
+            new MutationObserver(() => scheduleLiveSync(300)).observe(cams, { childList: true, subtree: true });
+            syncLiveFromCams();
+            return true;
+        };
+        if (!attach()) {
+            const wait = new MutationObserver(() => { if (attach()) { wait.disconnect(); } });
+            wait.observe(document.documentElement, { childList: true, subtree: true });
+        }
+    }
+
     function watchBroadcasterPanel() {
         const seen = new WeakSet();
 
@@ -131,7 +202,7 @@
             }
         }, true);
 
-        const mo = new MutationObserver(() => {
+        const setupPanel = () => {
             const panel = document.getElementById('rtc-broadcaster');
             if (!panel || seen.has(panel)) { return; }
             seen.add(panel);
@@ -153,24 +224,38 @@
             });
             panel.insertBefore(btn, panel.firstChild);
 
-            // Detect "Broadcast!" click → mark Go Live button as live
+            // Optimistic hint only — syncLiveFromCams() is the authority and will
+            // correct this within a moment either way.
+            //
+            // "stop" is checked FIRST and wins. The site labels its stop control
+            // "stop broadcasting", which matches /broadcast/i just as well as the
+            // start control does, so testing for start first marked the user LIVE
+            // at the moment they went down. That is the cam-down bug: the button
+            // then showed the wrong state and the next click did the opposite of
+            // what it said.
+            //
+            // The stop test is also no longer restricted to <a>: it previously
+            // corrected the mistake only when the control happened to be a link.
             panel.addEventListener('click', (e) => {
                 if (e.target.closest('#ichc-broadcaster-close')) { return; }
                 const el = e.target.closest('button, a, input, [onclick]') || e.target;
-                const text = el.textContent.trim() || el.value || '';
-                if (/broadcast/i.test(text)) {
+                const text = (el.textContent || '').trim() || el.value || '';
+                if (/\bstop\b/i.test(text)) {
+                    setLiveState(false);
+                } else if (/broadcast/i.test(text)) {
                     setLiveState(true);
                 }
+                // Whatever the label said, confirm against the real cam list. The
+                // site takes a moment to bring the stream up or down.
+                [400, 1500, 4000].forEach(d => window.setTimeout(syncLiveFromCams, d));
             });
-
-            // Detect "or stop" click → clear live state
-            panel.addEventListener('click', (e) => {
-                const target = e.target.closest('a');
-                if (target && /\bstop\b/i.test(target.textContent.trim())) {
-                    setLiveState(false);
-                }
-            });
-        });
+        };
+        // Run once up front as well as on mutation. Attaching only from inside the
+        // observer meant that if #rtc-broadcaster already existed when this ran, the
+        // callback never fired and the panel got no close button and no click
+        // handlers at all — so the live state was never updated from it.
+        setupPanel();
+        const mo = new MutationObserver(setupPanel);
         mo.observe(document.body, { childList: true, subtree: true });
     }
 
