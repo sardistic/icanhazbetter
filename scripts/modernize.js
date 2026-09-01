@@ -1615,23 +1615,42 @@
         } catch (e) { return null; }
     };
 
-    // One stop legitimately trips BOTH paths below — the toggle handler at 900ms
-    // and the state backstop on its next tick — and each "/cam audio-off" produces
-    // its own "has stopped broadcasting audio" line in chat. Coalesced so a single
-    // stop sends a single command.
-    let lastReleaseAt = 0;
-    const releaseAudio = (why) => {
+    // Releasing the AUDIO flag alone was not enough, and the user's cam-stats show
+    // why: after a cam-down the inbound relay of their own cam kept running
+    // (ssrc:… on the same port, still 275-350 kbps) and the audio message stayed.
+    // The server was never told the CAM went down either.
+    //
+    //   ichc-rtc.js  stop()      -> no /cam command at all
+    //   scripts110725.js stopCam -> "/cam off"   (only on the legacy path)
+    //
+    // So stopping from the RTC panel leaves the server believing the cam is still
+    // published: the slot stays taken, which is the "can't cam back up" half, and
+    // the audio flag it was given at go-live is still set, which is the message.
+    // A full stop therefore has to send BOTH.
+    //
+    // The guard is shared on the window object rather than kept per-patch: this file
+    // installs two hooks (the stopCam wrapper and the RTC one) and a single
+    // cam-down can trip both. Each command produces its own chat line, so one stop
+    // must produce one release.
+    window.__ichcReleaseBroadcast = window.__ichcReleaseBroadcast || function (why, sendCamOff) {
         const now = Date.now();
-        if (now - lastReleaseAt < 5000) { return; }
-        lastReleaseAt = now;
+        if (now - (window.__ichcLastBroadcastRelease || 0) < 5000) { return; }
+        window.__ichcLastBroadcastRelease = now;
         try {
+            // Only the RTC path needs this: the legacy stopCam has already sent it.
+            if (sendCamOff && typeof send_command === 'function') {
+                send_command('/cam off');
+            }
             if (typeof flashMicOff === 'function') { flashMicOff(); }
             else if (typeof send_command === 'function') { send_command('/cam audio-off'); }
-            console.log('%c[ichc] released audio flag after ' + why, 'color:#3ba55c');
+            console.log('%c[ichc] released broadcast after ' + why +
+                        (sendCamOff ? ' (/cam off + audio-off)' : ' (audio-off)'),
+                        'color:#3ba55c');
         } catch (e) {
-            console.warn('[ichc] audio release failed', e);
+            console.warn('[ichc] broadcast release failed', e);
         }
     };
+    const releaseAudio = (why) => window.__ichcReleaseBroadcast(why, true);
 
     // Capture phase: runs before the site's own click handler, so the state read
     // here is the state BEFORE it decides to stop.
@@ -1710,7 +1729,12 @@
         try {
             if (sendOff) {
                 broadcastArmed = false;
-                if (typeof flashMicOff === 'function') {
+                // Shared with the RTC hook so one cam-down cannot release twice.
+                // sendCamOff is false here: the site's own stopCam already sent
+                // '/cam off' on this path.
+                if (typeof window.__ichcReleaseBroadcast === 'function') {
+                    window.__ichcReleaseBroadcast('stopCam', false);
+                } else if (typeof flashMicOff === 'function') {
                     flashMicOff();
                 } else {
                     window.send_command('/cam audio-off');
