@@ -1531,6 +1531,74 @@
     // read BEFORE the site's handler runs, so `publishing === true` identifies this
     // click as a stop. Nothing is auto-clicked and no track is touched — this only
     // tells the server what the user already did.
+    // ── Diagnostic: who is starting a publisher? ────────────────────────────────
+    // The cam-stats table showed a NEW "(me)" outbound peer connection on a new
+    // port after every cam-down, each one preceded by a fresh getUserMedia. Reading
+    // the site's ichc-rtc.js did not explain it: stop() only tears down, and
+    // onPublishPeerConnectionStopped() clicks the PLAYER toggles, not publish. So
+    // the caller has to be identified at runtime rather than guessed at.
+    //
+    // Off by default and enabled on demand, because it wraps two hot constructors:
+    //     document.dispatchEvent(new CustomEvent('ichc-trace-pc'))
+    // then cam down and read the stacks. Each line names the function that created
+    // the connection or opened the camera.
+    function installPeerConnectionTrace() {
+        runInPageContext(`
+(() => {
+    if (window.__ichcPcTrace) { return; }
+    window.__ichcPcTrace = true;
+
+    const stack = () => {
+        try {
+            // Filter this shim's own frames out by NAME rather than by counting
+            // them: a fixed slice() depends on how the engine inlines the helper,
+            // and an off-by-one there silently produced an empty stack.
+            const lines = (new Error().stack || '').split('\\n')
+                .map(l => l.trim()).filter(Boolean);
+            const kept = lines.filter(l =>
+                l !== 'Error' && !/\\bat (?:stack|Wrapped|new Wrapped|md\\.getUserMedia)\\b/.test(l));
+            return (kept.length ? kept : lines).slice(0, 8).join('\\n    ');
+        } catch (e) { return '(no stack)'; }
+    };
+
+    const NativePC = window.RTCPeerConnection;
+    if (typeof NativePC === 'function') {
+        const Wrapped = function (...args) {
+            const pc = new NativePC(...args);
+            console.log('%c[ichc trace] new RTCPeerConnection', 'color:#faa61a;font-weight:bold');
+            console.log('    ' + stack());
+            try {
+                pc.addEventListener('connectionstatechange', () => {
+                    console.log('[ichc trace] pc state → ' + pc.connectionState);
+                });
+            } catch (e) {}
+            return pc;
+        };
+        Wrapped.prototype = NativePC.prototype;
+        Object.setPrototypeOf(Wrapped, NativePC);
+        window.RTCPeerConnection = Wrapped;
+    }
+
+    const md = navigator.mediaDevices;
+    if (md && typeof md.getUserMedia === 'function') {
+        const origGum = md.getUserMedia.bind(md);
+        md.getUserMedia = function (constraints) {
+            console.log('%c[ichc trace] getUserMedia', 'color:#faa61a;font-weight:bold',
+                        constraints && constraints.video ? 'video' : '', constraints);
+            console.log('    ' + stack());
+            return origGum(constraints);
+        };
+    }
+
+    console.log('%c[ichc] peer-connection trace ARMED — cam down now, then copy the stacks',
+                'color:#3ba55c;font-weight:bold');
+})();
+        `);
+    }
+
+    // Armed only on request; never at boot.
+    document.addEventListener('ichc-trace-pc', () => installPeerConnectionTrace());
+
     function installRtcStopAudioRelease() {
         runInPageContext(`
 (() => {
