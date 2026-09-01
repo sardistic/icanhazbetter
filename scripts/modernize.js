@@ -1900,6 +1900,32 @@
         return window._ichcSelectedVideoId || null;
     }
 
+    // TRUE when this getUserMedia is the publisher RE-ACQUIRING the camera from
+    // setCamera(), rather than the initial cam-up.
+    //
+    // This is what caused the endless cam-up/cam-down/reconnect loop, proven by the
+    // trace the user ran:
+    //
+    //   getUserMedia <- setCamera <- onAvMenuCameraChanged <- initAvMenu
+    //   new RTCPeerConnection <- start <- setCamera
+    //
+    // setCamera() re-acquires the camera AND opens a new peer connection. The cycle:
+    // the site asks for its CameraMobile_XXX id, we override it with a real device
+    // id, the track it gets back therefore belongs to a different device than the AV
+    // menu believes it selected, the publisher fires onCameraChanged, the menu
+    // re-selects, that calls setCamera again — and every turn of that loop starts a
+    // fresh publisher. Every restart in the user's log is immediately preceded by an
+    // "override camera deviceId" line.
+    //
+    // The override still applies to the INITIAL acquisition, which is the whole
+    // point of the feature (Firefox cannot match CameraMobile_XXX and silently falls
+    // back to the default camera). It just must not fight the site's own re-select.
+    function isCameraReacquire() {
+        try {
+            return /\\bsetCamera\\b/.test(new Error().stack || '');
+        } catch (e) { return false; }
+    }
+
     function improveConstraints(constraints) {
         const next = Object.assign({}, constraints || {});
         const video = next.video;
@@ -1925,6 +1951,11 @@
                 if (!live || live === requested) { return constraints; }
             }
             if (live) {
+                if (isCameraReacquire()) {
+                    // setCamera() re-acquiring. Overriding here is what loops.
+                    console.log('[ichc] setCamera re-acquire — leaving the site\'s camera id alone');
+                    return constraints;
+                }
                 next.video = Object.assign({}, video, { deviceId: { exact: live } });
                 console.log('[ichc] override camera deviceId →', live);
                 return next;

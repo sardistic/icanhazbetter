@@ -11,7 +11,7 @@
       }
     }
   },
-  "version": "3.37",
+  "version": "3.38",
   "description": "Dark theme, flexible room layout, cam management, and chat improvements for icanhazchat.com",
   "permissions": ["scripting"],
   "host_permissions": [
