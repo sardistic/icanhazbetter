@@ -1163,10 +1163,12 @@
         installFocusGuardPatch();
         installScrollPauseFix();
         installCamDownAudioFix();
+        installRtcStopAudioRelease();
         [800, 2500, 6000].forEach(d => window.setTimeout(() => {
             installFocusGuardPatch();
             installScrollPauseFix();
             installCamDownAudioFix();
+            installRtcStopAudioRelease();
         }, d));
         // Resume observing persisted rooms once this room has had time to join
         // — the whole feature is inert while the list is empty.
@@ -1510,6 +1512,87 @@
     // no foreign track is put on the site's senders, and the site's broadcast
     // toggle is never auto-clicked. This only runs on a stop the USER initiated
     // (stopCam's first argument is what tells the server), never to restart.
+    // The WebRTC broadcaster is a SECOND, separate stop path, and it is the one
+    // that leaves "is now broadcasting audio" stuck. From the site's own
+    // ichc-rtc.js:
+    //
+    //   const stop = () => { ichcWebRTCPublish.stop(); $("#mute-toggle").off('click'); ... };
+    //   $("#publish-toggle").click(e => { ... else if (state.publishing) { stop(); } ... });
+    //   function stop_camera(){ ... if (state.connectionState==='connected') $("#publish-toggle").click(); ... }
+    //
+    // That path tears the publisher down locally and sends NO "/cam ..." command at
+    // all. Only the legacy stopCam() in scripts110725.js talks to the server, and
+    // even that one sends just "/cam off". So going live sends "/cam audio-on",
+    // stopping from the RTC panel sends nothing, and the server keeps the audio
+    // flag indefinitely — the reported "still broadcasting audio minutes later",
+    // with the cam-down wrap installed but never reached.
+    //
+    // Hooked at the toggle rather than by polling: the publisher's own state is
+    // read BEFORE the site's handler runs, so `publishing === true` identifies this
+    // click as a stop. Nothing is auto-clicked and no track is touched — this only
+    // tells the server what the user already did.
+    function installRtcStopAudioRelease() {
+        runInPageContext(`
+(() => {
+    if (window.__ichcRtcStopRelease) { return; }
+    window.__ichcRtcStopRelease = true;
+
+    const isPublishing = () => {
+        try {
+            const api = window.ichcWebRTCPublish;
+            if (!api || typeof api.getState !== 'function') { return null; }
+            const st = api.getState();
+            if (!st) { return null; }
+            return !!(st.publishing || st.connectionState === 'connected');
+        } catch (e) { return null; }
+    };
+
+    // One stop legitimately trips BOTH paths below — the toggle handler at 900ms
+    // and the state backstop on its next tick — and each "/cam audio-off" produces
+    // its own "has stopped broadcasting audio" line in chat. Coalesced so a single
+    // stop sends a single command.
+    let lastReleaseAt = 0;
+    const releaseAudio = (why) => {
+        const now = Date.now();
+        if (now - lastReleaseAt < 5000) { return; }
+        lastReleaseAt = now;
+        try {
+            if (typeof flashMicOff === 'function') { flashMicOff(); }
+            else if (typeof send_command === 'function') { send_command('/cam audio-off'); }
+            console.log('%c[ichc] released audio flag after ' + why, 'color:#3ba55c');
+        } catch (e) {
+            console.warn('[ichc] audio release failed', e);
+        }
+    };
+
+    // Capture phase: runs before the site's own click handler, so the state read
+    // here is the state BEFORE it decides to stop.
+    document.addEventListener('click', (e) => {
+        const t = e.target && e.target.closest && e.target.closest('#publish-toggle');
+        if (!t) { return; }
+        if (isPublishing() !== true) { return; }   // this click starts, not stops
+        // Let the site tear the publisher down first, then tell the server.
+        window.setTimeout(() => {
+            if (isPublishing() === false) { releaseAudio('RTC publish-toggle stop'); }
+        }, 900);
+    }, true);
+
+    // Backstop for a stop that does not come from that button — a failed
+    // connection, or stop_camera() called from elsewhere. Only armed while
+    // actually publishing, so there is no idle cost.
+    let wasPublishing = false;
+    window.setInterval(() => {
+        const now = isPublishing();
+        if (now === null) { return; }
+        if (wasPublishing && !now) { releaseAudio('publisher stopped'); }
+        wasPublishing = now;
+    }, 2000);
+
+    console.log('%c[ichc] RTC stop audio release installed', 'color:#3ba55c');
+})();
+        `);
+    }
+
     function installCamDownAudioFix() {
         runInPageContext(`
 (() => {
