@@ -1514,20 +1514,55 @@
         runInPageContext(`
 (() => {
     if (window.__ichcCamDownAudioFix) { return; }
-    const orig = window.stopCam;
-    if (typeof orig !== 'function') { return; }   // site scripts not up yet; retried
+    const origStop = window.stopCam;
+    const origSend = window.send_command;
+    if (typeof origStop !== 'function' || typeof origSend !== 'function') { return; }
     window.__ichcCamDownAudioFix = true;
-    window.stopCam = function (sendOff) {
-        const result = orig.apply(this, arguments);
+
+    // Is a broadcast currently meant to be running? Tracked from the commands the
+    // site itself sends, so no minified internals are relied on.
+    let broadcastArmed = false;
+
+    // THE RACE. startBroadcasting() does:
+    //     send_command("/cam onx");
+    //     setTimeout(() => send_command("/cam audio-on"), 2000);
+    // and nothing cancels that timer. Cam down inside those two seconds and the
+    // server receives "/cam off" and then "/cam audio-on", so it announces
+    // "<nick> is now broadcasting audio" for a cam that is already down — the
+    // stuck audio indicator, and it also lands after our own "/cam audio-off".
+    // The timer cannot be cleared from out here (its id never leaves the closure),
+    // so the stale command is dropped at the point it would be sent.
+    window.send_command = function (cmd) {
         try {
-            // sendOff is the site's own "tell the server" flag. When it is falsy
-            // the call is a local teardown (e.g. a dropped cam being cleaned up)
-            // and the server was never told anything, so nothing is owed.
+            const text = String(cmd || '');
+            if (text === '/cam on' || text === '/cam onx') {
+                broadcastArmed = true;
+            } else if (text === '/cam off') {
+                broadcastArmed = false;
+            } else if (text === '/cam audio-on' && !broadcastArmed) {
+                // Deferred audio-on landing after the cam went down. Dropping it is
+                // the whole point; a legitimate audio-on (going live, or unmuting
+                // while live) always has broadcastArmed set.
+                console.log('%c[ichc] dropped a stale "/cam audio-on" after cam down',
+                            'color:#faa61a');
+                return;
+            }
+        } catch (e) {}
+        return origSend.apply(this, arguments);
+    };
+
+    // The site's stopCam sends only "/cam off" — never "/cam audio-off" — and
+    // leaves du.el / du.eS set, so the server keeps the audio flag for this user.
+    // flashMicOff() is the site's own function for exactly that.
+    window.stopCam = function (sendOff) {
+        const result = origStop.apply(this, arguments);
+        try {
             if (sendOff) {
+                broadcastArmed = false;
                 if (typeof flashMicOff === 'function') {
                     flashMicOff();
-                } else if (typeof send_command === 'function') {
-                    send_command('/cam audio-off');
+                } else {
+                    window.send_command('/cam audio-off');
                 }
             }
         } catch (e) {
@@ -1535,9 +1570,10 @@
         }
         return result;
     };
+
     console.log('%c[ichc] cam-down audio release installed', 'color:#3ba55c');
 })();
-        `);
+`);
     }
 
     function installFocusGuardPatch() {
