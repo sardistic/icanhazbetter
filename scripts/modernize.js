@@ -1136,8 +1136,31 @@
         setTimeout(dismiss, 10000);
     }());
 
-    installBroadcastQualityPatch();
-    installBroadcastDeviceSwitchFix();
+    // ── Master switch for everything this extension does to the broadcast path ──
+    // Six rounds of fixes for "cam down is busted" have not settled whether the
+    // extension is even involved, and two of those attempts made it worse. This
+    // makes that answerable in one step instead of by more guessing: with it off,
+    // the quality patch, the camera deviceId override and both audio releases are
+    // never installed, and the site's broadcast path runs exactly as it would
+    // without the extension. Everything else — theme, chat, user list — is
+    // untouched either way.
+    //
+    // Default ON, so behaviour is unchanged for everyone not debugging this.
+    const BCAST_PATCHES_KEY = 'ichc_broadcast_patches';
+    function _bcastPatchesOn() {
+        try { return localStorage.getItem(BCAST_PATCHES_KEY) !== '0'; } catch (_) { return true; }
+    }
+    function _setBcastPatches(on) {
+        try { localStorage.setItem(BCAST_PATCHES_KEY, on ? '1' : '0'); } catch (_) {}
+    }
+
+    if (_bcastPatchesOn()) {
+        installBroadcastQualityPatch();
+        installBroadcastDeviceSwitchFix();
+    } else {
+        console.log('%c[ichc] broadcast patches DISABLED — quality, camera override and ' +
+                    'audio release are all off for this session', 'color:#faa61a;font-weight:bold');
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
         _pruneProfileCaches();   // free localStorage early so the site's own writes never fail
@@ -1162,13 +1185,17 @@
         // The patch is idempotent and only sets its flag once it has really wrapped.
         installFocusGuardPatch();
         installScrollPauseFix();
-        installCamDownAudioFix();
-        installRtcStopAudioRelease();
+        if (_bcastPatchesOn()) {
+            installCamDownAudioFix();
+            installRtcStopAudioRelease();
+        }
         [800, 2500, 6000].forEach(d => window.setTimeout(() => {
             installFocusGuardPatch();
             installScrollPauseFix();
-            installCamDownAudioFix();
-            installRtcStopAudioRelease();
+            if (_bcastPatchesOn()) {
+                installCamDownAudioFix();
+                installRtcStopAudioRelease();
+            }
         }, d));
         // Resume observing persisted rooms once this room has had time to join
         // — the whole feature is inert while the list is empty.
@@ -1900,32 +1927,6 @@
         return window._ichcSelectedVideoId || null;
     }
 
-    // TRUE when this getUserMedia is the publisher RE-ACQUIRING the camera from
-    // setCamera(), rather than the initial cam-up.
-    //
-    // This is what caused the endless cam-up/cam-down/reconnect loop, proven by the
-    // trace the user ran:
-    //
-    //   getUserMedia <- setCamera <- onAvMenuCameraChanged <- initAvMenu
-    //   new RTCPeerConnection <- start <- setCamera
-    //
-    // setCamera() re-acquires the camera AND opens a new peer connection. The cycle:
-    // the site asks for its CameraMobile_XXX id, we override it with a real device
-    // id, the track it gets back therefore belongs to a different device than the AV
-    // menu believes it selected, the publisher fires onCameraChanged, the menu
-    // re-selects, that calls setCamera again — and every turn of that loop starts a
-    // fresh publisher. Every restart in the user's log is immediately preceded by an
-    // "override camera deviceId" line.
-    //
-    // The override still applies to the INITIAL acquisition, which is the whole
-    // point of the feature (Firefox cannot match CameraMobile_XXX and silently falls
-    // back to the default camera). It just must not fight the site's own re-select.
-    function isCameraReacquire() {
-        try {
-            return /\\bsetCamera\\b/.test(new Error().stack || '');
-        } catch (e) { return false; }
-    }
-
     function improveConstraints(constraints) {
         const next = Object.assign({}, constraints || {});
         const video = next.video;
@@ -1951,11 +1952,13 @@
                 if (!live || live === requested) { return constraints; }
             }
             if (live) {
-                if (isCameraReacquire()) {
-                    // setCamera() re-acquiring. Overriding here is what loops.
-                    console.log('[ichc] setCamera re-acquire — leaving the site\'s camera id alone');
-                    return constraints;
-                }
+                // NOTE: 3.38 skipped the override when the call came from
+                // setCamera(), to break the publisher-restart loop. That was wrong
+                // twice over: it did NOT stop the loop, and setCamera() is exactly
+                // the path a manual camera pick takes — so skipping it meant Firefox
+                // got the unmatchable CameraMobile_XXX id back and fell to the
+                // default camera. Selecting a source stopped working. Reverted in
+                // 3.39; do not reintroduce without testing a manual pick.
                 next.video = Object.assign({}, video, { deviceId: { exact: live } });
                 console.log('[ichc] override camera deviceId →', live);
                 return next;
@@ -8733,6 +8736,24 @@
                 icon: ICONS.eye,
                 obsPicker: true,
                 keepOpen: true,
+            },
+            {
+                label: 'Broadcast patches: ' + (_bcastPatchesOn() ? 'On' : 'Off'),
+                icon: ICONS.broadcast,
+                keepOpen: true,
+                action(labelEl) {
+                    // A/B switch for diagnosing the cam-down problem. The patches
+                    // install at page load, so a reload is required either way —
+                    // said plainly rather than leaving the user wondering why
+                    // nothing changed.
+                    const on = !_bcastPatchesOn();
+                    _setBcastPatches(on);
+                    if (labelEl) {
+                        labelEl.textContent = 'Broadcast patches: ' + (on ? 'On' : 'Off') + ' — reload';
+                    }
+                    console.log('%c[ichc] broadcast patches ' + (on ? 'ENABLED' : 'DISABLED') +
+                                ' — reload the page to apply', 'color:#faa61a;font-weight:bold');
+                },
             },
             {
                 label: 'Last msg cam overlay: ' + (_lastMsgOn() ? 'On' : 'Off'),
