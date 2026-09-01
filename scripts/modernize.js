@@ -1637,15 +1637,24 @@
         if (now - (window.__ichcLastBroadcastRelease || 0) < 5000) { return; }
         window.__ichcLastBroadcastRelease = now;
         try {
-            // Only the RTC path needs this: the legacy stopCam has already sent it.
-            if (sendCamOff && typeof send_command === 'function') {
-                send_command('/cam off');
-            }
+            // NOTE: this deliberately does NOT send "/cam off".
+            //
+            // 3.36 did, reasoning that the RTC stop path never tells the server the
+            // cam went down. That was true but the cure was worse: the release also
+            // fires from the state backstop, which caught transient teardowns while
+            // the user was still live. "/cam off" then stopped the stream
+            // server-side, the site's own playback check reported "Live stream is
+            // not running", and its dropcam() auto-cammed the user down with
+            // "It appears there are some difficulties viewing your cam" — a
+            // reconnect loop caused by this extension. Reverted in 3.37.
+            //
+            // Clearing the audio flag is safe because it does not tear down the
+            // video stream the site is watching. Telling the server the CAM is down
+            // is not safe from a heuristic, and must only ever come from the site's
+            // own stopCam.
             if (typeof flashMicOff === 'function') { flashMicOff(); }
             else if (typeof send_command === 'function') { send_command('/cam audio-off'); }
-            console.log('%c[ichc] released broadcast after ' + why +
-                        (sendCamOff ? ' (/cam off + audio-off)' : ' (audio-off)'),
-                        'color:#3ba55c');
+            console.log('%c[ichc] released audio flag after ' + why, 'color:#3ba55c');
         } catch (e) {
             console.warn('[ichc] broadcast release failed', e);
         }
@@ -1664,15 +1673,31 @@
         }, 900);
     }, true);
 
-    // Backstop for a stop that does not come from that button — a failed
-    // connection, or stop_camera() called from elsewhere. Only armed while
-    // actually publishing, so there is no idle cost.
-    let wasPublishing = false;
+    // Backstop for a stop that does not come from that button. It must be SLOW.
+    //
+    // An earlier version released as soon as one 2s sample saw the publisher
+    // stopped, and that fired during a transient teardown while the user was still
+    // trying to broadcast. Combined with the /cam off it sent (since reverted),
+    // that killed the stream server-side, the site's own playback check then
+    // reported "Live stream is not running", and its dropcam() auto-cammed the user
+    // down with "It appears there are some difficulties viewing your cam" — an
+    // endless reconnect loop, caused by this extension.
+    //
+    // A real cam-down stays down. A renegotiation does not. So the publisher has to
+    // be observed stopped on THREE consecutive samples — about six seconds —
+    // before anything is sent.
+    let stoppedSamples = 0;
+    let everPublished = false;
     window.setInterval(() => {
         const now = isPublishing();
         if (now === null) { return; }
-        if (wasPublishing && !now) { releaseAudio('publisher stopped'); }
-        wasPublishing = now;
+        if (now) { everPublished = true; stoppedSamples = 0; return; }
+        if (!everPublished) { return; }   // never went live; nothing to release
+        stoppedSamples++;
+        if (stoppedSamples === 3) {
+            releaseAudio('publisher stopped for ~6s');
+            everPublished = false;        // one release per broadcast
+        }
     }, 2000);
 
     console.log('%c[ichc] RTC stop audio release installed', 'color:#3ba55c');
