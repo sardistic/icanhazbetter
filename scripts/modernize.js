@@ -11807,7 +11807,11 @@
                         userListState.sortMode = id;
                         localStorage.setItem('ichc_ul_sort', id);
                         moreMenu.hidden = true;
-                        buildUserList();
+                        // The roster itself has not changed, so a normal build is
+                        // rejected by lastBuildSig before it reaches the comparator.
+                        // A sort choice is an explicit presentation change and must
+                        // bypass that source-data cache.
+                        buildUserList({ force: true });
                     });
                     moreMenu.appendChild(btn);
                 });
