@@ -1,6 +1,6 @@
 # icanhazbetter
 
-A browser extension that upgrades [icanhazchat.com](https://www.icanhazchat.com) with a dark theme, a smarter user list, cam management, and chat improvements.
+A browser extension that reshapes [icanhazchat.com](https://www.icanhazchat.com) into a customizable chat and cam room. It adds selectable themes, a flexible cam layout, richer user and chat tools, and a draggable private-message panel.
 
 > **Browser support** — Chrome, Firefox, Opera, Edge (all use this branch)
 
@@ -9,30 +9,28 @@ A browser extension that upgrades [icanhazchat.com](https://www.icanhazchat.com)
 ## Features
 
 **Theme**
-- Full dark UI across chat, cams, menus, and overlays — light theme also available via the sun icon
-- Real profile images for avatars, falling back to hash-colored initials when no profile picture is set
-- Site supporter hearts — users with a supporter badge get a subtle pink glow on their avatar
+- Seven selectable themes, including dark and light options
+- Restyled chat, cams, menus, controls, and overlays
+- Profile avatars and room-user details, with cached profile metadata and fallback initials
 
 **User list**
-- Rebuilt user list with compact rows, online/cammed/idle/mod indicators
-- Filter bar that searches both active users and the hidden-cams section simultaneously
-- Sort by name, age (absolute join date), or status
-- Year badges and karma tier indicators on user rows
-- Sidebar strip shows broadcaster avatars with name tooltips when the list is collapsed
-- Collapse/expand toggle built into the sidebar strip
+- Compact user list with online, cam, idle, and moderator indicators
+- Search and sorting, including name, account age, and karma
+- Karma tiers, account-age badges, avatars, and profile details
+- Collapsible sidebar with broadcaster shortcuts
 
 **Cam management**
-- Hide individual cams — they stay hidden across page refreshes (saved to `localStorage`)
-- Hidden cams listed in a collapsible section at the bottom of the user list
-- Cam refresh throttled to prevent disruptive random reloads
-- Broadcast timer shown on active cam cards
+- Hide, mute, reorder, resize, and feature cams in a flexible room layout
+- Hidden-cam list with search, restore, export, and import controls
+- Broadcast timers and room activity tools
+- Optional cam auto-restart when the room goes idle; broadcast patches can be disabled independently
 
 **Chat**
-- Consecutive join and leave events are combined into a single counted row (e.g. _3 Joined: alice, bob, charlie_) and reset on the next regular message
-- Image links auto-embed as inline previews; non-image URLs get a compact Open Graph card
-- Relative timestamps on messages (e.g. _2m ago_)
-- GIF/meme picker with search, plus an emoji tab; type `:name` in the chat box for inline tab-complete
-- Private message panel with unread badge, resize/drag, and per-conversation history
+- Optional chat history across reloads, condensed join/leave events, relative timestamps, and reply previews
+- Inline image previews and link cards with page metadata
+- GIF and emote search, an emoji picker, and emoji name completion
+- Mention/PM sound alerts with selectable styles, preview, and an on/off control
+- Draggable, resizable private-message panel with unread indicators and locally saved conversation history
 
 ---
 
@@ -125,11 +123,11 @@ Clone the repo and load as an unpacked extension per the instructions above for 
 
 ---
 
-## Privacy
+## Data and privacy
 
-icanhazbetter collects no user data. It does not transmit, store, or share any information with any server or third party.
+The extension does not include analytics or an extension-operated account service. It saves settings and site data in the browser's `localStorage` for icanhazchat.com. Depending on which features you use, this can include layout and theme preferences, hidden cams, cached room-profile details, chat history, and private-message history. These records remain in that browser storage unless you clear them or the site/browser removes them.
 
-The only data written to storage is your hidden-cam list, saved to `localStorage` in your own browser on icanhazchat.com. This never leaves your device.
+The extension works with icanhazchat.com and its image host. Chat, cam, and other site activity still uses the site's services. Link cards may also request the linked page's HTML to read its title, description, and preview image; the request omits cookies. Loading linked preview images or opening a link can contact that link's host.
 
 ## License
 
