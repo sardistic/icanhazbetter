@@ -696,6 +696,39 @@
         return cl.contains('ichc-theme-is-light') || cl.contains('ichc-light-theme');
     }
 
+    const MESSAGE_COLOR_KEY = 'ichc_full_message_color';
+    let fullMessageColor = false;
+    try { fullMessageColor = localStorage.getItem(MESSAGE_COLOR_KEY) === '1'; } catch (_) {}
+    window.__ichcChatMessageColor = {
+        enabled() { return fullMessageColor; },
+        setEnabled(on) {
+            fullMessageColor = !!on;
+            try { localStorage.setItem(MESSAGE_COLOR_KEY, fullMessageColor ? '1' : '0'); } catch (_) {}
+            const log = getChatLog();
+            if (log) { applyChatTheme(log); }
+            window.dispatchEvent(new CustomEvent('ichc-message-color-change'));
+        },
+    };
+
+    function syncChatMessageColors(root) {
+        const log = getChatLog();
+        getChatRowNodes(log).forEach(row => {
+            if (root !== log && root !== row && !root.contains(row) && !row.contains(root)) { return; }
+            // Container blocks can hold multiple authors; color their individual lines.
+            const container = row.querySelector('.line');
+            const event = row.classList.contains('ichc-chat-event') || isCompactChatEventText(row.textContent || '');
+            const author = row.querySelector('a[data-ichc-chat-nick="1"], .ichc-history-nick');
+            const color = author?.style.getPropertyValue('--ichc-chat-name-color') || author?.style.color;
+            const enabled = fullMessageColor && !container && !event && !!color;
+            row.classList.toggle('ichc-full-message-color', enabled);
+            if (enabled) {
+                row.style.setProperty('--ichc-chat-message-color', color);
+            } else {
+                row.style.removeProperty('--ichc-chat-message-color');
+            }
+        });
+    }
+
     function applyChatTheme(scope = getChatLog()) {
         const log = getChatLog();
         const root = scope || log;
@@ -705,7 +738,9 @@
 
         getScopedChatElements(root, 'a').forEach(anchor => {
             if (!isLikelyChatNickAnchor(anchor)) { return; }
-            const color = extractChatNickColor(anchor);
+            // Retain the original hue when settings or theme changes reprocess a row.
+            const color = anchor.dataset.ichcChatRawColor || extractChatNickColor(anchor);
+            if (color) { anchor.dataset.ichcChatRawColor = color; }
             // Harvest before any readability adjustment — store what the user chose
             if (color) { recordNickColor(anchor.textContent, color); }
             // First time we style this anchor is the first time we have seen the
@@ -731,29 +766,26 @@
                 if (parent) {
                     const parentColor = extractInlineColor(parent);
                     if (parentColor && isDarkChatColor(parentColor)) {
-                        parent.style.setProperty('color', '#d5e2ef', 'important');
+                        parent.style.setProperty('color', 'var(--ichc-chat-message-color, #d5e2ef)', 'important');
                     }
                 }
             }
         });
 
         getScopedChatElements(root, 'font[color], [style*="color"]').forEach(node => {
-            if (node.matches?.('a.userlink')) { return; }
+            if (node.closest('a[data-ichc-chat-nick="1"], .ichc-history-nick')) { return; }
             const color = extractInlineColor(node);
 
-            // NOTE: message bodies are deliberately NOT painted with the sender's
-            // chosen colour. That was tried and reverted on request — it made every
-            // message text and nick take the picked colour, which is not wanted.
-            // The flattening rule in theme.css stays, and only unreadable colours
-            // are corrected, as below.
+            // The row variable applies the optional author color; its fallback keeps
+            // the existing readability correction in username-only mode.
             if (lightMode) {
                 // In light mode: light-colored text → force dark so it's readable.
                 if (color && !isDarkChatColor(color)) {
-                    node.style.setProperty('color', '#111214', 'important');
+                    node.style.setProperty('color', 'var(--ichc-chat-message-color, #111214)', 'important');
                 }
             } else {
                 if (color && isDarkChatColor(color)) {
-                    node.style.setProperty('color', '#d5e2ef', 'important');
+                    node.style.setProperty('color', 'var(--ichc-chat-message-color, #d5e2ef)', 'important');
                 }
             }
         });
@@ -884,6 +916,8 @@
                 el.removeAttribute('color');
             });
         });
+
+        syncChatMessageColors(root);
 
         // Embed image links as inline images, otherwise attach a compact OG preview.
         getScopedChatElements(root, 'a').forEach(anchor => {
@@ -1114,6 +1148,16 @@
             const next = a.nextSibling;
             return next?.nodeType === Node.TEXT_NODE && /^\s*[:：]/.test(next.textContent || '');
         }) || links.find(a => !/^\s*@/.test(a.textContent || '')) || null;
+    }
+
+    function _hasMessageAuthorSeparator(link) {
+        if (!link) { return false; }
+        const next = link.nextSibling;
+        return /[:：]\s*$/.test(link.textContent || '') ||
+            (next?.nodeType === Node.TEXT_NODE && /^\s*[:：]/.test(next.textContent || '')) ||
+            (next?.nodeType === Node.ELEMENT_NODE && next.matches('.ichc-nick-sep')) ||
+            (link.parentElement?.matches('.ichc-nick-block') && /[:：]\s*$/.test(link.parentElement.textContent || '')) ||
+            !!link.closest('.ichc-nick-repeat');
     }
 
     function _rowNickKey(row) {
@@ -2008,8 +2052,9 @@
     // but the overlay is the one consumer that wants the emotes and gifs kept. The
     // emote ban button goes, though — it is chrome for the chat log, and it would
     // be a dead control floating over a cam.
-    const LAST_MSG_STRIP = '.ichc-ts, .ichc-reply-btn, a.userlink, .ichc-og-card,' +
+    const LAST_MSG_STRIP = '.ichc-ts, .ichc-reply-btn, .ichc-og-card,' +
         ' .ichc-event-collector, .ichc-chat-year-badge, .ichc-nick-block, .ichc-nick-sep,' +
+        ' .ichc-nick-repeat,' +
         ' .ichc-muted-row, .ichc-emote-ban-btn';
     // "Just an emoji" for sizing purposes: at least one pictograph, and nothing
     // besides pictographs, skin-tone modifiers, flag halves, variation selectors,
@@ -2021,6 +2066,8 @@
 
     function _lastMsgContent(row) {
         const clone = row.cloneNode(true);
+        // Keep linked @mentions in the body; only the row's author link goes.
+        _chatAuthorAnchor(clone)?.remove();
         clone.querySelectorAll(LAST_MSG_STRIP).forEach(el => el.remove());
 
         // Removing the nick link leaves the ": " separator that followed it.
@@ -2032,8 +2079,8 @@
             } else if (node.nodeType === Node.ELEMENT_NODE) { break; }
         }
 
-        const media = [...clone.querySelectorAll('.ichc-chat-inline-img')];
-        for (const el of media) {
+        const media = [...clone.querySelectorAll('.ichc-chat-inline-img, .ichc-emote-wrap, img[id^="emot-"]')];
+        for (const el of clone.querySelectorAll('video.ichc-chat-inline-img')) {
             // A cloned <video> starts its own decode pipeline. Muted and without
             // controls it stays a moving thumbnail rather than a player, which is
             // all the overlay is for.
@@ -2042,24 +2089,44 @@
 
         const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
         if (!text && !media.length) { return null; }
+        const sig = clone.innerHTML;
         const frag = document.createDocumentFragment();
         while (clone.firstChild) { frag.appendChild(clone.firstChild); }
         return {
             frag,
             text,
+            sig,
             // Media-only messages (a lone emote or gif) get the same enlargement as
             // a lone emoji — from the reader's side they are the same thing.
             big: (!text && media.length > 0) || (!!text && _EMOJI_ONLY_RE.test(text)),
         };
     }
 
-    // Returns Map(lowercased nick -> { frag, text, big }) for the nicks asked about,
+    function _camMessageContent(row) {
+        const content = _lastMsgContent(row);
+        if (!content) { return null; }
+        const link = _chatAuthorAnchor(row);
+        const nick = _rowNickKey(row);
+        const epoch = Number(row.querySelector('.ichc-ts[data-ichc-ts-epoch]')?.dataset.ichcTsEpoch);
+        const savedColor = nickColors.get(nick);
+        content.row = row;
+        content.epoch = Number.isFinite(epoch) && epoch > 0 ? epoch : null;
+        content.color = (link?.style.getPropertyValue('--ichc-chat-name-color') ||
+            (savedColor ? (document.documentElement.classList.contains('ichc-light-theme')
+                ? makeReadableOnLightChatColor(savedColor) : makeReadableChatColor(savedColor)) : '') ||
+            (link ? getComputedStyle(link).color : '') || '').trim();
+        content.hasMention = row.classList.contains('ichc-mention') ||
+            !!row.querySelector('.ichc-at-mention');
+        return content;
+    }
+
+    // Returns Map(canonical nick -> { frag, text, big }) for the nicks asked about,
     // in a single backwards pass over the log.
     function _lastMsgForNicks(nicks) {
         const out = new Map();
         const log = getChatLog();
         if (!log || !nicks || !nicks.length) { return out; }
-        const want = new Set(nicks.map(n => String(n).trim().toLowerCase()).filter(Boolean));
+        const want = new Set(nicks.map(_chatNickKey).filter(Boolean));
         if (!want.size) { return out; }
 
         const rows = log.children;
@@ -2067,14 +2134,16 @@
             const row = rows[i];
             if (!_isRetainableRow(row)) { continue; }
             seen++;
-            const link = row.querySelector('a.userlink');
-            if (!link) { continue; }
-            const nick = (link.textContent || '').trim().toLowerCase();
+            if (row.classList.contains('ichc-chat-event') || row.classList.contains('ichc-bcast-event')) { continue; }
+            const link = _chatAuthorAnchor(row);
+            const nick = _rowNickKey(row);
             if (!nick || !want.has(nick)) { continue; }
-            // A join/leave row also carries a userlink; only "nick: message" counts.
-            const next = link.nextSibling;
-            if (!(next?.nodeType === Node.TEXT_NODE && /^\s*:/.test(next.textContent))) { continue; }
-            const content = _lastMsgContent(row);
+            // The site may put the colon inside the author link, immediately after
+            // it, or inside a grouped nick wrapper. A stamped continuation row can
+            // omit the link entirely; its data-ichc-nick identifies the author.
+            const hasSeparator = _hasMessageAuthorSeparator(link);
+            if (!hasSeparator && !(row.dataset.ichcNick && !link)) { continue; }
+            const content = _camMessageContent(row);
             if (!content) { continue; }
             out.set(nick, content);
             want.delete(nick);
@@ -2092,14 +2161,76 @@
     // row is fully themed (emotes wrapped, images inlined) before anything clones it.
     let _chatRowNotifyTimer = null;
     const _chatRowNotifyNicks = new Set();
-    function _notifyChatRow(nick) {
+    const _chatRowNotifyRows = new Set();
+    const _chatRowsNotified = new WeakSet();
+    function _liveChatRowFor(node, log) {
+        let row = node instanceof Element ? node : node?.parentElement;
+        while (row && row.parentElement !== log) { row = row.parentElement; }
+        if (!row?.matches?.('table, div, p, ul, .line') ||
+            row.dataset.ichcInserted || row.dataset.ichcEventProcessed ||
+            row.matches('.ichc-condensed-bar, .ichc-history-block, .ichc-event-collector, .ichc-slot-offer-row')) {
+            return null;
+        }
+        return row;
+    }
+    function _notifyChatRow(nick, row) {
         if (nick) { _chatRowNotifyNicks.add(nick.toLowerCase()); }
+        if (row && !_chatRowsNotified.has(row)) { _chatRowNotifyRows.add(row); }
         if (_chatRowNotifyTimer) { return; }
         _chatRowNotifyTimer = window.setTimeout(() => {
             _chatRowNotifyTimer = null;
+            const rows = [..._chatRowNotifyRows];
+            _chatRowNotifyRows.clear();
+            for (const mentionRow of rows) {
+                if (!mentionRow.isConnected || _chatRowsNotified.has(mentionRow)) { continue; }
+                if (mentionRow.dataset.ichcInserted || mentionRow.dataset.ichcEventProcessed) {
+                    _chatRowsNotified.add(mentionRow);
+                    continue;
+                }
+                const eventType = _classifyEventRow(mentionRow);
+                if (eventType) {
+                    const eventNick = _extractEventNick(mentionRow);
+                    if (eventNick) {
+                        _addToEventCollector(eventType, eventNick, mentionRow);
+                        _chatRowsNotified.add(mentionRow);
+                    }
+                    continue;
+                }
+                applyChatTheme(mentionRow);
+                if (mentionRow.classList.contains('ichc-chat-event') ||
+                    mentionRow.classList.contains('ichc-bcast-event')) {
+                    _chatRowsNotified.add(mentionRow);
+                    continue;
+                }
+                const link = _chatAuthorAnchor(mentionRow);
+                const author = _rowNickKey(mentionRow);
+                if (!author || (!_hasMessageAuthorSeparator(link) &&
+                    !(mentionRow.dataset.ichcNick && !link))) { continue; }
+                const content = _camMessageContent(mentionRow);
+                if (!content) { continue; }
+                _chatRowsNotified.add(mentionRow);
+                _chatRowNotifyNicks.add(author);
+                // Read the flattened message body: the site can put "@" in one
+                // text node and the linked username in another.
+                const targets = [];
+                _AT_NICK_RE.lastIndex = 0;
+                let match;
+                while ((match = _AT_NICK_RE.exec(content.text)) !== null) {
+                    const nick = _chatNickKey(match[1]);
+                    if (nick && nick !== author && !targets.includes(nick)) { targets.push(nick); }
+                }
+                if (!targets.length) { continue; }
+                const displayAuthor = (link?.textContent || author)
+                    .trim().replace(/[:：]\s*$/, '');
+                window.dispatchEvent(new CustomEvent('ichc-cam-mention', {
+                    detail: { author: displayAuthor, targets, content },
+                }));
+            }
             const nicks = [..._chatRowNotifyNicks];
             _chatRowNotifyNicks.clear();
-            window.dispatchEvent(new CustomEvent('ichc-chat-row', { detail: { nicks } }));
+            if (nicks.length) {
+                window.dispatchEvent(new CustomEvent('ichc-chat-row', { detail: { nicks } }));
+            }
         }, 180);
     }
 
@@ -2459,7 +2590,7 @@
     }
 
     function _condensedOn() {
-        try { return localStorage.getItem(CONDENSED_KEY) === '1'; } catch (_) { return false; }
+        try { return localStorage.getItem(CONDENSED_KEY) !== '0'; } catch (_) { return true; }
     }
 
     // Stamped on every genuinely new chat row so events can be aged against them.
@@ -3476,7 +3607,7 @@
         clearNativeChatPause();
         // Seed line numbers for rows already loaded, so condensed expiry has a scale
         // to measure against from the first event rather than after the first scroll.
-        [...log.children].forEach(_stampLine);
+        [...log.children].forEach(row => { _stampLine(row); _chatRowsNotified.add(row); });
         _scheduleCondensed();
         _restoreChatHistory();       // show what was on screen before the refresh
         _snapshotChatCache();        // seed the cache from whatever is already loaded
@@ -3517,6 +3648,8 @@
 
                 mutations.forEach(mutation => {
                     mutation.addedNodes.forEach(node => {
+                        const liveRow = _liveChatRowFor(node, log);
+                        if (liveRow) { _notifyChatRow('', liveRow); }
                         if (node.nodeType === 1) {
                             const isInserted = node.classList &&
                                 (node.classList.contains('ichc-chat-inline-img') ||
@@ -3559,16 +3692,13 @@
                                     }
                                 } else {
                                     // Seal only on real "nick: message" rows — not DOM noise or misclassified events
-                                    const a = node.querySelector?.('a.userlink');
-                                    if (a) {
-                                        const next = a.nextSibling;
-                                        if (next?.nodeType === Node.TEXT_NODE && /^\s*:/.test(next.textContent)) {
-                                            _scheduleSeal();
-                                            // Tell the cam overlay a message landed. The nick
-                                            // only — the overlay pulls the content itself once
-                                            // our own theming pass has finished with the row.
-                                            _notifyChatRow((a.textContent || '').trim());
-                                        }
+                                    const a = _chatAuthorAnchor(node);
+                                    if (_hasMessageAuthorSeparator(a)) {
+                                        _scheduleSeal();
+                                        // Tell the cam overlay a message landed. The nick
+                                        // only — the overlay pulls the content itself once
+                                        // our own theming pass has finished with the row.
+                                        _notifyChatRow(_chatNickKey(a.textContent || ''), node);
                                     }
                                     applyChatTheme(node);
                                     _markMentions(node);

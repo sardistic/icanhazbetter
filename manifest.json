@@ -11,7 +11,7 @@
       }
     }
   },
-  "version": "3.40",
+  "version": "3.41",
   "description": "Dark theme, flexible room layout, cam management, and chat improvements for icanhazchat.com",
   "permissions": ["scripting"],
   "host_permissions": [
@@ -24,7 +24,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["gifs.txt", "images/year-badges/*.svg", "fonts/*.woff2"],
+      "resources": ["gifs.txt", "iTellMessage.ogg", "aol_instant_messenger.mp3", "yahoo_messenger.mp3", "aol_aim_notification.mp3", "msn_notification.mp3", "icq_messenger.mp3", "images/year-badges/*.svg", "fonts/*.woff2"],
       "matches": ["https://www.icanhazchat.com/*"]
     }
   ],

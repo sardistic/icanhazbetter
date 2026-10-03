@@ -103,19 +103,91 @@
 
     function setLiveState(isLive) {
         const btn = document.querySelector('a.ichc-broadcast-btn');
-        if (!btn) { return; }
-        btn.classList.toggle('ichc-live', isLive);
-        // When the 3D rolodex prism is mounted, its faces show GO/STOP and it flips
-        // itself off the .ichc-live class — writing textContent here would clobber the
-        // whole prism with a plain text label. Only update the label on the plain button.
-        if (!btn.classList.contains('ichc-rolo-btn')) {
-            const label = btn.querySelector('span:not(.ichc-btn-icon-lg)');
-            if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
+        if (btn) {
+            btn.classList.toggle('ichc-live', isLive);
+            // The header prism follows .ichc-live; plain buttons still need text.
+            if (!btn.classList.contains('ichc-rolo-btn')) {
+                const label = btn.querySelector('span:not(.ichc-btn-icon-lg)');
+                if (label) { label.textContent = isLive ? 'Stop Live' : 'Go Live'; }
+            }
         }
+        const panel = document.getElementById('rtc-broadcaster');
+        panel?.classList.toggle('ichc-is-live', isLive);
+        const panelTitle = panel?.querySelector('.ichc-broadcaster-title');
+        if (panelTitle) { panelTitle.textContent = isLive ? 'Live camera' : 'Go live'; }
+        panel?.querySelector('#publish-toggle')?._ichcRoloSync?.(isLive);
         // Going off live must not refresh the inbound cam list. A global refresh
         // tears down and renegotiates every viewer connection, which makes the
         // remaining cams stutter and can feed protocol list events back into more
         // refresh activity. Manual and per-feed refresh controls handle recovery.
+    }
+
+    function mountPublishGlass(panel) {
+        const btn = panel.querySelector('#publish-toggle');
+        if (!btn || btn.querySelector('.ichc-publish-glass-content')) { return; }
+        // The site replaces the button contents when publish state changes. Restore
+        // our content while retaining the native button and its click handler.
+        if (btn._ichcGlassNode) {
+            const nativeLabel = (btn.textContent || '').trim();
+            btn.replaceChildren(btn._ichcGlassShadow, btn._ichcGlassNode);
+            if (/\bstop\b/i.test(nativeLabel)) { btn._ichcRoloSync?.(true); }
+            else if (/\bbroadcast\b/i.test(nativeLabel)) { btn._ichcRoloSync?.(false); }
+            return;
+        }
+        btn._ichcRoloCleanup?.();
+        const nativeLabel = (btn.textContent || '').trim();
+        const topButton = document.querySelector('a.ichc-broadcast-btn');
+        let isLive = /\bstop\b/i.test(nativeLabel) || !!topButton?.classList.contains('ichc-live');
+        btn.classList.add('ichc-publish-glass-btn');
+        const broadcastIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>';
+        const liveIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>';
+        btn.innerHTML = '<span class="ichc-glass-drop-shadow" aria-hidden="true"></span>' +
+            '<span class="ichc-publish-glass-content" aria-hidden="true">' +
+            '<span class="ichc-publish-glass-icon"></span>' +
+            '<span class="ichc-publish-glass-label"></span></span>';
+        btn._ichcGlassNode = btn.querySelector('.ichc-publish-glass-content');
+        btn._ichcGlassShadow = btn.querySelector('.ichc-glass-drop-shadow');
+        const icon = btn.querySelector('.ichc-publish-glass-icon');
+        const label = btn.querySelector('.ichc-publish-glass-label');
+        const listeners = new AbortController();
+        const listenerOptions = { signal: listeners.signal };
+        const paint = () => {
+            btn.classList.toggle('ichc-publish-live', isLive);
+            btn.setAttribute('aria-label', isLive ? 'Broadcast is live. Close this window to stop.' : 'Start broadcasting');
+            icon.innerHTML = isLive ? liveIcon : broadcastIcon;
+            label.textContent = isLive ? 'LIVE' : 'BROADCAST';
+        };
+        paint();
+        btn._ichcRoloIsLive = () => isLive;
+        btn._ichcRoloSync = nextLive => {
+            if (nextLive !== isLive) {
+                isLive = nextLive;
+                paint();
+            }
+        };
+        btn.addEventListener('pointermove', event => {
+            const rect = btn.getBoundingClientRect();
+            const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+            const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+            btn.style.setProperty('--ichc-glass-shadow-x', `${Math.round((.5 - x) * 9)}px`);
+            btn.style.setProperty('--ichc-glass-shadow-y', `${Math.round((.5 - y) * 9 + 5)}px`);
+        }, listenerOptions);
+        const resetLight = () => {
+            btn.style.removeProperty('--ichc-glass-shadow-x');
+            btn.style.removeProperty('--ichc-glass-shadow-y');
+        };
+        btn.addEventListener('pointerleave', resetLight, listenerOptions);
+        btn.addEventListener('pointercancel', resetLight, listenerOptions);
+        btn.addEventListener('click', event => {
+            if (isLive && event.isTrusted) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+        }, { capture: true, signal: listeners.signal });
+        btn._ichcRoloCleanup = () => {
+            listeners.abort();
+            resetLight();
+        };
     }
 
     // ── Real broadcast state, instead of guessing from click text ───────────────
@@ -190,39 +262,241 @@
 
     function watchBroadcasterPanel() {
         const seen = new WeakSet();
+        const margin = 8;
+        const clamp = (value, low, high) => Math.max(low, Math.min(value, Math.max(low, high)));
+        const shown = panel => !!panel && !panel.classList.contains('ichc-panel-closed') &&
+            getComputedStyle(panel).display !== 'none';
+        const moveTo = (panel, x, y) => {
+            panel.style.setProperty('--ichc-popup-x', clamp(x, margin, innerWidth - panel.offsetWidth - margin) + 'px');
+            panel.style.setProperty('--ichc-popup-y', clamp(y, margin, innerHeight - panel.offsetHeight - margin) + 'px');
+        };
+        const keepOnScreen = panel => {
+            if (!shown(panel)) { return; }
+            const rect = panel.getBoundingClientRect();
+            moveTo(panel, rect.left, rect.top);
+        };
+        const fitBroadcasterPanel = panel => {
+            const preview = panel.querySelector('#publisher-video');
+            if (!preview) { return; }
+            preview.style.removeProperty('height');
+            preview.style.removeProperty('max-height');
+            const overflow = panel.scrollHeight - (innerHeight - 16);
+            if (overflow > 0) {
+                const height = Math.max(90, preview.getBoundingClientRect().height - overflow - 8);
+                preview.style.setProperty('height', height + 'px', 'important');
+                preview.style.setProperty('max-height', height + 'px', 'important');
+            }
+        };
+        const placeUnderButton = (panel, anchor) => {
+            if (!shown(panel) || panel._ichcMoved) { return; }
+            fitBroadcasterPanel(panel);
+            const source = anchor || document.querySelector('a.ichc-broadcast-btn');
+            if (!source) { keepOnScreen(panel); return; }
+            const rect = source.getBoundingClientRect();
+            const width = panel.offsetWidth;
+            const height = panel.offsetHeight;
+            const below = rect.bottom + 8;
+            const above = rect.top - height - 8;
+            moveTo(panel, rect.left + rect.width / 2 - width / 2,
+                below + height <= innerHeight - margin ? below : above >= margin ? above : below);
+        };
+        const stopAndClose = panel => {
+            if (!shown(panel)) { return; }
+            const wasLive = panel.querySelector('#publish-toggle')?._ichcRoloIsLive?.() ||
+                document.querySelector('a.ichc-broadcast-btn')?.classList.contains('ichc-live');
+            panel._ichcClosing = !!wasLive;
+            panel.classList.add('ichc-panel-closed');
+            const sample = panel.querySelector('.ichc-glass-sample');
+            sample?.getContext('2d')?.clearRect(0, 0, sample.width, sample.height);
+            if (wasLive) {
+                // Read the publisher's real state in the page realm before using its
+                // native toggle. A stale visual Live state must never start a stream.
+                runInPageContext(`(() => {
+                    const state = window.ichcWebRTCPublish?.getState?.();
+                    if (state?.publishing || state?.connectionState === 'connected') {
+                        document.getElementById('publish-toggle')?.click();
+                    }
+                })();`);
+                setLiveState(false);
+                [400, 1500, 4000].forEach(delay => window.setTimeout(syncLiveFromCams, delay));
+            }
+        };
 
-        // When Go Live/Stop Live button is clicked: clear closed state and sync live flag
+        const arrangeControls = panel => {
+            const settings = panel.querySelector('#publish-settings');
+            if (!settings) { return; }
+            const camera = settings.querySelector('#camera-toggle')?.closest('.row');
+            const microphone = settings.querySelector('#mute-toggle')?.closest('.row');
+            const action = settings.querySelector('#publish-toggle')?.closest('.row');
+            if (!camera || !microphone || !action) { return; }
+            camera.classList.add('ichc-camera-input-row');
+            microphone.classList.add('ichc-mic-input-row');
+            action.classList.add('ichc-publish-action-row');
+            panel.classList.add('ichc-broadcaster-compact');
+            const stage = panel.querySelector('#publish-content > .row');
+            const videoContainer = panel.querySelector('#publish-video-container');
+            // The site's video container sits inside a Bootstrap column. That
+            // column is the grid item; spanning the inner container alone leaves
+            // an empty row beneath the preview.
+            let previewColumn = videoContainer;
+            while (stage && previewColumn && previewColumn.parentElement !== stage) {
+                previewColumn = previewColumn.parentElement;
+            }
+            if (stage && previewColumn) {
+                previewColumn.classList.add('ichc-publish-preview-column');
+            }
+            if (stage && !stage.querySelector(':scope > .ichc-glass-sample')) {
+                const sample = document.createElement('canvas');
+                sample.className = 'ichc-glass-sample';
+                sample.width = 72;
+                sample.height = 72;
+                sample.setAttribute('aria-hidden', 'true');
+                stage.appendChild(sample);
+            }
+            const devices = [
+                [camera, 'Camera', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>'],
+                [microphone, 'Microphone', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4m-4 0h8"/></svg>'],
+            ];
+            for (const [row, device, iconMarkup] of devices) {
+                const select = row.querySelector('select');
+                const picker = select?.closest('.col-10') || select?.parentElement;
+                if (!select || !picker) { continue; }
+                picker.classList.add('ichc-device-picker');
+                select.setAttribute('aria-label', `Input ${device.toLowerCase()}`);
+                const updateTitle = () => {
+                    select.title = `${device}: ${select.selectedOptions[0]?.textContent?.trim() || 'Choose device'}`;
+                };
+                if (select.dataset.ichcDevicePicker !== '1') {
+                    select.dataset.ichcDevicePicker = '1';
+                    select.addEventListener('change', updateTitle);
+                }
+                updateTitle();
+                if (!picker.querySelector('.ichc-device-picker-icon')) {
+                    const icon = document.createElement('span');
+                    icon.className = 'ichc-device-picker-icon';
+                    icon.setAttribute('aria-hidden', 'true');
+                    icon.innerHTML = iconMarkup;
+                    picker.appendChild(icon);
+                }
+            }
+        };
+
+        // Keep the original native open path: clear our closed class on the header
+        // click and let the site's handler create or show the broadcaster panel.
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('.ichc-broadcast-btn');
             if (!btn) { return; }
-            const panel = document.getElementById('rtc-broadcaster');
-            if (panel) { panel.classList.remove('ichc-panel-closed'); }
-            if (btn.classList.contains('ichc-live')) {
-                setLiveState(false);
+            const existing = document.getElementById('rtc-broadcaster');
+            if (existing) {
+                existing._ichcMoved = false;
+                existing._ichcClosing = false;
+                existing.classList.remove('ichc-panel-closed');
             }
+            const reveal = () => {
+                const panel = document.getElementById('rtc-broadcaster');
+                if (!panel) { return; }
+                panel._ichcClosing = false;
+                panel.classList.remove('ichc-panel-closed');
+                placeUnderButton(panel, btn);
+            };
+            requestAnimationFrame(reveal);
+            window.setTimeout(reveal, 120);
+            window.setTimeout(reveal, 500);
         }, true);
+
+        document.addEventListener('pointerdown', e => {
+            const panel = document.getElementById('rtc-broadcaster');
+            if (!shown(panel) || panel.contains(e.target) || e.target.closest?.('.ichc-broadcast-btn')) { return; }
+            stopAndClose(panel);
+        }, true);
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { stopAndClose(document.getElementById('rtc-broadcaster')); }
+        }, true);
+        window.addEventListener('resize', () => {
+            const panel = document.getElementById('rtc-broadcaster');
+            if (shown(panel)) { fitBroadcasterPanel(panel); keepOnScreen(panel); }
+        });
 
         const setupPanel = () => {
             const panel = document.getElementById('rtc-broadcaster');
-            if (!panel || seen.has(panel)) { return; }
+            if (!panel) { return; }
+            mountPublishGlass(panel);
+            arrangeControls(panel);
+            if (seen.has(panel)) { return; }
             seen.add(panel);
+            // A tiny, low-rate copy supplies the preview's colors to the glass
+            // column without putting controls over the actual camera image.
+            const sampleTimer = window.setInterval(() => {
+                if (!panel.isConnected) { window.clearInterval(sampleTimer); return; }
+                if (!shown(panel)) { return; }
+                const preview = panel.querySelector('#publisher-video');
+                const sample = panel.querySelector('.ichc-glass-sample');
+                if (!sample) { return; }
+                const context = sample.getContext('2d');
+                if (!preview || preview.readyState < 2 || !preview.videoWidth) {
+                    context?.clearRect(0, 0, sample.width, sample.height);
+                    return;
+                }
+                try {
+                    // Continue the preview's right-edge colors into the controls.
+                    const sourceX = Math.floor(preview.videoWidth * .68);
+                    context?.drawImage(preview, sourceX, 0,
+                        preview.videoWidth - sourceX, preview.videoHeight,
+                        0, 0, sample.width, sample.height);
+                } catch (_) { /* A non-readable native video leaves the neutral glass fallback. */ }
+            }, 250);
 
-            // Close button. Guarded on the DOM, not just the `seen` Set: if this setup
-            // ever runs twice each pass gets its own Set and the panel ends up with two
-            // buttons sharing one id (observed in the live markup).
+            let handle = panel.querySelector('.ichc-broadcaster-handle');
+            if (!handle) {
+                handle = document.createElement('div');
+                handle.className = 'ichc-broadcaster-handle';
+                handle.title = 'Drag window';
+                panel.insertBefore(handle, panel.firstChild);
+            }
+            handle.addEventListener('pointerdown', e => {
+                if (e.button !== 0) { return; }
+                const rect = panel.getBoundingClientRect();
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const originalX = rect.left;
+                const originalY = rect.top;
+                panel._ichcMoved = true;
+                handle.setPointerCapture(e.pointerId);
+                const move = event => moveTo(panel,
+                    originalX + event.clientX - startX,
+                    originalY + event.clientY - startY);
+                const finish = () => {
+                    handle.removeEventListener('pointermove', move);
+                    handle.removeEventListener('pointerup', finish);
+                    handle.removeEventListener('pointercancel', finish);
+                };
+                handle.addEventListener('pointermove', move);
+                handle.addEventListener('pointerup', finish);
+                handle.addEventListener('pointercancel', finish);
+            });
+
+            // Guarded on the DOM because the native panel can be rebuilt.
             if (panel.querySelector('#ichc-broadcaster-close')) { return; }
             const btn = document.createElement('button');
             btn.type = 'button';
-        btn.id = 'ichc-broadcaster-close';
+            btn.id = 'ichc-broadcaster-close';
             btn.textContent = '✕';
-            btn.title = 'Close';
+            btn.title = 'Close and stop broadcast';
+            btn.setAttribute('aria-label', 'Close and stop broadcast');
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                panel.classList.add('ichc-panel-closed');
-                setLiveState(false);
+                stopAndClose(panel);
             });
-            panel.insertBefore(btn, panel.firstChild);
+            panel.insertBefore(btn, handle.nextSibling);
+            if (typeof ResizeObserver === 'function') {
+                new ResizeObserver(() => keepOnScreen(panel)).observe(panel);
+            }
+            panel.querySelector('#publisher-video')?.addEventListener('loadedmetadata', () => {
+                fitBroadcasterPanel(panel);
+                keepOnScreen(panel);
+            });
+            requestAnimationFrame(() => placeUnderButton(panel));
 
             // Optimistic hint only — syncLiveFromCams() is the authority and will
             // correct this within a moment either way.
@@ -238,9 +512,13 @@
             // corrected the mistake only when the control happened to be a link.
             panel.addEventListener('click', (e) => {
                 if (e.target.closest('#ichc-broadcaster-close')) { return; }
+                if (panel._ichcClosing) { scheduleLiveSync(300); return; }
                 const el = e.target.closest('button, a, input, [onclick]') || e.target;
+                const publishToggle = el.closest?.('#publish-toggle');
                 const text = (el.textContent || '').trim() || el.value || '';
-                if (/\bstop\b/i.test(text)) {
+                if (publishToggle?._ichcRoloIsLive) {
+                    setLiveState(!publishToggle._ichcRoloIsLive());
+                } else if (/\bstop\b/i.test(text)) {
                     setLiveState(false);
                 } else if (/broadcast/i.test(text)) {
                     setLiveState(true);

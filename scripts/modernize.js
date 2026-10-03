@@ -4209,7 +4209,14 @@
     }
 
     function _removeAllCamLastMsg() {
-        document.querySelectorAll('.ichc-cam-lastmsg').forEach(el => el.remove());
+        document.querySelectorAll('.ichc-cam-lastmsg').forEach(el => {
+            window.clearTimeout(el._ichcFadeTimer);
+            el.remove();
+        });
+        document.querySelectorAll('#cams .name-on-cam.ichc-lastmsg-name').forEach(el => {
+            el.classList.remove('ichc-lastmsg-name');
+            el.style.removeProperty('--ichc-lastmsg-name-color');
+        });
     }
 
     let _lastMsgTimer = null;
@@ -4230,6 +4237,22 @@
         _lastMsgDiag = state;
         console.log('%c[ichc] last-msg overlay: ' + state, 'color:#7289da');
     }
+    function _lastMsgAge(epoch) {
+        if (!epoch) { return ''; }
+        const seconds = Math.max(0, Math.floor((Date.now() - epoch) / 1000));
+        if (seconds < 60) { return seconds + 's ago'; }
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) { return minutes + 'm ago'; }
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) { return hours + 'h ago'; }
+        return Math.floor(hours / 24) + 'd ago';
+    }
+    window.setInterval(() => {
+        if (!_lastMsgOn()) { return; }
+        document.querySelectorAll('.ichc-cam-lastmsg-time').forEach(el => {
+            el.textContent = _lastMsgAge(Number(el.dataset.ichcEpoch));
+        });
+    }, 5000);
 
     function _syncCamLastMsg() {
         if (!_lastMsgOn()) { _removeAllCamLastMsg(); _lastMsgDiag = ''; return; }
@@ -4254,39 +4277,106 @@
             if (!parent) { continue; }
             const content = found.get(nick);
             let overlay = parent.querySelector(':scope > .ichc-cam-lastmsg');
-            if (!content) { overlay?.remove(); continue; }
+            if (!content) {
+                if (overlay) { window.clearTimeout(overlay._ichcFadeTimer); overlay.remove(); }
+                nameEl.classList.remove('ichc-lastmsg-name');
+                nameEl.style.removeProperty('--ichc-lastmsg-name-color');
+                continue;
+            }
+
+            nameEl.classList.add('ichc-lastmsg-name');
+            if (content.color) { nameEl.style.setProperty('--ichc-lastmsg-name-color', content.color); }
+            else { nameEl.style.removeProperty('--ichc-lastmsg-name-color'); }
 
             if (!overlay) {
                 overlay = document.createElement('div');
                 overlay.className = 'ichc-cam-lastmsg';
-                // A hidden copy of the nick, in the name's own font, is what pushes
-                // the message clear of it — no measuring, and it re-fits by itself
-                // when the nick or the font changes.
-                const spacer = document.createElement('span');
-                spacer.className = 'ichc-cam-lastmsg-spacer';
-                spacer.setAttribute('aria-hidden', 'true');
                 const body = document.createElement('span');
                 body.className = 'ichc-cam-lastmsg-body';
-                overlay.append(spacer, body);
-                // Directly after the name so both share its containing block and
-                // therefore its coordinate system.
+                const time = document.createElement('span');
+                time.className = 'ichc-cam-lastmsg-time';
+                overlay.append(body, time);
                 nameEl.insertAdjacentElement('afterend', overlay);
             }
-            overlay.querySelector('.ichc-cam-lastmsg-spacer').textContent = (nameEl.textContent || '').trim();
+            const nameRect = nameEl.getBoundingClientRect();
+            const parentRect = parent.getBoundingClientRect();
+            const left = nameRect.right - parentRect.left + 7;
+            const top = nameRect.top - parentRect.top + 2;
+            overlay.style.setProperty('left', Math.round(left) + 'px', 'important');
+            overlay.style.setProperty('top', Math.round(top) + 'px', 'important');
+            overlay.classList.toggle('ichc-has-mention', !!content.hasMention);
+            const time = overlay.querySelector('.ichc-cam-lastmsg-time');
+            if (time) {
+                time.dataset.ichcEpoch = content.epoch || '';
+                time.textContent = _lastMsgAge(content.epoch);
+            }
             const body = overlay.querySelector('.ichc-cam-lastmsg-body');
             // Only repaint when the line actually changed — this runs on every cam
             // pass, and replacing identical nodes would restart every gif in view.
-            const sig = content.text + '|' + (content.frag.childElementCount || 0) + '|' + content.big;
-            if (overlay.dataset.ichcSig === sig) { continue; }
-            overlay.dataset.ichcSig = sig;
+            const sig = content.sig + '|' + content.big;
+            if (overlay._ichcSig === sig && overlay._ichcRow === content.row &&
+                overlay._ichcEpoch === content.epoch) { continue; }
+            overlay._ichcSig = sig;
+            overlay._ichcRow = content.row;
+            overlay._ichcEpoch = content.epoch;
             body.replaceChildren(content.frag);
             overlay.classList.toggle('ichc-big', !!content.big);
             overlay.title = content.text || '';
+            window.clearTimeout(overlay._ichcFadeTimer);
+            const remaining = 30000 - (Date.now() - (content.epoch || Date.now()));
+            overlay.classList.toggle('ichc-expired', remaining <= 0);
+            if (remaining > 0) {
+                overlay._ichcFadeTimer = window.setTimeout(() => {
+                    overlay.classList.add('ichc-expired');
+                }, remaining);
+            }
         }
     }
 
+    window.addEventListener('ichc-nick-colors-updated', () => {
+        if (_lastMsgOn()) { _scheduleCamLastMsg(); }
+    });
+
     window.addEventListener('ichc-chat-row', () => {
         if (_lastMsgOn()) { _scheduleCamLastMsg(); }
+    });
+
+    window.addEventListener('ichc-cam-mention', event => {
+        const { author, targets, content } = event.detail || {};
+        if (!targets?.length || !content?.frag) { return; }
+        const targetNicks = new Set(targets);
+        document.querySelectorAll('#cams .name-on-cam').forEach(nameEl => {
+            if (!targetNicks.has((nameEl.textContent || '').trim().toLowerCase())) { return; }
+            const card = nameEl.closest('.rounded_square');
+            if (!card) { return; }
+            let bubble = card.querySelector(':scope > .ichc-cam-mention');
+            if (!bubble) {
+                bubble = document.createElement('div');
+                bubble.className = 'ichc-cam-mention';
+                const sender = document.createElement('span');
+                sender.className = 'ichc-cam-mention-sender';
+                const body = document.createElement('span');
+                body.className = 'ichc-cam-mention-body';
+                bubble.append(sender, body);
+                card.appendChild(bubble);
+            }
+            window.clearTimeout(bubble._ichcHideTimer);
+            window.clearTimeout(bubble._ichcRemoveTimer);
+            bubble.querySelector('.ichc-cam-mention-sender').textContent = author || '';
+            bubble.style.setProperty('--ichc-cam-mention-color', content.color || '#f6d365');
+            const body = bubble.querySelector('.ichc-cam-mention-body');
+            body.replaceChildren(content.frag.cloneNode(true));
+            body.querySelectorAll('video').forEach(video => {
+                video.muted = true;
+                video.controls = false;
+                video.loop = true;
+            });
+            bubble.classList.remove('ichc-expired');
+            bubble._ichcHideTimer = window.setTimeout(() => {
+                bubble.classList.add('ichc-expired');
+                bubble._ichcRemoveTimer = window.setTimeout(() => bubble.remove(), 450);
+            }, 10000);
+        });
     });
 
     function _updateCamBadgesForUser(key) {
@@ -5164,18 +5254,35 @@
     }
 
     // ── Mention / PM ping ─────────────────────────────────────────────────────
-    // Two states only: off, or this ping. The previous version tried to reuse the
-    // site's own audio and accepted *any* <audio> element on the page (its scoring
-    // filter let a score of 0 through), so the alert was whatever clip happened to be
-    // loaded — which is why it sounded like a UI click and bore no relation to the
-    // event. Synthesised instead: nothing to fetch, no dependency on site markup, and
-    // it cannot drift into playing the wrong clip.
-    //
-    // The sound is a rising two-note bell (A5 → D6, ~90 ms apart), each note a sine
-    // with a quiet octave partial and a 0.38 s exponential decay. Short and clearly a
-    // notification rather than a click. Built in the page's main world so the
-    // AudioContext inherits the page's user activation.
+    // Bundled recordings and original synthesized cues share the same mention/PM
+    // trigger. Playback runs in the page's main world so user activation applies.
     const PING_KEY = 'ichc_ping_sound';
+    const PING_STYLE_KEY = 'ichc_ping_style';
+    const PING_STYLES = ['itell', 'aolim', 'aim', 'yahoo', 'msn', 'icq', 'airy', 'bell', 'retro', 'glass', 'warm'];
+    const PING_STYLE_LABELS = {
+        itell: 'iTellMessage', airy: 'Airy whisper', bell: 'Soft bell',
+        retro: 'Retro pop', glass: 'Glass ping', warm: 'Warm knock',
+        aolim: 'AOL IM', aim: 'AIM alert', yahoo: 'Yahoo', msn: 'MSN', icq: 'ICQ',
+    };
+    const PING_AUDIO_FILES = {
+        itell: 'iTellMessage.ogg',
+        aolim: 'aol_instant_messenger.mp3',
+        aim: 'aol_aim_notification.mp3',
+        yahoo: 'yahoo_messenger.mp3',
+        msn: 'msn_notification.mp3',
+        icq: 'icq_messenger.mp3',
+    };
+    function _pingStyle() {
+        try {
+            const saved = localStorage.getItem(PING_STYLE_KEY);
+            return PING_STYLES.includes(saved) ? saved : 'itell';
+        } catch (_) { return 'itell'; }
+    }
+    function _cyclePingStyle() {
+        const next = PING_STYLES[(PING_STYLES.indexOf(_pingStyle()) + 1) % PING_STYLES.length];
+        try { localStorage.setItem(PING_STYLE_KEY, next); } catch (_) {}
+        return next;
+    }
     function _pingEnabled() {
         try { return localStorage.getItem(PING_KEY) !== 'off'; } catch (_) { return true; }
     }
@@ -5184,39 +5291,94 @@
     }
 
     let _pingLast = 0;
-    // `force` bypasses both the toggle and the throttle — used to preview the sound
-    // when the user switches it on, so "does it work" is answered immediately.
+    // `force` bypasses both the toggle and the throttle, so the sound can be previewed
+    // directly without changing the setting.
     function _playPing(force) {
         if (!force && !_pingEnabled()) { return; }
         const now = Date.now();
         if (!force && now - _pingLast < 1200) { return; }   // collapse bursts
         _pingLast = now;
+        const api = (typeof browser !== 'undefined' && browser.runtime) ? browser : chrome;
+        const style = _pingStyle();
+        const soundFile = PING_AUDIO_FILES[style];
+        const soundUrl = soundFile ? api.runtime.getURL(soundFile) : '';
         runInPageContext(`
 (() => {
     try {
+        const style = ${JSON.stringify(style)};
+        const soundUrl = ${JSON.stringify(soundUrl)};
+        if (soundUrl) {
+            const audio = new Audio(soundUrl);
+            audio.volume = 0.8;
+            audio.play().catch(() => {});
+            return;
+        }
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) { return; }
         const ctx = window.__ichcPingCtx || (window.__ichcPingCtx = new Ctx());
         if (ctx.state === 'suspended') { ctx.resume().catch(() => {}); }
         const t0 = ctx.currentTime + 0.01;
         const out = ctx.createGain();
-        out.gain.value = 0.9;
+        out.gain.value = style === 'bell' ? 0.72 : 0.58;
         out.connect(ctx.destination);
-        [[880, 0], [1174.66, 0.085]].forEach(pair => {
-            const base = pair[0], delay = pair[1];
-            [[base, 0.17], [base * 2, 0.05]].forEach(part => {
-                const freq = part[0], peak = part[1];
+        if (style === 'bell') {
+            [[880, 0], [1174.66, 0.09]].forEach(([freq, delay]) => {
                 const osc = ctx.createOscillator();
-                const g = ctx.createGain();
+                const gain = ctx.createGain();
                 osc.type = 'sine';
                 osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, t0 + delay);
+                gain.gain.exponentialRampToValueAtTime(0.14, t0 + delay + 0.012);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + 0.4);
+                osc.connect(gain).connect(out);
+                osc.start(t0 + delay);
+                osc.stop(t0 + delay + 0.42);
+            });
+            return;
+        }
+        if (style === 'airy') {
+            // A short, filtered noise puff gives this option an intimate breathy edge.
+            const noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.24), ctx.sampleRate);
+            const noise = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < noise.length; i++) { noise[i] = (Math.random() * 2 - 1) * (1 - i / noise.length); }
+            const puff = ctx.createBufferSource();
+            puff.buffer = noiseBuffer;
+            const puffFilter = ctx.createBiquadFilter();
+            puffFilter.type = 'bandpass';
+            puffFilter.frequency.setValueAtTime(1500, t0);
+            puffFilter.frequency.exponentialRampToValueAtTime(850, t0 + 0.22);
+            puffFilter.Q.value = 0.7;
+            const puffGain = ctx.createGain();
+            puffGain.gain.setValueAtTime(0.0001, t0);
+            puffGain.gain.exponentialRampToValueAtTime(0.035, t0 + 0.035);
+            puffGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+            puff.connect(puffFilter).connect(puffGain).connect(out);
+            puff.start(t0);
+            puff.stop(t0 + 0.24);
+        }
+        const notes = style === 'retro' ? [[659.25, 0], [880, 0.105]]
+            : style === 'glass' ? [[1046.5, 0], [1318.5, 0.08]]
+            : style === 'warm' ? [[523.25, 0], [659.25, 0.12]]
+            : [[740, 0], [987.77, 0.105]];
+        notes.forEach(pair => {
+            const base = pair[0], delay = pair[1];
+            const parts = style === 'glass' ? [[base, 0.09], [base * 2, 0.025], [base * 3, 0.008]]
+                : [[base, 0.095], [base * 1.006, 0.032], [base * 2.01, 0.009]];
+            parts.forEach(part => {
+                const osc = ctx.createOscillator();
+                const g = ctx.createGain();
+                const filter = ctx.createBiquadFilter();
+                osc.type = style === 'retro' ? 'square' : (style === 'warm' ? 'triangle' : 'sine');
+                osc.frequency.value = part[0];
+                filter.type = 'lowpass';
+                filter.frequency.value = 2600;
                 const s = t0 + delay;
                 g.gain.setValueAtTime(0.0001, s);
-                g.gain.exponentialRampToValueAtTime(peak, s + 0.012);
-                g.gain.exponentialRampToValueAtTime(0.0001, s + 0.38);
-                osc.connect(g).connect(out);
+                g.gain.exponentialRampToValueAtTime(part[1], s + 0.028);
+                g.gain.exponentialRampToValueAtTime(0.0001, s + 0.52);
+                osc.connect(filter).connect(g).connect(out);
                 osc.start(s);
-                osc.stop(s + 0.42);
+                osc.stop(s + 0.55);
             });
         });
     } catch (_) {}
@@ -5257,9 +5419,8 @@
         _pmAvObsDone = true;
         _injectPmAvStyles();
 
-        // ichc-pm-alert fires for every incoming PM unconditionally — use this
-        // instead of watching ichc-pm-tab-unread, which never gets added because
-        // handleIncomingPmMessage calls openPmForNick first (which activates the tab).
+        // Incoming PMs use the same indicators and sound as mentions. Background
+        // conversations stay unread until the user explicitly selects them.
         window.addEventListener('ichc-pm-alert', e => {
             const nick = e.detail?.nick;
             if (!nick) { return; }
@@ -5322,6 +5483,7 @@
             document.querySelectorAll('#ichc-pm-avatars [data-nick]').forEach(item => {
                 item.classList.toggle('ichc-pm-avatar-active', (item.dataset.nick || '').toLowerCase() === activeNick);
             });
+            if (e.detail?.nick) { _clearPmAvatarBadge(e.detail.nick); }
         });
 
         // PM toggle button clicked — clear all avatar badges.
@@ -8577,6 +8739,54 @@
         layoutChat();
     }
 
+    const CAM_DIAG_BUTTON_KEY = 'ichc_cam_diag_button';
+    function _camDiagButtonVisible() {
+        try { return localStorage.getItem(CAM_DIAG_BUTTON_KEY) === '1'; } catch (_) { return false; }
+    }
+    function _setCamDiagButtonVisible(visible) {
+        try { localStorage.setItem(CAM_DIAG_BUTTON_KEY, visible ? '1' : '0'); } catch (_) {}
+        const button = document.getElementById('ichc-cam-test-btn');
+        if (button) { button.hidden = !visible; }
+    }
+
+    function _condensedEventsOn() {
+        try { return localStorage.getItem('ichc_condensed_events') !== '0'; } catch (_) { return true; }
+    }
+    function _setCondensedEvents(on) {
+        try { localStorage.setItem('ichc_condensed_events', on ? '1' : '0'); } catch (_) {}
+        window.dispatchEvent(new CustomEvent('ichc-condensed-events-change'));
+    }
+
+    function _messageColorLabel() {
+        return 'Message color: ' + (window.__ichcChatMessageColor?.enabled() ? 'Full message' : 'Username only');
+    }
+
+    function _createMessageColorToggle() {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.id = 'ichc-message-color-toggle';
+        button.className = 'ichc-ul-more-item';
+        button.setAttribute('role', 'switch');
+        button.setAttribute('aria-label', 'Color full chat messages with the username color');
+        button.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.chat}</span>` +
+            `<span class="ichc-message-color-label"></span>` +
+            `<span class="ichc-ul-more-toggle" aria-hidden="true"></span>`;
+        const paint = () => {
+            const on = !!window.__ichcChatMessageColor?.enabled();
+            button.querySelector('.ichc-message-color-label').textContent = _messageColorLabel();
+            button.classList.toggle('ichc-on', on);
+            button.setAttribute('aria-checked', String(on));
+        };
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+            const preference = window.__ichcChatMessageColor;
+            preference?.setEnabled(!preference.enabled());
+        });
+        window.addEventListener('ichc-message-color-change', paint);
+        paint();
+        return button;
+    }
+
     function transformCommandBar() {
         // Hide command bar native buttons (do this every call so it catches late-loaded bars)
         const bar = document.getElementById('room_command_bar');
@@ -8635,6 +8845,7 @@
             if (_camDiagBtn && _footerLeft && !_footerLeft.contains(_camDiagBtn)) {
                 _footerLeft.appendChild(_camDiagBtn);
             }
+            if (_camDiagBtn) { _camDiagBtn.hidden = !_camDiagButtonVisible(); }
             const _reloadBtn = document.getElementById('ichc-reload-cams-btn');
             if (_reloadBtn && _footerLeft && !_footerLeft.contains(_reloadBtn)) {
                 _footerLeft.appendChild(_reloadBtn);
@@ -8690,56 +8901,41 @@
         menu.id = 'ichc-cog-menu';
         menu.setAttribute('role', 'menu');
 
-        // Read the current notification state label from the native button's img title.
-        // The site cycles the title as the user toggles (e.g. "Show Notifications" →
-        // "Mentions Only" → "No Notifications"), so we mirror it in the menu item.
-        function getNotifLabel() {
-            const img = document.querySelector('#showNotifications img.smicon');
-            const raw = (img?.title || img?.alt || '').trim();
-            return raw || 'Notifications';
-        }
-
         const items = [
             {
-                label: getNotifLabel(),
-                icon: ICONS.bell,
-                action(labelEl) {
-                    runInPageContext('if (typeof toggleNotifications === "function") { toggleNotifications(); }');
-                    window.setTimeout(() => {
-                        if (labelEl) { labelEl.textContent = getNotifLabel(); }
-                    }, 50);
-                },
+                soundControls: true,
             },
             {
-                // Explicit two-state toggle for our own mention/PM ping. This used to
-                // call the site's toggleChatSound(), whose state we could not read and
-                // whose label therefore said nothing about what would actually happen.
-                label: 'Mention/PM sound: ' + (_pingEnabled() ? 'Ping' : 'Off'),
-                icon: ICONS.volume,
+                label: 'Condensed join/leave: ' + (_condensedEventsOn() ? 'On' : 'Off'),
+                icon: ICONS.chat,
+                condensedToggle: true,
                 keepOpen: true,
-                action(labelEl) {
-                    const on = !_pingEnabled();
-                    _setPingEnabled(on);
-                    if (labelEl) { labelEl.textContent = 'Mention/PM sound: ' + (on ? 'Ping' : 'Off'); }
-                    // Preview on enable so the setting proves itself immediately
-                    if (on) { _playPing(true); }
-                },
+                action() { _setCondensedEvents(!_condensedEventsOn()); },
+            },
+            {
+                label: 'Beta features',
+                icon: ICONS.terminal,
+                betaPicker: true,
+                keepOpen: true,
             },
             {
                 label: 'Broadcast quality: ' + _bcastQLabel(),
                 icon: ICONS.gauge,
                 qualityPicker: true,
+                betaItem: true,
                 keepOpen: true,
             },
             {
                 label: 'Observed rooms',
                 icon: ICONS.eye,
                 obsPicker: true,
+                betaItem: true,
                 keepOpen: true,
             },
             {
                 label: 'Broadcast patches: ' + (_bcastPatchesOn() ? 'On' : 'Off'),
                 icon: ICONS.broadcast,
+                betaItem: true,
                 keepOpen: true,
                 action(labelEl) {
                     // A/B switch for diagnosing the cam-down problem. The patches
@@ -8758,11 +8954,34 @@
             {
                 label: 'Last msg cam overlay: ' + (_lastMsgOn() ? 'On' : 'Off'),
                 icon: ICONS.chat,
+                betaItem: true,
                 keepOpen: true,
                 action(labelEl) {
                     const on = !_lastMsgOn();
                     _setLastMsgOn(on);
                     if (labelEl) { labelEl.textContent = 'Last msg cam overlay: ' + (on ? 'On' : 'Off'); }
+                },
+            },
+            {
+                label: 'Don’t retain cleared chat: ' + (localStorage.getItem('ichc_chat_retain') === 'false' ? 'On' : 'Off'),
+                icon: ICONS.eyeSlash,
+                betaItem: true,
+                keepOpen: true,
+                action(labelEl) {
+                    const on = localStorage.getItem('ichc_chat_retain') !== 'false';
+                    localStorage.setItem('ichc_chat_retain', on ? 'false' : 'true');
+                    if (labelEl) { labelEl.textContent = 'Don’t retain cleared chat: ' + (on ? 'On' : 'Off'); }
+                },
+            },
+            {
+                label: 'Cam diagnostics button: ' + (_camDiagButtonVisible() ? 'Shown' : 'Hidden'),
+                icon: ICONS.terminal,
+                betaItem: true,
+                keepOpen: true,
+                action(labelEl) {
+                    const visible = !_camDiagButtonVisible();
+                    _setCamDiagButtonVisible(visible);
+                    if (labelEl) { labelEl.textContent = 'Cam diagnostics button: ' + (visible ? 'Shown' : 'Hidden'); }
                 },
             },
             {
@@ -8829,15 +9048,16 @@
             },
             { label: 'Help',            icon: ICONS.question,  href: 'help' },
         ];
+        let betaList = null;
         items.forEach(item => {
-            const el = document.createElement('a');
-            el.className = 'ichc-cog-item';
-            el.setAttribute('role', 'menuitem');
+            const el = document.createElement(item.soundControls ? 'div' : 'a');
+            el.className = 'ichc-cog-item' + (item.soundControls ? ' ichc-cog-sound-row' : '');
+            el.setAttribute('role', item.soundControls ? 'group' : 'menuitem');
             if (item.href) {
                 el.href = item.href;
                 el.target = '_blank';
                 el.rel = 'noopener';
-            } else {
+            } else if (!item.soundControls) {
                 el.href = '#';
                 el.addEventListener('click', e => {
                     e.preventDefault();
@@ -8877,7 +9097,52 @@
             const swatchHtml = item.colorInput
                 ? '<input type="color" class="ichc-color-swatch ichc-color-input" aria-label="Chat text colour">'
                 : (item.swatch ? '<span class="ichc-color-swatch" aria-hidden="true"></span>' : '');
-            el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span class="ichc-cog-item-label">${item.label}</span>${swatchHtml}`;
+            if (item.soundControls) {
+                el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.volume}</span><span class="ichc-cog-item-label">Mention/PM sound</span><button type="button" class="ichc-sound-style" aria-label="Change notification sound"></button><button type="button" class="ichc-sound-preview" aria-label="Preview notification sound" title="Preview">▶</button><button type="button" class="ichc-sound-toggle" role="switch" aria-label="Mention and PM notifications"></button>`;
+                const styleBtn = el.querySelector('.ichc-sound-style');
+                const previewBtn = el.querySelector('.ichc-sound-preview');
+                const toggleBtn = el.querySelector('.ichc-sound-toggle');
+                const paint = () => {
+                    const style = _pingStyle();
+                    styleBtn.textContent = PING_STYLE_LABELS[style];
+                    styleBtn.title = 'Change sound (currently ' + PING_STYLE_LABELS[style] + ')';
+                    toggleBtn.setAttribute('aria-checked', String(_pingEnabled()));
+                    toggleBtn.classList.toggle('is-on', _pingEnabled());
+                    toggleBtn.textContent = _pingEnabled() ? 'On' : 'Off';
+                };
+                styleBtn.addEventListener('click', e => { e.stopPropagation(); _cyclePingStyle(); paint(); _playPing(true); });
+                previewBtn.addEventListener('click', e => { e.stopPropagation(); _playPing(true); });
+                toggleBtn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const on = !_pingEnabled();
+                    _setPingEnabled(on);
+                    paint();
+                    if (on) { _playPing(true); }
+                });
+                paint();
+            } else {
+                el.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${item.icon}</span><span class="ichc-cog-item-label">${item.label}</span>${swatchHtml}`;
+            }
+            if (item.condensedToggle) {
+                window.addEventListener('ichc-condensed-events-change', () => {
+                    el.querySelector('.ichc-cog-item-label').textContent =
+                        'Condensed join/leave: ' + (_condensedEventsOn() ? 'On' : 'Off');
+                });
+            }
+            if (item.betaPicker) {
+                el.classList.add('ichc-cog-item-expandable');
+                el.setAttribute('aria-expanded', 'false');
+                betaList = document.createElement('div');
+                betaList.className = 'ichc-theme-list ichc-beta-list';
+                betaList.setAttribute('role', 'group');
+                betaList.setAttribute('aria-label', 'Beta features');
+                betaList.hidden = true;
+                el.addEventListener('click', () => {
+                    betaList.hidden = !betaList.hidden;
+                    el.setAttribute('aria-expanded', String(!betaList.hidden));
+                });
+                item.afterEl = betaList;
+            }
             if (item.themePicker) {
                 // Expands in place rather than flying out sideways: the cog menu is
                 // already anchored near the viewport edge, so a nested popover would
@@ -9075,8 +9340,9 @@
                     sw.style.background = saved;
                 }
             }
-            menu.appendChild(el);
-            if (item.afterEl) { menu.appendChild(item.afterEl); }
+            const container = item.betaItem ? betaList : menu;
+            container.appendChild(el);
+            if (item.afterEl) { container.appendChild(item.afterEl); }
         });
 
         // Portal the menu to #ichc-room-root so it escapes nested stacking contexts
@@ -9095,9 +9361,6 @@
             const next = menu.hidden;
             if (next) {
                 portalMenu();
-                // Refresh notification label on open to reflect any external state change
-                const notifLabelEl = menu.querySelector('.ichc-cog-item-label');
-                if (notifLabelEl) { notifLabelEl.textContent = getNotifLabel(); }
             }
             menu.hidden = !next;
             cogBtn.setAttribute('aria-expanded', String(next));
@@ -9674,6 +9937,7 @@
             camTestBtn.innerHTML = ICONS.terminal;
             camTestBtn.addEventListener('click', () => { toggleCamDiagnostics(); });
         }
+        camTestBtn.hidden = !_camDiagButtonVisible();
         if (footerLeft && !footerLeft.contains(camTestBtn)) {
             footerLeft.appendChild(camTestBtn);
         }
@@ -11951,26 +12215,6 @@
                 });
                 moreMenu.appendChild(wcItem);
 
-                // Retain chat through moderator clears
-                const retainItem = document.createElement('button');
-                retainItem.type = 'button';
-                retainItem.className = 'ichc-ul-more-item';
-                const _retainOn = () => localStorage.getItem('ichc_chat_retain') !== 'false';
-                const _refreshRetainItem = () => {
-                    const on = _retainOn();
-                    const label = on ? 'Don’t retain cleared chat' : 'Retain cleared chat';
-                    retainItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${on ? ICONS.eye : ICONS.eyeSlash}</span><span>${label}</span><span class="ichc-ul-more-toggle" aria-hidden="true"></span>`;
-                    retainItem.classList.toggle('ichc-on', on);
-                };
-                _refreshRetainItem();
-                retainItem.addEventListener('click', e => {
-                    e.stopPropagation();
-                    moreMenu.hidden = true;
-                    localStorage.setItem('ichc_chat_retain', String(!_retainOn()));
-                    _refreshRetainItem();
-                });
-                moreMenu.appendChild(retainItem);
-
                 // Condensed join/leave — collapses all joins/leaves into two pinned
                 // lines at the top of the chat log instead of an inline event row.
                 // chat.js owns the rendering; this only flips the flag and announces it,
@@ -11979,24 +12223,22 @@
                 const condItem = document.createElement('button');
                 condItem.type = 'button';
                 condItem.className = 'ichc-ul-more-item';
-                const _condOn = () => localStorage.getItem('ichc_condensed_events') === '1';
                 const _refreshCondItem = () => {
-                    const on = _condOn();
+                    const on = _condensedEventsOn();
                     condItem.innerHTML = `<span class="ichc-cog-item-icon" aria-hidden="true">${ICONS.chat}</span>` +
                         `<span>Condensed join/leave</span>` +
                         `<span class="ichc-ul-more-toggle" aria-hidden="true"></span>`;
                     condItem.classList.toggle('ichc-on', on);
                 };
                 _refreshCondItem();
+                window.addEventListener('ichc-condensed-events-change', _refreshCondItem);
                 condItem.addEventListener('click', e => {
                     e.stopPropagation();
                     moreMenu.hidden = true;
-                    const next = !_condOn();
-                    localStorage.setItem('ichc_condensed_events', next ? '1' : '0');
-                    _refreshCondItem();
-                    window.dispatchEvent(new CustomEvent('ichc-condensed-events-change'));
+                    _setCondensedEvents(!_condensedEventsOn());
                 });
                 moreMenu.appendChild(condItem);
+                moreMenu.appendChild(_createMessageColorToggle());
 
                 document.body.appendChild(moreMenu);
 
@@ -12223,7 +12465,7 @@
         // Emotes and gifs inside the last-message overlay are <img>/<video> sitting
         // in the card. Without this they would be collected as the cam's own media,
         // and getMediaAspect would size the whole card from an emote.
-        if (node.closest('.ichc-cam-lastmsg')) { return true; }
+        if (node.closest('.ichc-cam-lastmsg, .ichc-cam-mention')) { return true; }
         if (node.matches('.cam-logo, .smicon, .name-on-cam')) { return true; }
 
         const className = typeof node.className === 'string' ? node.className.toLowerCase() : '';
@@ -12253,7 +12495,7 @@
         if (!container) { return false; }
         const meaningfulChildren = [...container.children].filter(node => {
             if (!(node instanceof Element)) { return false; }
-            if (node.matches('.name-on-cam, .ichc-card-tools, .cam-logo, .smicon, .ichc-cam-lastmsg')) { return false; }
+            if (node.matches('.name-on-cam, .ichc-card-tools, .cam-logo, .smicon, .ichc-cam-lastmsg, .ichc-cam-mention')) { return false; }
             if (node.matches('.cam-button, .cam-button2, [id^="cambtn"]')) { return false; }
             return true;
         });
@@ -12515,45 +12757,81 @@
         btn.addEventListener('click', e => {
             e.preventDefault();
             e.stopPropagation();
+            if (btn.disabled) { return; }
+            const camId = getCamId(card);
+            if (!camId) { return; }
+            btn.disabled = true;
             btn.classList.add('ichc-refreshing');
-            setTimeout(() => btn.classList.remove('ichc-refreshing'), 3000);
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.classList.remove('ichc-refreshing');
+            }, 10000);
 
-            // WebRTC videos have a MediaStream in srcObject and no reloadable src URL,
-            // so clearing video.src only made the icon spin. Drive ICHC's own
-            // disable→start sequence in the page world instead; that stops the one
-            // inbound peer connection and negotiates a fresh one without touching the
-            // user's outbound broadcast.
+            // Retry rebuilds only this native viewer. Clicking Disable first also
+            // persists a hidden user and adds another retry handler on the site.
+            // That handler overlap can rebuild an already-disabled viewer again.
             const bridgeToken = `ichc-cam-${Date.now()}-${Math.random().toString(36).slice(2)}`;
             card.setAttribute('data-ichc-cam-refresh', bridgeToken);
             const selector = `[data-ichc-cam-refresh="${bridgeToken}"]`;
             runInPageContext(`
 (() => {
     const card = document.querySelector(${JSON.stringify(selector)});
+    const camId = ${JSON.stringify(camId)};
     if (!card) { return; }
-    card.removeAttribute('data-ichc-cam-refresh');
-
-    const disabled = card.querySelector('video[id$="-disabled"]');
-    const disable = card.querySelector('.cam-button2, [id^="cambtn2-"]');
-    if (!disabled && disable && typeof disable.click === 'function') {
-        disable.click();
+    const pending = window.__ichcCamFeedRefreshes || (window.__ichcCamFeedRefreshes = new Map());
+    if ((pending.get(camId) || 0) > Date.now()) {
+        card.removeAttribute('data-ichc-cam-refresh');
+        return;
     }
-
-    window.setTimeout(() => {
-        const retry = card.querySelector('[id^="cambtn1-"][id$="-retry"]');
-        if (retry && typeof retry.click === 'function') {
-            retry.click();
-        } else if (typeof window.send_command === 'function') {
-            window.send_command('/cam refresh');
+    const deadline = Date.now() + 10000;
+    pending.set(camId, deadline);
+    const clearMarker = () => {
+        if (card.getAttribute('data-ichc-cam-refresh') === ${JSON.stringify(bridgeToken)}) {
+            card.removeAttribute('data-ichc-cam-refresh');
         }
-    }, 180);
+    };
+    const retryFeed = () => {
+        const vc = document.getElementById('id-' + camId);
+        if (!vc || !card.isConnected || !card.contains(vc)) {
+            clearMarker();
+            pending.delete(camId);
+            return;
+        }
+        const retry = document.getElementById('cambtn1-' + camId + '-retry');
+        // The site creates Start immediately but binds its retry handler up to
+        // eight seconds later. Wait for that binding instead of stopping the feed.
+        const jq = window.jQuery;
+        const ready = retry && vc.contains(retry) &&
+            (!jq || typeof jq._data !== 'function' ||
+             !!jq._data(retry, 'events')?.click?.length || typeof retry.onclick === 'function');
+        if (ready) {
+            clearMarker();
+            // Native player setup has an eight-second in-progress window. Guard
+            // new overlay buttons too, since retry replaces the card's children.
+            const until = Date.now() + 9000;
+            pending.set(camId, until);
+            window.setTimeout(() => {
+                if (pending.get(camId) === until) { pending.delete(camId); }
+            }, 9000);
+            retry.click();
+            return;
+        }
+        if (Date.now() < deadline) {
+            window.setTimeout(retryFeed, 100);
+        } else {
+            clearMarker();
+            pending.delete(camId);
+        }
+    };
+    retryFeed();
 })();
             `);
             window.setTimeout(() => {
                 if (card.getAttribute('data-ichc-cam-refresh') === bridgeToken) {
                     card.removeAttribute('data-ichc-cam-refresh');
                 }
-            }, 3000);
-            [300, 1500, 5000].forEach(delay => {
+            }, 11000);
+            [300, 1500, 5000, 11000].forEach(delay => {
                 window.setTimeout(() => requestCamRelayout(60), delay);
             });
         });

@@ -244,6 +244,14 @@
         return byNav;
     }
 
+    function getSelectedPmTab(root) {
+        const tabs = getPmTabItems(root);
+        const selected = root?.dataset.ichcPmSelectedKey;
+        return tabs.find(tab => getPmKeyFromId(tab.id, 'pm_') === selected) ||
+            tabs.find(tab => tab.classList.contains('ui-tabs-active') || tab.classList.contains('ui-state-active')) ||
+            tabs[0] || null;
+    }
+
     function getPmKeyFromId(id = '', prefix = '') {
         return id.startsWith(prefix) ? id.slice(prefix.length) : '';
     }
@@ -548,7 +556,15 @@
         const msgs = panel.querySelector(`#msgs_${CSS.escape(key)}`);
         const input = panel.querySelector(`#txt_to_${CSS.escape(key)}`);
         const title = convo.title || key;
-        tab.querySelector('a')?.replaceChildren(document.createTextNode(title));
+        const anchor = tab.querySelector('a');
+        if (anchor) {
+            // Updating a conversation must not remove its unread-count badge.
+            if (anchor.firstChild?.nodeType === Node.TEXT_NODE) {
+                if (anchor.firstChild.textContent !== title) { anchor.firstChild.textContent = title; }
+            } else {
+                anchor.prepend(document.createTextNode(title));
+            }
+        }
         panel.dataset.ichcPmTitle = title;
         if (msgs && convo.html && (!msgs.innerHTML.trim() || options.forceContent)) {
             msgs.innerHTML = convo.html;
@@ -570,6 +586,7 @@
     function activatePmTab(root, key) {
         if (!root || !key) { return; }
         _D('activatePmTab', key);
+        root.dataset.ichcPmSelectedKey = key;
         if (_userHiddenPm) {
             hidePmRoot(root);
         } else {
@@ -1161,15 +1178,22 @@
             showPmRoot(root);
         }
 
-        // Find active tab: prefer site-marked active, fall back to first.
-        const activeTab = tabs.find(t =>
-            t.classList.contains('ui-tabs-active') || t.classList.contains('ui-state-active'),
-        ) || tabs[0];
+        // Keep the user's selected conversation when native PM arrival changes
+        // jQuery tab classes. Explicit tab/avatar clicks update this selection.
+        const activeTab = getSelectedPmTab(root);
 
         // Determine which panel to show using the anchor href (most reliable),
         // with a key-based fallback.
         const targetHref = (activeTab.querySelector('a')?.getAttribute('href') || '').replace(/^#/, '');
         const activeKey = getPmKeyFromId(activeTab.id, 'pm_');
+        root.dataset.ichcPmSelectedKey = activeKey;
+        tabs.forEach(tab => {
+            const active = tab === activeTab;
+            tab.classList.toggle('ui-tabs-active', active);
+            tab.classList.toggle('ui-state-active', active);
+            tab.setAttribute('aria-selected', String(active));
+            tab.setAttribute('aria-expanded', String(active));
+        });
         _D('syncPmVisibility activeTab:', activeTab.id, 'targetHref:', targetHref);
 
         const allPanels = [...root.querySelectorAll('[id^="from_"]')];
@@ -1252,9 +1276,7 @@
 
             // Also ensure the active panel is visible.  jQuery UI re-init can
             // set all .ui-tabs-panel to display:none after our syncPmVisibility runs.
-            const activeTab = getPmTabItems(root).find(t =>
-                t.classList.contains('ui-tabs-active') || t.classList.contains('ui-state-active'),
-            ) || getPmTabItems(root)[0];
+            const activeTab = getSelectedPmTab(root);
             if (activeTab) {
                 const key = getPmKeyFromId(activeTab.id, 'pm_');
                 const panel = key ? root.querySelector(`#from_${CSS.escape(key)}`) : null;
@@ -1445,7 +1467,7 @@
     // Opens (or activates) the PM window for a specific nick.
     // Called when bO fires with a 5-arg PM-open call, and also from the
     // _pmArrivalObserver when the site adds PM nodes on its own.
-    function openPmForNick(nick, { forceShow = false } = {}) {
+    function openPmForNick(nick, { forceShow = false, activate = true } = {}) {
         if (!nick || !isRoomPage()) { return; }
         _D('openPmForNick:', nick, 'forceShow:', forceShow);
 
@@ -1456,6 +1478,10 @@
             bindPmWindow(root);
             bindPmObservers(root);
         }
+
+        const selectedTab = getSelectedPmTab(root);
+        const selectedKey = getPmKeyFromId(selectedTab?.id || '', 'pm_');
+        const activeNick = activate || !selectedKey ? nick : selectedKey;
 
         // Create the conversation panel + tab if not already present.
         ensurePmConversation(root, { key: nick, title: nick });
@@ -1485,12 +1511,14 @@
             }
         }
 
-        // Update slim header with active nick and profile bg
-        _updatePmHeader(root, nick);
+        // Incoming messages may add a background conversation; only explicit
+        // opens choose a different recipient for the composer.
+        root.dataset.ichcPmSelectedKey = activeNick;
+        _updatePmHeader(root, activeNick);
 
         // Activate the correct tab and panel.
         getPmTabItems(root).forEach(tab => {
-            const active = getPmKeyFromId(tab.id, 'pm_') === nick;
+            const active = getPmKeyFromId(tab.id, 'pm_') === activeNick;
             tab.classList.toggle('ui-tabs-active', active);
             tab.classList.toggle('ui-state-active', active);
             tab.setAttribute('aria-selected', String(active));
@@ -1499,7 +1527,7 @@
         const allPanels = [...root.querySelectorAll('[id^="from_"]')];
         let shownAny = false;
         allPanels.forEach(panel => {
-            const active = panel.id === `from_${nick}`;
+            const active = panel.id === `from_${activeNick}`;
             panel.classList.toggle('ichc-pm-active', active);
             panel.style.setProperty('display', active ? 'flex' : 'none', 'important');
             panel.setAttribute('aria-hidden', active ? 'false' : 'true');
@@ -1511,7 +1539,7 @@
             allPanels[0].setAttribute('aria-hidden', 'false');
         }
 
-        clearPmTabUnread(root, nick);
+        clearPmTabUnread(root, activeNick);
         applyPmTheme(root);
         schedulePmSave(200);
         startPmPoll();
@@ -1523,7 +1551,9 @@
         if (!nick || !isRoomPage()) { return; }
         _D('incoming PM nick=', nick, 'msg=', (messageHtml || '').slice(0, 80));
 
-        openPmForNick(nick, { forceShow: true });
+        // Show the first incoming PM, but preserve any existing conversation
+        // and respect a window the user has minimized.
+        openPmForNick(nick, { forceShow: !hasLivePmTabs(), activate: false });
 
         const root = getPmRoot();
         if (!root) { return; }
@@ -1563,7 +1593,7 @@
 
         // Mark the tab unread if it isn't the currently active one.
         const tabEl = root.querySelector(`#pm_${CSS.escape(nick)}`);
-        if (tabEl && !tabEl.classList.contains('ui-tabs-active')) {
+        if (tabEl && (!tabEl.classList.contains('ui-tabs-active') || _userHiddenPm)) {
             tabEl.classList.add('ichc-pm-tab-unread');
             let badge = tabEl.querySelector('.ichc-pm-unread-badge');
             if (!badge) {
@@ -1839,6 +1869,7 @@
                                         html:  String(args[2] || ''),
                                     },
                                 }));
+                                return; // pm.js owns incoming rendering and selection.
                             }
                         }
 
@@ -1871,6 +1902,15 @@
                     var _wrap = function(fn) {
                         return function() {
                             var args = Array.prototype.slice.call(arguments);
+                            if (args.length === 3 && args[1] && typeof args[1] === 'string') {
+                                var incomingNick = String(args[1]).trim();
+                                if (incomingNick) {
+                                    window.dispatchEvent(new CustomEvent('ichc-pm-incoming', {
+                                        detail: { nick: incomingNick, color: String(args[0] || ''), html: String(args[2] || '') }
+                                    }));
+                                    return; // Avoid native focus changes and duplicate rows.
+                                }
+                            }
                             var result;
                             try { result = fn && fn.apply(this, args); } catch(e) {}
                             // 5-arg form: bO(color, nick, img, karma, pmFlag) = open PM

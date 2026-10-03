@@ -1799,7 +1799,7 @@
     #txt .ichc-og-card:not(:has(.ichc-og-image)) {
         grid-template-columns: minmax(0, 1fr) !important;
     }
-    #txt a { color: var(--ichc-accent-soft) !important; }
+    #txt a { color: var(--ichc-chat-message-color, var(--ichc-accent-soft)) !important; }
     #txt a.userlink,
     #txt a.userlink:visited {
         color: var(--ichc-chat-name-color, var(--ichc-text-2)) !important;
@@ -1812,6 +1812,9 @@
         font-weight: 700 !important;
         text-decoration: none !important;
     }
+    #txt a.userlink *,
+    #txt a[data-ichc-chat-nick="1"] * { color: inherit !important; }
+    #txt .ichc-full-message-color { color: var(--ichc-chat-message-color) !important; }
     #txt a.userlink:hover { text-decoration: underline !important; }
     #txt .ichc-icon-glyph {
         display: inline-flex !important;
@@ -1839,7 +1842,7 @@
     #txt td,
     #txt p,
     #txt li {
-        color: var(--ichc-text) !important;
+        color: var(--ichc-chat-message-color, var(--ichc-text)) !important;
     }
     #txt table[bgcolor],
     #txt table[style*="ff0000"],
@@ -3391,7 +3394,9 @@
     .ichc-range strong { color: var(--ichc-text) !important; }
     .ichc-toolbar-note { margin-left: auto !important; color: var(--ichc-text-muted) !important; font-size: 12px !important; }
 
-    #rtc-broadcaster.ichc-panel-closed { display: none !important; }
+    #rtc-broadcaster.ichc-panel-closed,
+    #cams #rtc-broadcaster.ichc-panel-closed,
+    #cams.ichc-has-rounded-cards > #rtc-broadcaster.ichc-panel-closed { display: none !important; }
 
     /* ── Go Live panel (#rtc-broadcaster) ───────────────────────
        The site builds this with Bootstrap: .row > .col-md-7 (video) + .col-md-5
@@ -3409,17 +3414,18 @@
     #cams.ichc-has-rounded-cards > #rtc-broadcaster {
         position: fixed !important;
         z-index: 2147483647 !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        width: 680px !important;
-        max-width: 94vw !important;
+        top: var(--ichc-popup-y, 8px) !important;
+        left: var(--ichc-popup-x, 8px) !important;
+        transform: none !important;
+        width: 600px !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
         box-sizing: border-box !important;
         display: block !important;
         background: var(--ichc-surface-2) !important;
-        border: 1px solid rgba(var(--ichc-tint-rgb),0.09) !important;
-        border-radius: 14px !important;
-        box-shadow: 0 24px 60px rgba(0,0,0,0.7), 0 2px 10px rgba(0,0,0,0.45) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.14) !important;
+        border-radius: 18px !important;
+        box-shadow: 0 28px 80px rgba(0,0,0,.55), 0 2px 12px rgba(0,0,0,.25) !important;
         padding: 0 !important;
         overflow: hidden !important;
         font-family: "Hanken Grotesk", "Trebuchet MS", "Segoe UI", sans-serif !important;
@@ -3428,18 +3434,28 @@
            white over a dark panel when opened. */
         color-scheme: dark !important;
     }
-    /* Header bar, drawn with ::before so no markup change is needed */
-    #rtc-broadcaster::before {
-        content: "Go live" !important;
-        display: block !important;
-        padding: 13px 16px 12px !important;
+    #rtc-broadcaster::before { display: none !important; }
+    #rtc-broadcaster .ichc-broadcaster-handle {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-height: 24px !important;
+        box-sizing: border-box !important;
+        padding: 0 34px !important;
         background: var(--ichc-surface-3) !important;
-        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
-        color: var(--ichc-text-3) !important;
-        font-size: 11px !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.08em !important;
-        text-transform: uppercase !important;
+        border-bottom: 1px solid rgba(var(--ichc-tint-rgb),0.1) !important;
+        color: var(--ichc-text-strong) !important;
+        cursor: grab !important;
+        touch-action: none !important;
+        user-select: none !important;
+    }
+    #rtc-broadcaster .ichc-broadcaster-handle:active { cursor: grabbing !important; }
+    #rtc-broadcaster .ichc-broadcaster-handle::before {
+        content: "";
+        width: 28px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(var(--ichc-tint-rgb),.25);
     }
 
     /* ── Bootstrap neutralisation ── */
@@ -3451,7 +3467,7 @@
         width: auto !important;
     }
     #rtc-broadcaster #publish-content {
-        padding: 16px !important;
+        padding: 20px 24px 24px !important;
     }
     #rtc-broadcaster #publish-content > .row,
     #rtc-broadcaster #publish-settings > .row {
@@ -3475,13 +3491,30 @@
 
     /* ── Body: preview | controls ── */
     #rtc-broadcaster #publish-content > .row {
-        gap: 16px !important;
+        gap: 20px !important;
         align-items: stretch !important;
     }
     #rtc-broadcaster #publish-video-container {
         flex: 1 1 auto !important;
         min-width: 0 !important;
         display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        padding: 10px !important;
+        box-sizing: border-box !important;
+        background: var(--ichc-surface-3) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),.12) !important;
+        border-radius: 14px !important;
+    }
+    #rtc-broadcaster #publish-video-container::before {
+        content: "Camera preview" !important;
+        display: block !important;
+        padding: 2px 4px 0 !important;
+        color: var(--ichc-text-muted) !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        letter-spacing: .08em !important;
+        text-transform: uppercase !important;
     }
     /* Overrides the site's inline width:90% */
     #rtc-broadcaster #publisher-video {
@@ -3492,20 +3525,21 @@
         display: block !important;
         object-fit: cover !important;
         background: #000 !important;
-        border: 1px solid rgba(var(--ichc-tint-rgb),0.07) !important;
-        border-radius: 10px !important;
+        border: 0 !important;
+        border-radius: 9px !important;
     }
     #rtc-broadcaster #publish-settings {
-        flex: 0 0 232px !important;
-        width: 232px !important;
+        flex: 0 0 258px !important;
+        width: 258px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 14px !important;
-        /* The site puts a card border here; the panel is part of ours now */
-        background: transparent !important;
-        border: 0 !important;
+        gap: 18px !important;
+        box-sizing: border-box !important;
+        background: var(--ichc-surface-3) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),.12) !important;
+        border-radius: 14px !important;
         box-shadow: none !important;
-        padding: 0 !important;
+        padding: 18px !important;
     }
 
     /* ── One input row: label, then select + square toggle side by side ── */
@@ -3518,15 +3552,15 @@
         min-width: 0 !important;
     }
     #rtc-broadcaster #publish-settings .col-2 {
-        flex: 0 0 34px !important;
-        width: 34px !important;
+        flex: 0 0 40px !important;
+        width: 40px !important;
     }
     #rtc-broadcaster .form-group { margin: 0 !important; width: auto !important; }
     #rtc-broadcaster label {
         display: block !important;
-        margin: 0 0 5px !important;
+        margin: 0 0 7px !important;
         color: var(--ichc-text-muted) !important;
-        font-size: 9.5px !important;
+        font-size: 10px !important;
         font-weight: 700 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.07em !important;
@@ -3543,19 +3577,21 @@
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
-        height: 34px !important;
+        height: 40px !important;
         box-sizing: border-box !important;
         padding: 0 26px 0 10px !important;
         background-color: var(--ichc-surface-3) !important;
         background-image: linear-gradient(45deg, transparent 50%, var(--ichc-text-muted) 50%),
             linear-gradient(135deg, var(--ichc-text-muted) 50%, transparent 50%) !important;
-        background-position: calc(100% - 14px) 15px, calc(100% - 9px) 15px !important;
+        background-position: calc(100% - 14px) 18px, calc(100% - 9px) 18px !important;
         background-size: 5px 5px, 5px 5px !important;
         background-repeat: no-repeat !important;
-        border: 1px solid rgba(var(--ichc-tint-rgb),0.09) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.16) !important;
         border-radius: 8px !important;
         color: var(--ichc-text) !important;
-        font: 500 12px/1 inherit !important;
+        font-family: inherit !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
         text-overflow: ellipsis !important;
         cursor: pointer !important;
         transition: border-color 0.13s, background-color 0.13s !important;
@@ -3574,9 +3610,9 @@
     #rtc-broadcaster .control-button,
     #rtc-broadcaster #camera-toggle,
     #rtc-broadcaster #mute-toggle {
-        width: 34px !important;
-        min-width: 34px !important;
-        height: 34px !important;
+        width: 40px !important;
+        min-width: 40px !important;
+        height: 40px !important;
         padding: 0 !important;
         display: inline-flex !important;
         align-items: center !important;
@@ -3584,7 +3620,7 @@
         flex: 0 0 auto !important;
         background-color: var(--ichc-surface-3) !important;
         background-image: none !important;
-        border: 1px solid rgba(var(--ichc-tint-rgb),0.09) !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.16) !important;
         border-radius: 8px !important;
         cursor: pointer !important;
         transition: background-color 0.13s, border-color 0.13s !important;
@@ -3592,6 +3628,13 @@
     #rtc-broadcaster .control-button:hover {
         background-color: var(--ichc-surface-4) !important;
         border-color: rgba(var(--ichc-tint-rgb),0.2) !important;
+    }
+    #rtc-broadcaster .control-button:focus-visible,
+    #rtc-broadcaster #camera-toggle:focus-visible,
+    #rtc-broadcaster #mute-toggle:focus-visible,
+    #ichc-broadcaster-close:focus-visible {
+        outline: 2px solid var(--ichc-accent) !important;
+        outline-offset: 2px !important;
     }
     /* The site swaps which <img> is shown to signal state, so only normalise them.
        brightness(0) invert(1) forces any source colour to a clean white glyph. */
@@ -3606,7 +3649,9 @@
     /* ── Actions ── */
     #rtc-broadcaster #publish-settings > .row:last-child {
         display: block !important;
-        margin-top: auto !important;   /* pin to the bottom of the column */
+        margin-top: auto !important;
+        padding-top: 18px !important;
+        border-top: 1px solid rgba(var(--ichc-tint-rgb),.12) !important;
     }
     #rtc-broadcaster #publish-settings > .row:last-child .col-10 {
         width: 100% !important;
@@ -3614,29 +3659,110 @@
     }
     #rtc-broadcaster #publish-toggle,
     #rtc-broadcaster #publish-toggle.btn {
-        display: block !important;
+        display: flex !important;
+        position: relative !important;
+        align-items: center !important;
+        justify-content: center !important;
         width: 100% !important;
-        padding: 11px 12px !important;
-        background: var(--ichc-accent) !important;
-        border: 0 !important;
+        height: 100% !important;
+        min-width: 0 !important;
+        min-height: 64px !important;
+        margin: 0 !important;
+        padding: 8px !important;
+        background: linear-gradient(145deg, rgba(24,29,38,.75), rgba(8,11,17,.84)) !important;
+        backdrop-filter: blur(30px) saturate(.78) !important;
+        -webkit-backdrop-filter: blur(30px) saturate(.78) !important;
+        border: 1px solid rgba(193,207,224,.24) !important;
         border-radius: 10px !important;
-        color: var(--ichc-text-strong) !important;
-        font: 700 14px/1.2 inherit !important;
-        letter-spacing: 0.01em !important;
+        color: #ff96a4 !important;
         cursor: pointer !important;
-        box-shadow: 0 2px 10px rgba(88,101,242,0.32) !important;
-        transition: background 0.14s, box-shadow 0.14s, transform 0.1s !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.5), var(--ichc-glass-shadow-x, 0px) var(--ichc-glass-shadow-y, 6px) 30px rgba(0,0,0,.52) !important;
+        overflow: hidden !important;
+        transform: none !important;
+        transition: border-color .2s ease, box-shadow .2s ease, transform .16s ease !important;
     }
     #rtc-broadcaster #publish-toggle:hover {
-        background: #6b76f5 !important;
-        box-shadow: 0 4px 16px rgba(88,101,242,0.45) !important;
+        border-color: rgba(205,217,232,.36) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(0,0,0,.5), var(--ichc-glass-shadow-x, 0px) var(--ichc-glass-shadow-y, 6px) 38px 3px rgba(0,0,0,.68) !important;
     }
-    #rtc-broadcaster #publish-toggle:active { transform: translateY(1px) !important; }
+    #rtc-broadcaster #publish-toggle:active { transform: scale(.97) !important; }
+    #rtc-broadcaster #publish-toggle::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        border-radius: inherit;
+        background: linear-gradient(160deg, rgba(255,255,255,.1), transparent 32%, rgba(171,194,222,.035) 82%, transparent);
+    }
+    #rtc-broadcaster #publish-toggle .ichc-glass-drop-shadow {
+        position: absolute;
+        inset: 2px;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow: inset 0 -2px 4px rgba(180,200,225,.12), inset 0 3px 9px rgba(3,7,17,.42);
+        background: linear-gradient(125deg, transparent 5%, rgba(255,197,218,.025) 40%, rgba(176,219,255,.04) 66%, transparent 90%);
+        z-index: 1;
+    }
+    #rtc-broadcaster #publish-toggle .ichc-glass-drop-shadow::before {
+        content: "";
+        position: absolute;
+        inset: -18%;
+        border-radius: 35%;
+        pointer-events: none;
+        opacity: .07;
+        background: conic-gradient(from 120deg, transparent, rgba(150,220,255,.65), rgba(255,255,255,.12), rgba(255,150,203,.6), transparent);
+        filter: blur(20px);
+        mix-blend-mode: screen;
+    }
+    #rtc-broadcaster #publish-toggle .ichc-glass-drop-shadow::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), inset 0 -5px 9px rgba(255,255,255,.07);
+    }
+    #rtc-broadcaster #publish-toggle::after { display: none !important; }
+    #rtc-broadcaster #publish-toggle .ichc-publish-glass-content {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .03em;
+        text-shadow: 0 0 8px rgba(255,52,82,.58);
+    }
+    #rtc-broadcaster #publish-toggle .ichc-publish-glass-icon,
+    #rtc-broadcaster #publish-toggle .ichc-publish-glass-icon svg {
+        display: block;
+        width: 24px;
+        height: 24px;
+    }
+    #rtc-broadcaster #publish-toggle.ichc-publish-live {
+        color: #ff96a4 !important;
+        background: linear-gradient(145deg, rgba(24,29,38,.75), rgba(8,11,17,.84)) !important;
+        border-color: rgba(208,217,230,.3) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.5), var(--ichc-glass-shadow-x, 0px) var(--ichc-glass-shadow-y, 6px) 30px rgba(0,0,0,.52) !important;
+    }
+    #rtc-broadcaster #publish-toggle.ichc-publish-live .ichc-publish-glass-content {
+        text-shadow: 0 0 9px rgba(255,68,96,.65), 0 0 20px rgba(255,68,96,.25);
+        filter: drop-shadow(0 0 5px rgba(255,68,96,.45));
+    }
+    #rtc-broadcaster #publish-toggle:focus-visible { outline: 2px solid #7fe6a4 !important; outline-offset: 5px; }
+    @media (prefers-reduced-motion: reduce) {
+        #rtc-broadcaster #publish-toggle { transition: none !important; }
+    }
     #rtc-broadcaster #publish-settings br { display: none !important; }
     #rtc-broadcaster a[href*="stopCam"] {
         display: block !important;
-        margin-top: 8px !important;
-        padding: 5px !important;
+        width: max-content !important;
+        max-width: 100% !important;
+        margin: 9px auto 0 !important;
+        padding: 4px 9px !important;
         color: var(--ichc-text-muted) !important;
         font-size: 11px !important;
         font-weight: 600 !important;
@@ -3674,10 +3800,10 @@
     /* Close button injected by theme.js — sits in the header bar */
     #ichc-broadcaster-close {
         position: absolute !important;
-        top: 9px !important;
-        right: 11px !important;
-        width: 26px !important;
-        height: 26px !important;
+        top: 13px !important;
+        right: 18px !important;
+        width: 32px !important;
+        height: 32px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -3694,6 +3820,239 @@
     /* If a duplicate is ever injected again, show only the first */
     #ichc-broadcaster-close ~ #ichc-broadcaster-close { display: none !important; }
     #ichc-broadcaster-close:hover { color: var(--ichc-text-strong) !important; background: rgba(var(--ichc-tint-rgb),.1) !important; }
+    html.ichc-light-theme #rtc-broadcaster { color-scheme: light !important; }
+    html.ichc-light-theme #rtc-broadcaster .control-button img { filter: brightness(0) !important; }
+
+    @media (max-width: 650px) {
+        #rtc-broadcaster #publish-content > .row {
+            flex-direction: column !important;
+        }
+        #rtc-broadcaster #publish-settings {
+            flex: 1 1 auto !important;
+            width: 100% !important;
+        }
+        #rtc-broadcaster #publish-settings > .row:last-child {
+            margin-top: 0 !important;
+        }
+    }
+    @media (max-width: 420px) {
+        #rtc-broadcaster #publish-content { padding: 14px !important; }
+        #rtc-broadcaster #publish-content > .row { gap: 12px !important; }
+        #rtc-broadcaster #publish-settings { padding: 14px !important; }
+    }
+
+    /* The camera stays visible at left. A tiny sampled canvas carries its colors
+       behind the separate glass controls at right. Native handlers remain intact. */
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-content { padding: 10px 12px 12px !important; }
+    #rtc-broadcaster.ichc-broadcaster-compact,
+    #cams #rtc-broadcaster.ichc-broadcaster-compact,
+    #cams.ichc-has-rounded-cards > #rtc-broadcaster.ichc-broadcaster-compact,
+    #rtc-broadcaster.ichc-broadcaster-compact .container-fluid,
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-content {
+        height: fit-content !important;
+        min-height: 0 !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-content > .row {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 108px !important;
+        grid-template-rows: minmax(0, 1fr) 42px 42px !important;
+        gap: 6px !important;
+        height: min(300px, calc(100dvh - 80px)) !important;
+        min-height: 160px !important;
+        align-items: stretch !important;
+        background: #101114 !important;
+        border-radius: 10px !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-settings { display: contents !important; }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-content > .row > .ichc-publish-preview-column {
+        grid-column: 1 !important;
+        grid-row: 1 / 4 !important;
+        display: flex !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        max-width: none !important;
+        overflow: hidden !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-video-container {
+        grid-column: 1 !important;
+        grid-row: 1 / 4 !important;
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        flex: 1 1 auto !important;
+        align-self: stretch !important;
+        padding: 4px !important;
+        gap: 0 !important;
+        background: #101114 !important;
+        border-radius: 10px !important;
+        z-index: 0 !important;
+        overflow: hidden !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-video-container::before { display: none !important; }
+    #rtc-broadcaster.ichc-broadcaster-compact #publisher-video {
+        aspect-ratio: auto !important;
+        height: 100% !important;
+        max-height: none !important;
+        min-height: 0 !important;
+        flex: 1 1 auto !important;
+        object-fit: contain !important;
+        border-radius: 6px !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-glass-sample {
+        grid-column: 2 !important;
+        grid-row: 1 / 4 !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        object-fit: cover !important;
+        border-radius: 13px !important;
+        background: #101114 !important;
+        filter: blur(24px) saturate(.68) brightness(.62) !important;
+        clip-path: inset(0 round 11px) !important;
+        opacity: .78 !important;
+        pointer-events: none !important;
+        z-index: 0 !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-settings > .ichc-camera-input-row {
+        grid-column: 2 !important;
+        grid-row: 2 !important;
+        z-index: 2 !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-settings > .ichc-mic-input-row {
+        grid-column: 2 !important;
+        grid-row: 3 !important;
+        z-index: 2 !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-settings > .ichc-publish-action-row {
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        display: flex !important;
+        align-items: stretch !important;
+        justify-content: center !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+        z-index: 2 !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-camera-input-row,
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-mic-input-row {
+        justify-content: center !important;
+        gap: 6px !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 10px !important;
+        background: transparent !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        box-shadow: none !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-camera-input-row .col-2,
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-mic-input-row .col-2 {
+        flex: 0 0 40px !important;
+        width: 40px !important;
+    }
+    #rtc-broadcaster .ichc-camera-input-row label,
+    #rtc-broadcaster .ichc-mic-input-row label {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0,0,0,0) !important;
+        white-space: nowrap !important;
+    }
+    #rtc-broadcaster #publish-settings .ichc-device-picker {
+        position: relative !important;
+        flex: 0 0 40px !important;
+        width: 40px !important;
+    }
+    #rtc-broadcaster .ichc-device-picker select {
+        color: transparent !important;
+        font-size: 0 !important;
+        padding: 0 !important;
+        background-image: none !important;
+    }
+    #rtc-broadcaster .ichc-device-picker select option { font-size: 12px !important; }
+    #rtc-broadcaster .ichc-device-picker-icon {
+        position: absolute !important;
+        top: 11px !important;
+        left: 10px !important;
+        width: 18px !important;
+        height: 18px !important;
+        color: #f0f6f5 !important;
+        pointer-events: none !important;
+    }
+    #rtc-broadcaster .ichc-device-picker-icon svg { width: 18px !important; height: 18px !important; }
+    #rtc-broadcaster .ichc-device-picker::after {
+        content: "⌄";
+        position: absolute;
+        top: 16px;
+        right: 3px;
+        color: #d5e1dd;
+        font-size: 10px;
+        pointer-events: none;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-camera-input-row select,
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-mic-input-row select,
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-camera-input-row .control-button,
+    #rtc-broadcaster.ichc-broadcaster-compact .ichc-mic-input-row .control-button,
+    #rtc-broadcaster.ichc-broadcaster-compact #camera-toggle,
+    #rtc-broadcaster.ichc-broadcaster-compact #mute-toggle {
+        background: rgba(12,16,23,.78) !important;
+        backdrop-filter: blur(24px) saturate(.76) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(.76) !important;
+        border-color: rgba(193,207,224,.24) !important;
+        border-radius: 10px !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 4px 14px rgba(0,0,0,.34) !important;
+    }
+    html.ichc-light-theme #rtc-broadcaster.ichc-broadcaster-compact .ichc-camera-input-row .control-button img,
+    html.ichc-light-theme #rtc-broadcaster.ichc-broadcaster-compact .ichc-mic-input-row .control-button img {
+        filter: brightness(0) invert(1) !important;
+    }
+    #rtc-broadcaster.ichc-broadcaster-compact #publish-settings > .ichc-publish-action-row .col-10 {
+        width: 100% !important;
+        flex: 1 1 auto !important;
+        height: 100% !important;
+        display: flex !important;
+    }
+    #rtc-broadcaster #publish-toggle.ichc-publish-live { cursor: default !important; }
+    #rtc-broadcaster .ichc-publish-action-row a,
+    #rtc-broadcaster a[href*="stopCam"] { display: none !important; }
+    #rtc-broadcaster .ichc-broadcaster-handle {
+        min-height: 30px !important;
+        justify-content: flex-start !important;
+        padding: 0 36px 0 12px !important;
+        background: var(--ichc-surface-2) !important;
+    }
+    #rtc-broadcaster .ichc-broadcaster-handle::before {
+        content: "Broadcast preview";
+        width: auto;
+        height: auto;
+        background: none;
+        color: var(--ichc-text-muted);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .04em;
+    }
+    #ichc-broadcaster-close { top: 3px !important; right: 5px !important; width: 24px !important; height: 24px !important; }
+
+    @media (max-width: 480px) {
+        #rtc-broadcaster.ichc-broadcaster-compact #publish-content { padding: 10px !important; }
+        #rtc-broadcaster.ichc-broadcaster-compact #publish-content > .row {
+            grid-template-columns: minmax(0, 1fr) 104px !important;
+            gap: 8px !important;
+            flex-direction: initial !important;
+        }
+        #rtc-broadcaster #publish-toggle .ichc-publish-glass-content { font-size: 9px !important; }
+    }
 
     #cams {
         width: 100% !important;
@@ -4117,11 +4476,20 @@
         -webkit-text-stroke: 0.4px rgba(1, 6, 12, 0.88) !important;
         pointer-events: none !important;
     }
+    #cams .name-on-cam.ichc-lastmsg-name {
+        color: var(--ichc-lastmsg-name-color, var(--ichc-text-strong)) !important;
+        max-width: calc(100% - 90px) !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        padding: 1px 4px !important;
+        border-radius: 4px !important;
+        background: rgba(5, 9, 15, 0.68) !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85) !important;
+        -webkit-text-stroke: 0 !important;
+    }
     /* ── Last-message overlay (opt-in) ──
-       Sits on the same line as the nick, starting where the nick ends. The offset
-       comes from a hidden copy of the nick rendered in the name's own font rather
-       than from a measured pixel value, so it stays correct when the nick changes,
-       when the font loads, and at every card size. */
+       The script positions this directly beside the rendered name. */
     .ichc-cam-lastmsg {
         position: absolute !important;
         top: 12px !important;
@@ -4129,25 +4497,19 @@
         right: 12px !important;
         z-index: 5 !important;
         display: flex !important;
-        align-items: baseline !important;
-        gap: 6px !important;
+        align-items: center !important;
+        gap: 7px !important;
+        justify-content: flex-start !important;
         min-width: 0 !important;
         pointer-events: none !important;
+        opacity: 1 !important;
+        transition: opacity 600ms ease !important;
     }
-    .ichc-cam-lastmsg-spacer {
-        /* Must match .name-on-cam's type metrics exactly — it exists only to
-           occupy the nick's width. visibility, not display:none, so it still
-           takes up space. */
-        visibility: hidden !important;
-        flex: 0 0 auto !important;
-        max-width: calc(100% - 70px) !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
+    .ichc-cam-lastmsg.ichc-expired {
+        opacity: 0 !important;
     }
     .ichc-cam-lastmsg-body {
-        flex: 1 1 auto !important;
+        flex: 0 1 auto !important;
         min-width: 0 !important;
         display: block !important;
         overflow: hidden !important;
@@ -4167,6 +4529,26 @@
             1px 0 0 rgba(1, 6, 12, 0.98),
             0 -1px 0 rgba(1, 6, 12, 0.98),
             0 0 10px rgba(1, 6, 12, 0.7) !important;
+    }
+    .ichc-cam-lastmsg-time {
+        flex: 0 0 auto !important;
+        color: #c6ccd5 !important;
+        font-size: 10px !important;
+        font-weight: 600 !important;
+        line-height: 1.35 !important;
+        white-space: nowrap !important;
+        text-shadow: 0 1px 3px #000, 0 0 8px #000 !important;
+    }
+    .ichc-cam-lastmsg-time:empty { display: none !important; }
+    #cams .ichc-cam-lastmsg-body a.userlink,
+    #cams .ichc-cam-lastmsg-body a[data-ichc-chat-nick="1"] {
+        color: var(--ichc-chat-name-color, var(--ichc-accent-soft)) !important;
+        font-weight: 700 !important;
+    }
+    #cams .ichc-cam-lastmsg-body .ichc-at-mention { color: #ffd63c !important; }
+    .ichc-cam-lastmsg.ichc-has-mention .ichc-cam-lastmsg-body {
+        border-left: 2px solid #ffd63c !important;
+        padding-left: 5px !important;
     }
     /* Emotes, gifs and inline images inside the overlay. Height-capped to the line
        so a tall emote cannot push the overlay over the video. */
@@ -4196,10 +4578,55 @@
         max-height: 46px !important;
         max-width: 120px !important;
     }
-    /* Narrow cards need no special case: the spacer holds the nick's width, the
-       body takes what is left and ellipsises. A container query was considered and
-       rejected — it would mean putting `container-type` on .rounded_square, and the
-       containment that creates is read by the freeform packer as card geometry. */
+    #cams .ichc-cam-mention {
+        position: absolute !important;
+        left: 8px !important;
+        right: auto !important;
+        bottom: 40px !important;
+        z-index: 15 !important;
+        box-sizing: border-box !important;
+        max-width: min(80%, 280px) !important;
+        padding: 5px 8px !important;
+        border-left: 2px solid #ffd63c !important;
+        border-radius: 5px !important;
+        background: rgba(8, 12, 19, 0.87) !important;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.32) !important;
+        color: #f1f5f9 !important;
+        pointer-events: none !important;
+        opacity: 1 !important;
+        transition: opacity 400ms ease !important;
+    }
+    #cams .ichc-cam-mention.ichc-expired { opacity: 0 !important; }
+    #cams .ichc-cam-mention-sender {
+        display: block !important;
+        margin-bottom: 1px !important;
+        color: var(--ichc-cam-mention-color, #f6d365) !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        line-height: 1.15 !important;
+    }
+    #cams .ichc-cam-mention-body {
+        display: -webkit-box !important;
+        overflow: hidden !important;
+        -webkit-box-orient: vertical !important;
+        -webkit-line-clamp: 2 !important;
+        font-size: 12px !important;
+        line-height: 1.18 !important;
+        overflow-wrap: anywhere !important;
+    }
+    #cams .ichc-cam-mention-body .ichc-at-mention,
+    #cams .ichc-cam-mention-body a.userlink { color: #ffd63c !important; }
+    #cams .ichc-cam-mention-body img,
+    #cams .ichc-cam-mention-body video {
+        display: inline-block !important;
+        width: auto !important;
+        height: auto !important;
+        max-height: 24px !important;
+        max-width: 72px !important;
+        object-fit: contain !important;
+        vertical-align: middle !important;
+    }
+    #cams .ichc-cam-mention-body .ichc-emote-wrap { max-height: 24px !important; }
     .ichc-card-tools {
         position: absolute !important;
         right: 8px !important;
@@ -5824,6 +6251,8 @@
         box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
         padding: 4px !important;
         z-index: 2147483647 !important;
+        max-height: calc(100vh - 80px) !important;
+        overflow-y: auto !important;
         display: flex !important;
         flex-direction: column !important;
         gap: 2px !important;
@@ -5851,6 +6280,28 @@
         width: 16px !important;
         color: var(--ichc-accent-soft) !important;
     }
+    .ichc-cog-sound-row { gap: 6px !important; cursor: default !important; }
+    .ichc-cog-sound-row:hover { color: var(--ichc-text) !important; }
+    .ichc-sound-style,
+    .ichc-sound-preview,
+    .ichc-sound-toggle {
+        flex: 0 0 auto !important;
+        min-height: 26px !important;
+        border: 1px solid rgba(var(--ichc-tint-rgb),0.18) !important;
+        border-radius: 5px !important;
+        background: rgba(var(--ichc-tint-rgb),0.07) !important;
+        color: var(--ichc-text) !important;
+        font: inherit !important;
+        cursor: pointer !important;
+    }
+    .ichc-sound-style { min-width: 88px !important; margin-left: auto !important; padding: 3px 6px !important; font-size: 10px !important; }
+    .ichc-sound-preview { width: 28px !important; padding: 2px !important; font-size: 10px !important; }
+    .ichc-sound-toggle { min-width: 38px !important; padding: 2px 5px !important; font-size: 10px !important; opacity: 0.65 !important; }
+    .ichc-sound-toggle.is-on { opacity: 1 !important; border-color: rgba(98,220,160,0.55) !important; color: #9de9bf !important; }
+    html.ichc-light-theme .ichc-sound-style,
+    html.ichc-light-theme .ichc-sound-preview,
+    html.ichc-light-theme .ichc-sound-toggle { color: #313338 !important; background: rgba(0,0,0,0.05) !important; }
+    html.ichc-light-theme .ichc-sound-toggle.is-on { color: #167346 !important; }
 
     /* ── Theme picker (expands inside the cog menu) ────────────────────────────
        Entirely token-driven, so it repaints correctly the instant a palette is
@@ -5879,6 +6330,10 @@
         border-left: 1px solid rgba(var(--ichc-tint-rgb),0.10) !important;
     }
     .ichc-theme-list[hidden] { display: none !important; }
+    .ichc-beta-list > .ichc-cog-item {
+        padding: 6px 8px !important;
+        font-size: 11px !important;
+    }
     .ichc-theme-row {
         display: flex !important;
         align-items: center !important;
@@ -6074,6 +6529,7 @@
         transition: color 0.12s !important;
     }
     #ichc-cam-test-btn:hover { color: var(--ichc-text) !important; }
+    #ichc-cam-test-btn[hidden] { display: none !important; }
     #ichc-cam-test-btn svg { width: 1em !important; height: 1em !important; }
 
     /* ── Live cam-stats toggle — shares the bare cam-diagnostics button look ── */
@@ -7794,7 +8250,7 @@
     html.ichc-theme-is-light #txt td,
     html.ichc-theme-is-light #txt tr,
     html.ichc-theme-is-light #txt p,
-    html.ichc-theme-is-light #txt li { color: var(--ichc-text-bright) !important; }
+    html.ichc-theme-is-light #txt li { color: var(--ichc-chat-message-color, var(--ichc-text-bright)) !important; }
     /* Force userlink nicks dark — dark theme sets var(--ichc-chat-name-color) */
     html.ichc-light-theme #txt a.userlink,
     html.ichc-light-theme #txt a[data-ichc-chat-nick="1"],
@@ -7805,7 +8261,7 @@
     html.ichc-theme-is-light #txt a.userlink:visited,
     html.ichc-theme-is-light #txt a[data-ichc-chat-nick="1"]:visited { color: var(--ichc-accent-hover) !important; }
     html.ichc-light-theme #txt a:not(.userlink):not([data-ichc-chat-nick]),
-    html.ichc-theme-is-light #txt a:not(.userlink):not([data-ichc-chat-nick]) { color: var(--ichc-accent) !important; }
+    html.ichc-theme-is-light #txt a:not(.userlink):not([data-ichc-chat-nick]) { color: var(--ichc-chat-message-color, var(--ichc-accent)) !important; }
     /* ...but nothing inside a nick anchor. chat.js writes the user's readable-on-light
        colour onto the anchor itself; the broad element rule above carries an ID so it
        outweighs a bare inherit, and a nick wrapped in <b>/<span> would otherwise flatten
@@ -7853,6 +8309,12 @@
     }
     html.ichc-light-theme #cams .cam_overlay,
     html.ichc-light-theme #cams .cam_overlay * { color: #313338 !important; }
+    html.ichc-light-theme #cams .name-on-cam.ichc-lastmsg-name {
+        color: var(--ichc-lastmsg-name-color, var(--ichc-text-strong)) !important;
+    }
+    html.ichc-light-theme #cams .ichc-cam-lastmsg .ichc-cam-lastmsg-body { color: #f1f5f9 !important; }
+    html.ichc-light-theme #cams .ichc-cam-lastmsg .ichc-cam-lastmsg-time { color: #c6ccd5 !important; }
+    html.ichc-light-theme #cams .ichc-cam-lastmsg-body .ichc-at-mention { color: #ffd63c !important; }
     html.ichc-light-theme .ichc-disabled-overlay {
         background: linear-gradient(135deg,#c4c8ce 0%,#cdd0d5 50%,#c4c8ce 100%) !important;
     }
@@ -8157,7 +8619,7 @@
         color: var(--ichc-text-dim) !important;
         margin-right: 5px !important;
     }
-    #txt .ichc-history-body { color: var(--ichc-text-3) !important; }
+    #txt .ichc-history-body { color: var(--ichc-chat-message-color, var(--ichc-text-3)) !important; }
     #txt .ichc-history-divider {
         margin: 3px 0 4px !important;
         padding-top: 3px !important;
@@ -8168,7 +8630,7 @@
         letter-spacing: 0.02em !important;
     }
     html.ichc-light-theme #txt .ichc-history-nick { color: #4a515c !important; }
-    html.ichc-light-theme #txt .ichc-history-body { color: #5c636e !important; }
+    html.ichc-light-theme #txt .ichc-history-body { color: var(--ichc-chat-message-color, #5c636e) !important; }
     html.ichc-light-theme #txt .ichc-history-divider {
         border-top-color: rgba(0,0,0,0.12) !important;
     }
